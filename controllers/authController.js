@@ -21,7 +21,7 @@ exports.register = async (req, res) => {
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.realtyexpodb(email)) {
       return res.status(400).json({ message: 'Invalid email format' });
     }
 
