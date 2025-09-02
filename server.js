@@ -13,7 +13,10 @@ app.use(express.json());
 app.use(morgan('dev'));      
 
 const authRoutes = require('./routes/authroute');
+const contactRoutes = require('./routes/contactroute');
+
 app.use('/api/auth', authRoutes);
+app.use("/api/submitform",contactRoutes);
 
 
 app.get('/', (req, res) => {

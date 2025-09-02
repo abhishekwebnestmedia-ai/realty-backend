@@ -8,7 +8,7 @@ const userSchema = new mongoose.Schema({
   lastLoginAt: { type: Date },
   lastLogoutAt: { type: Date },
 }, {
-  timestamps: true, // optional createdAt, updatedAt fields
+  timestamps: true,
 });
 
 module.exports = mongoose.model('User', userSchema);
