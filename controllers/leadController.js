@@ -1,5 +1,5 @@
 // controllers/leadController.js
-const Lead = require('../models/Lead');
+const Lead = require('../models/leadModel');
 
 const validStatuses = [
   "Hot",
