@@ -14,9 +14,11 @@ app.use(morgan('dev'));
 
 const authRoutes = require('./routes/authroute');
 const contactRoutes = require('./routes/contactroute');
+const leadRoutes = require('./routes/leadroute');
 
 app.use('/api/auth', authRoutes);
 app.use("/api/submitform",contactRoutes);
+app.use("/api/realtleads",leadRoutes);
 
 
 app.get('/', (req, res) => {
