@@ -12,7 +12,8 @@ const app = express();
 // CORS configuration to allow only specified origins
 const allowedOrigins = [
   'https://realtyxpo.in',
-  'https://crm.realtyxpo.in'
+  'https://crm.realtyxpo.in',
+  'http://localhost:3000',  
 ];
 
 app.use(cors({
