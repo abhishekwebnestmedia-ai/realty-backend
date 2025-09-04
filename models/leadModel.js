@@ -38,6 +38,7 @@ const leadSchema = new mongoose.Schema({
   transferTo: { type: String },
   source: { type: String },
   Budget: { type: String }
-});
+} , { timestamps: true }); 
+
 
 module.exports = mongoose.model('Lead', leadSchema);

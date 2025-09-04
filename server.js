@@ -37,11 +37,13 @@ app.use(morgan('dev'));
 const authRoutes = require('./routes/authroute');
 const contactRoutes = require('./routes/contactroute');
 const leadRoutes = require('./routes/leadroute');
+const inventryRoutes = require('./routes/inventryroute');
 
 // Use routes
 app.use('/api/auth', authRoutes);
 app.use('/api/submitform', contactRoutes);
 app.use('/api/realtleads', leadRoutes);
+app.use('/api/inventry', inventryRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
