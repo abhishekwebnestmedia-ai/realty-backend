@@ -41,9 +41,10 @@ exports.deleteInventry = async (req, res) => {
 // Fetch all records
 exports.getAllInventry = async (req, res) => {
   try {
-    const records = await Inventory.find();
+    const records = await Inventory.find().sort({ createdAt: -1 }); // Sort by createdAt descending
     res.json(records);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
+
