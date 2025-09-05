@@ -57,6 +57,7 @@ exports.register = async (req, res) => {
 
 exports.login = async (req, res) => {
   try {
+   
     const { email, password } = req.body;
 
     // --- Field-specific validation ---
@@ -83,21 +84,26 @@ exports.login = async (req, res) => {
       { expiresIn: '1h' }
     );
 
-    // Send response with token and user details
-    res.json({
-      token,
-      message: 'Login successful',
-      user: {
-        name: user.name,   // assuming user document has 'name'
-        email: user.email
-      }
-    });
+    res.json({ token, message: 'Login successful' });
 
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+
+exports.getProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId).select('-password');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json(user);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error fetching profile' });
+  }
+};
+
 
 
 exports.logout = async (req, res) => {
@@ -116,6 +122,8 @@ exports.logout = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+
 
 
 

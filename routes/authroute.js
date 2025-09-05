@@ -9,6 +9,7 @@ router.post('/logout', authMiddleware, authController.logout);
 
 // Forgot Password route - send reset link
 router.post('/forgot-password', authController.forgotPassword);
+router.get('/profile', authMiddleware, authController.getProfile);
 
 // Reset Password route - submit new password along with token
 router.post('/reset-password', authController.resetPassword);
