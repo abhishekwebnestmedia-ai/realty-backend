@@ -23,6 +23,7 @@ const inventorySchema = new mongoose.Schema({
   typology: { type: String },
   size: { type: String },
   demand: { type: String },
+  Project: { type: [String], required: true },
   contactNumbers: { type: [String], required: true },
   email: { type: String },
   paymentStatus: { type: [String] },
