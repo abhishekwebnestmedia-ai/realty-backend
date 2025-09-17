@@ -156,3 +156,31 @@ exports.deleteLead = async (req, res) => {
     res.status(500).json({ success: false, message: "Error deleting lead" });
   }
 };
+
+
+exports.bulkUploadLeads = async (req, res) => {
+  try {
+    const { leads } = req.body;
+
+    if (!Array.isArray(leads) || leads.length === 0) {
+      return res.status(400).json({ message: "Leads array is required" });
+    }
+
+    // Insert many leads at once
+    const insertedLeads = await Lead.insertMany(leads, { ordered: false }); 
+    // ordered:false → continues inserting even if some docs fail (e.g., duplicate emails)
+
+    res.status(201).json({
+      message: "Bulk upload successful",
+      insertedCount: insertedLeads.length,
+      insertedLeads,
+    });
+  } catch (error) {
+    console.error("Bulk upload error:", error);
+
+    res.status(500).json({
+      message: "Error during bulk upload",
+      error: error.message,
+    });
+  }
+};

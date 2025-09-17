@@ -12,6 +12,35 @@ exports.createInventry = async (req, res) => {
   }
 };
 
+
+// Bulk Upload Inventory
+exports.bulkUploadInventry = async (req, res) => {
+  try {
+    const { records } = req.body;
+
+    if (!Array.isArray(records) || records.length === 0) {
+      return res.status(400).json({ message: "Records array is required" });
+    }
+
+    // Insert many inventory records
+    const insertedRecords = await Inventory.insertMany(records, { ordered: false });
+
+    res.status(201).json({
+      message: "Bulk upload successful",
+      insertedCount: insertedRecords.length,
+      insertedRecords,
+    });
+  } catch (err) {
+    console.error("Bulk upload error:", err);
+
+    res.status(500).json({
+      message: "Error during bulk upload",
+      error: err.message,
+    });
+  }
+};
+
+
 // Update
 exports.updateInventry = async (req, res) => {
   try {

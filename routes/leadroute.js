@@ -5,6 +5,7 @@ const authMiddleware = require("../middleware/authmiddleware");
 
 
 router.post('/create',authMiddleware,leadController.createLead);
+router.post('/bulk-upload', authMiddleware,leadController.bulkUploadLeads);
 router.get('/getlead',authMiddleware,leadController.getLeads);
 router.put('/update/:id', authMiddleware,leadController.updateLead );
 router.delete('/delete/:id' , authMiddleware,leadController.deleteLead);

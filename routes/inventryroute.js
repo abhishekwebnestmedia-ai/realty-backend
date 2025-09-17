@@ -8,6 +8,8 @@ router.post('/createinventry',authMiddleware,inventrycontroller.createInventry);
 router.get('/inventrylist', authMiddleware ,inventrycontroller.getAllInventry);
 router.put('/update/:id', authMiddleware,inventrycontroller.updateInventry);
 router.delete('/delete/:id', authMiddleware,inventrycontroller.deleteInventry);
+router.post("/bulk-upload", authMiddleware, inventrycontroller.bulkUploadInventry);
+
 
 module.exports = router;
 
