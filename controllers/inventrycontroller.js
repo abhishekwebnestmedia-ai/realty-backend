@@ -12,6 +12,20 @@ exports.createInventry = async (req, res) => {
   }
 };
 
+// Get inventory by ID
+exports.getInventryById = async (req, res) => {
+  try {
+    const record = await Inventory.findById(req.params.id);
+    if (!record) {
+      return res.status(404).json({ error: "Record not found" });
+    }
+    res.json(record);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+
 
 // Bulk Upload Inventory
 exports.bulkUploadInventry = async (req, res) => {

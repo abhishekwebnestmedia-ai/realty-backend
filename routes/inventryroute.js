@@ -6,9 +6,11 @@ const authMiddleware = require('../middleware/authmiddleware')
 
 router.post('/createinventry',authMiddleware,inventrycontroller.createInventry);
 router.get('/inventrylist', authMiddleware ,inventrycontroller.getAllInventry);
+router.get('/inventrylist/:id',authMiddleware , inventrycontroller.getInventryById);
 router.put('/update/:id', authMiddleware,inventrycontroller.updateInventry);
 router.delete('/delete/:id', authMiddleware,inventrycontroller.deleteInventry);
 router.post("/bulk-upload", authMiddleware, inventrycontroller.bulkUploadInventry);
+
 
 
 module.exports = router;
