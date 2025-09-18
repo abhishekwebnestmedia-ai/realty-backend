@@ -80,16 +80,11 @@ const leadSchema = new mongoose.Schema({
   remark: { type: String },
   date: { type: String },
   capturedBy: { type: String },
-
-  // 👇 assignTo is now a reference to User collection
-  assignTo: { 
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  },
-
+  // ✅ store user _id, but accept name/email in controller
+  assignTo: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   transferTo: { type: String },
   source: { type: String },
   Budget: { type: String }
-}, { timestamps: true }); 
+} , { timestamps: true }); 
 
 module.exports = mongoose.model('Lead', leadSchema);

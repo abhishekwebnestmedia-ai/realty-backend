@@ -187,7 +187,8 @@
 
 
 const Lead = require('../models/leadModel');
-const User = require('../models/user'); // 👈 import User model
+const User = require('../models/user');
+const mongoose = require("mongoose");
 
 const validStatuses = [
   "Hot",
@@ -208,6 +209,25 @@ const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 // Helper to validate phone number (7-15 digits)
 const isValidPhone = (phone) => /^\d{7,15}$/.test(phone);
+
+// 🔹 Resolve assignTo: accepts ObjectId, name, or email
+async function resolveAssignTo(assignTo) {
+  if (!assignTo) return null;
+
+  let user = null;
+
+  // If it's a valid ObjectId, try by ID first
+  if (mongoose.Types.ObjectId.isValid(assignTo)) {
+    user = await User.findById(assignTo);
+  }
+
+  // Otherwise, search by name or email
+  if (!user) {
+    user = await User.findOne({ $or: [{ name: assignTo }, { email: assignTo }] });
+  }
+
+  return user;
+}
 
 // Create Lead
 exports.createLead = async (req, res) => {
@@ -246,10 +266,11 @@ exports.createLead = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid or missing Lead Type" });
     }
 
-    // ✅ validate assignTo user
+    // ✅ Resolve assignTo
+    let user = null;
     if (assignTo) {
-      const userExists = await User.findById(assignTo);
-      if (!userExists) {
+      user = await resolveAssignTo(assignTo);
+      if (!user) {
         return res.status(400).json({ success: false, message: "Invalid assignTo user" });
       }
     }
@@ -265,7 +286,7 @@ exports.createLead = async (req, res) => {
       remark,
       date,
       capturedBy,
-      assignTo,
+      assignTo: user ? user._id : null,
       transferTo,
       source,
       Budget
@@ -279,27 +300,24 @@ exports.createLead = async (req, res) => {
   }
 };
 
-
 // Assign/Reassign Lead
 exports.assignLead = async (req, res) => {
   try {
     const { assignTo } = req.body;
 
-    // Check if assignTo is provided
     if (!assignTo) {
       return res.status(400).json({ success: false, message: "assignTo field is required" });
     }
 
-    // Validate user exists
-    const userExists = await User.findById(assignTo);
-    if (!userExists) {
+    // ✅ Resolve assignTo
+    const user = await resolveAssignTo(assignTo);
+    if (!user) {
       return res.status(400).json({ success: false, message: "Invalid assignTo user" });
     }
 
-    // Update lead with new assigned user
     const lead = await Lead.findByIdAndUpdate(
       req.params.id,
-      { assignTo },
+      { assignTo: user._id },
       { new: true }
     ).populate("assignTo", "name email");
 
@@ -314,8 +332,7 @@ exports.assignLead = async (req, res) => {
   }
 };
 
-
-// Get All Leads (with assigned user populated)
+// Get All Leads
 exports.getLeads = async (req, res) => {
   try {
     const leads = await Lead.find().populate("assignTo", "name email");
@@ -328,48 +345,34 @@ exports.getLeads = async (req, res) => {
 // Update Lead
 exports.updateLead = async (req, res) => {
   try {
-    const {
-      customerName,
-      contactNumber,
-      email,
-      status,
-      leadType,
-      followUp,
-      requirement,
-      remark,
-      date,
-      capturedBy,
-      assignTo,
-      transferTo,
-      source,
-      Budget
-    } = req.body;
+    const updateData = { ...req.body };
 
-    if (customerName !== undefined && customerName.trim() === '') {
+    if (updateData.customerName !== undefined && updateData.customerName.trim() === '') {
       return res.status(400).json({ success: false, message: "Customer Name cannot be empty" });
     }
-    if (contactNumber !== undefined && !isValidPhone(contactNumber)) {
+    if (updateData.contactNumber !== undefined && !isValidPhone(updateData.contactNumber)) {
       return res.status(400).json({ success: false, message: "Invalid Contact Number" });
     }
-    if (email !== undefined && !isValidEmail(email)) {
+    if (updateData.email !== undefined && !isValidEmail(updateData.email)) {
       return res.status(400).json({ success: false, message: "Invalid Email" });
     }
-    if (status !== undefined && !validStatuses.includes(status)) {
+    if (updateData.status !== undefined && !validStatuses.includes(updateData.status)) {
       return res.status(400).json({ success: false, message: "Invalid Status" });
     }
-    if (leadType !== undefined && !validLeadTypes.includes(leadType)) {
+    if (updateData.leadType !== undefined && !validLeadTypes.includes(updateData.leadType)) {
       return res.status(400).json({ success: false, message: "Invalid Lead Type" });
     }
 
-    // ✅ validate assignTo user if updating
-    if (assignTo !== undefined) {
-      const userExists = await User.findById(assignTo);
-      if (!userExists) {
+    // ✅ Resolve assignTo if provided
+    if (updateData.assignTo !== undefined) {
+      const user = await resolveAssignTo(updateData.assignTo);
+      if (!user) {
         return res.status(400).json({ success: false, message: "Invalid assignTo user" });
       }
+      updateData.assignTo = user._id;
     }
 
-    const lead = await Lead.findByIdAndUpdate(req.params.id, req.body, { new: true }).populate("assignTo", "name email");
+    const lead = await Lead.findByIdAndUpdate(req.params.id, updateData, { new: true }).populate("assignTo", "name email");
     if (!lead) {
       return res.status(404).json({ success: false, message: "Lead not found" });
     }
@@ -401,17 +404,22 @@ exports.bulkUploadLeads = async (req, res) => {
       return res.status(400).json({ message: "Leads array is required" });
     }
 
-    // ✅ Optional: validate assignTo for each lead
+    const processedLeads = [];
     for (const lead of leads) {
+      let user = null;
       if (lead.assignTo) {
-        const userExists = await User.findById(lead.assignTo);
-        if (!userExists) {
+        user = await resolveAssignTo(lead.assignTo);
+        if (!user) {
           return res.status(400).json({ message: `Invalid assignTo user for lead: ${lead.customerName}` });
         }
       }
+      processedLeads.push({
+        ...lead,
+        assignTo: user ? user._id : null
+      });
     }
 
-    const insertedLeads = await Lead.insertMany(leads, { ordered: false });
+    const insertedLeads = await Lead.insertMany(processedLeads, { ordered: false });
 
     res.status(201).json({
       message: "Bulk upload successful",
