@@ -279,6 +279,42 @@ exports.createLead = async (req, res) => {
   }
 };
 
+
+// Assign/Reassign Lead
+exports.assignLead = async (req, res) => {
+  try {
+    const { assignTo } = req.body;
+
+    // Check if assignTo is provided
+    if (!assignTo) {
+      return res.status(400).json({ success: false, message: "assignTo field is required" });
+    }
+
+    // Validate user exists
+    const userExists = await User.findById(assignTo);
+    if (!userExists) {
+      return res.status(400).json({ success: false, message: "Invalid assignTo user" });
+    }
+
+    // Update lead with new assigned user
+    const lead = await Lead.findByIdAndUpdate(
+      req.params.id,
+      { assignTo },
+      { new: true }
+    ).populate("assignTo", "name email");
+
+    if (!lead) {
+      return res.status(404).json({ success: false, message: "Lead not found" });
+    }
+
+    res.json({ success: true, message: "Lead assigned successfully", data: lead });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Error assigning lead" });
+  }
+};
+
+
 // Get All Leads (with assigned user populated)
 exports.getLeads = async (req, res) => {
   try {
