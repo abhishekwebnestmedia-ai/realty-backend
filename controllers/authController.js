@@ -10,7 +10,7 @@ exports.register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    // --- Field-specific validation ---
+ 
     let missingFields = [];
     if (!name) missingFields.push('Name is missing');
     if (!email) missingFields.push('Email is missing');
@@ -33,7 +33,7 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
     }
 
-    // --- Check if user already exists ---
+  
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ message: 'User already exists' });

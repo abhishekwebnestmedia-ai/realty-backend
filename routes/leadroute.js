@@ -1,13 +1,39 @@
+// const express = require('express');
+// const router = express.Router();
+// const leadController = require('../controllers/leadController');
+// const authMiddleware = require("../middleware/authmiddleware");
+
+
+// router.post('/create',authMiddleware,leadController.createLead);
+// router.post('/bulk-upload', authMiddleware,leadController.bulkUploadLeads);
+// router.get('/getlead',authMiddleware,leadController.getLeads);
+// router.put('/update/:id', authMiddleware,leadController.updateLead );
+// router.delete('/delete/:id' , authMiddleware,leadController.deleteLead);
+
+// module.exports = router;
+
+
 const express = require('express');
 const router = express.Router();
 const leadController = require('../controllers/leadController');
 const authMiddleware = require("../middleware/authmiddleware");
 
+// Create new lead
+router.post('/create', authMiddleware, leadController.createLead);
 
-router.post('/create',authMiddleware,leadController.createLead);
-router.post('/bulk-upload', authMiddleware,leadController.bulkUploadLeads);
-router.get('/getlead',authMiddleware,leadController.getLeads);
-router.put('/update/:id', authMiddleware,leadController.updateLead );
-router.delete('/delete/:id' , authMiddleware,leadController.deleteLead);
+// Bulk upload leads
+router.post('/bulk-upload', authMiddleware, leadController.bulkUploadLeads);
+
+// Get all leads (with populated assigned user details)
+router.get('/getlead', authMiddleware, leadController.getLeads);
+
+// Update a lead
+router.put('/update/:id', authMiddleware, leadController.updateLead);
+
+// Assign/Reassign a lead
+router.patch('/assign/:id', authMiddleware, leadController.assignLead);
+
+// Delete a lead
+router.delete('/delete/:id', authMiddleware, leadController.deleteLead);
 
 module.exports = router;
