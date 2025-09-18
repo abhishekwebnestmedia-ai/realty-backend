@@ -124,6 +124,23 @@ exports.logout = async (req, res) => {
 };
 
 
+// Get all users (only id, name, email)
+exports.getAllUsers = async (req, res) => {
+  try {
+    const users = await User.find({}, { _id: 1, name: 1, email: 1 });
+
+    res.json({
+      success: true,
+      count: users.length,
+      users
+    });
+  } catch (err) {
+    console.error("❌ getAllUsers error:", err);
+    res.status(500).json({ success: false, message: 'Server error fetching users' });
+  }
+};
+
+
 
 
 

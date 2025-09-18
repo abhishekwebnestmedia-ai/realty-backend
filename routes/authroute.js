@@ -13,6 +13,7 @@ router.get('/profile', authMiddleware, authController.getProfile);
 
 // Reset Password route - submit new password along with token
 router.post('/reset-password', authController.resetPassword);
+router.get('/alluser', authMiddleware,authController.getAllUsers);
 
 
 
