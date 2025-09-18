@@ -605,6 +605,31 @@ exports.updateLead = async (req, res) => {
   }
 };
 
+
+// 🔹 Get Lead by ID
+exports.getLeadById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate ID
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid lead ID" });
+    }
+
+    const lead = await Lead.findById(id).populate("assignTo", "name email");
+
+    if (!lead) {
+      return res.status(404).json({ success: false, message: "Lead not found" });
+    }
+
+    res.json({ success: true, data: lead });
+  } catch (err) {
+    console.error("❌ getLeadById error:", err);
+    res.status(500).json({ success: false, message: "Error fetching lead" });
+  }
+};
+
+
 // 🔹 Delete Lead
 exports.deleteLead = async (req, res) => {
   try {
