@@ -93,23 +93,53 @@ const Inventory = require('../models/inventryModel');
 
 
 
+// controllers/inventoryController.js
+const Inventory = require("../models/Inventory");
 
-exports.createInventry = async (req, res) => {
+// ✅ Helper to dynamically push values into array fields if not already present
+const addDynamicValue = async (field, value) => {
+  try {
+    // Ensure value is an array (so we can push multiple at once)
+    const values = Array.isArray(value) ? value : [value];
+
+    // Update all docs to ensure enum-like unique push
+    await Inventory.updateMany(
+      {}, 
+      { $addToSet: { [field]: { $each: values } } }
+    );
+  } catch (err) {
+    console.error(`Error adding dynamic value to ${field}:`, err.message);
+  }
+};
+
+// ✅ Create Inventory
+exports.createInventory = async (req, res) => {
   try {
     const { source, paymentStatus, typology } = req.body;
 
-    // Make sure to add dynamic values for source, paymentStatus, typology
-    if (source) await addDynamicValue('source', source);
-    if (paymentStatus) await addDynamicValue('paymentStatus', paymentStatus);
-    if (typology) await addDynamicValue('typology', typology);
+    // Dynamically add values
+    if (source) await addDynamicValue("source", source);
+    if (paymentStatus) await addDynamicValue("paymentStatus", paymentStatus);
+    if (typology) await addDynamicValue("typology", typology);
 
-    const record = new Inventory(req.body);
+    // Ensure fields are arrays
+    const cleanBody = {
+      ...req.body,
+      source: source ? (Array.isArray(source) ? source : [source]) : [],
+      paymentStatus: paymentStatus ? (Array.isArray(paymentStatus) ? paymentStatus : [paymentStatus]) : [],
+      typology: typology ? (Array.isArray(typology) ? typology : [typology]) : []
+    };
+
+    // Save record
+    const record = new Inventory(cleanBody);
     await record.save();
+
     res.status(201).json(record);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 };
+
 
 // Helper function to add dynamic value to fields
 async function addDynamicValue(field, value) {

@@ -41,7 +41,7 @@ const inventorySchema = new mongoose.Schema({
   loanStatus: { type: String },
   remarks: { type: String } 
 }, {
-  timestamps: true // Adds createdAt and updatedAt
+  timestamps: true 
 });
 
 module.exports = mongoose.model('Inventory', inventorySchema);
