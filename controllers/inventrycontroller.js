@@ -94,7 +94,7 @@ const Inventory = require('../models/inventryModel');
 
 
 // controllers/inventoryController.js
-const Inventory = require("../models/Inventory");
+
 
 // ✅ Helper to dynamically push values into array fields if not already present
 const addDynamicValue = async (field, value) => {
