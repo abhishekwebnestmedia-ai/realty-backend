@@ -26,7 +26,7 @@ const inventorySchema = new mongoose.Schema({
   Project: { type: [String], required: true },
   contactNumbers: { type: [String], required: true },
   email: { type: String },
-  paymentStatus: { type: [String] },
+  paymentStatus: { type: [String]},
   registryType: {
     type: String,
     enum: validRegistryTypes

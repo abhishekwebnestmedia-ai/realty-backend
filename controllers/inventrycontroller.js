@@ -12,6 +12,21 @@ exports.createInventry = async (req, res) => {
   }
 };
 
+exports.getDropdownOptions = async (req, res) => {
+  try {
+    const typology = await Inventory.distinct("typology");
+    const source = await Inventory.distinct("source");
+    const paymentStatus = await Inventory.distinct("paymentStatus");
+
+    res.json({
+      typology,
+      source,
+      paymentStatus,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
 
 exports.getInventryById = async (req, res) => {
   try {
