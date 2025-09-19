@@ -1,7 +1,6 @@
 
 const Inventory = require('../models/inventryModel'); 
 
-
 exports.createInventry = async (req, res) => {
   try {
     const record = new Inventory(req.body);
@@ -40,9 +39,6 @@ exports.getInventryById = async (req, res) => {
   }
 };
 
-
-
-
 exports.bulkUploadInventry = async (req, res) => {
   try {
     const { records } = req.body;
@@ -68,8 +64,6 @@ exports.bulkUploadInventry = async (req, res) => {
     });
   }
 };
-
-
 
 exports.updateInventry = async (req, res) => {
   try {

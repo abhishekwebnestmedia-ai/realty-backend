@@ -5,7 +5,7 @@ const authMiddleware = require('../middleware/authmiddleware')
 
 
 router.post('/createinventry',authMiddleware,inventrycontroller.createInventry);
-router.get('/inventry/dropdown', authMiddleware, inventrycontroller.getDropdownOptions);
+router.get('/dropdown', authMiddleware, inventrycontroller.getDropdownOptions);
 
 router.get('/inventrylist', authMiddleware ,inventrycontroller.getAllInventry);
 router.get('/inventrylist/:id',authMiddleware , inventrycontroller.getInventryById);
