@@ -20,7 +20,7 @@ const inventorySchema = new mongoose.Schema({
   sector: { type: String },
   unitNo: { type: String },
   towerNo: { type: String },
-  typology: { type: String },
+  typology: { type: [String ]},
   size: { type: String },
   demand: { type: String },
   Project: { type: [String], required: true },
@@ -37,9 +37,9 @@ const inventorySchema = new mongoose.Schema({
   assignTo: { type: String },
   transferTo: { type: String },
   followUpDate: { type: String },
-  source: { type: String },
+  source: { type: [String ]},
   loanStatus: { type: String },
-  remarks: { type: String }
+  remarks: { type: String } 
 }, {
   timestamps: true // Adds createdAt and updatedAt
 });
