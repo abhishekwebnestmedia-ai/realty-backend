@@ -438,6 +438,9 @@
 // };
 
 
+
+
+
 const Lead = require('../models/leadModel');
 const User = require('../models/user');
 const mongoose = require("mongoose");
@@ -563,15 +566,27 @@ exports.assignLead = async (req, res) => {
 };
 
 // 🔹 Get All Leads
+// exports.getLeads = async (req, res) => {
+//   try {
+//     const leads = await Lead.find().populate("assignTo", "name email");
+//     res.json({ success: true, data: leads });
+//   } catch (err) {
+//     console.error("❌ getLeads error:", err);
+//     res.status(500).json({ success: false, message: "Error fetching leads" });
+//   }
+// };
 exports.getLeads = async (req, res) => {
   try {
-    const leads = await Lead.find().populate("assignTo", "name email");
+    const leads = await Lead.find()
+      .populate("assignTo", "name email")
+      .sort({ createdAt: -1 }); // newest first
     res.json({ success: true, data: leads });
   } catch (err) {
     console.error("❌ getLeads error:", err);
     res.status(500).json({ success: false, message: "Error fetching leads" });
   }
 };
+
 
 // 🔹 Update Lead
 exports.updateLead = async (req, res) => {

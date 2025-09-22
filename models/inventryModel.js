@@ -11,6 +11,8 @@ const validRegistryTypes = [
   "Transferred"
 ];
 
+
+
 const inventorySchema = new mongoose.Schema({
   sellerName: { type: String, required: true },
   inventoryType: {
