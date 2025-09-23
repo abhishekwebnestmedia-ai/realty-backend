@@ -1,6 +1,5 @@
 const DailyPerformance = require('../models/DailyTask');
 
-// Get all records
 exports.getAllPerformances = async (req, res) => {
   try {
     const records = await DailyPerformance.find().sort({ date: -1 });
@@ -10,7 +9,6 @@ exports.getAllPerformances = async (req, res) => {
   }
 };
 
-// Add a new record
 exports.addPerformance = async (req, res) => {
   try {
     const newRecord = new DailyPerformance(req.body);
@@ -21,7 +19,6 @@ exports.addPerformance = async (req, res) => {
   }
 };
 
-// Get single record by id
 exports.getPerformanceById = async (req, res) => {
   try {
     const record = await DailyPerformance.findById(req.params.id);
@@ -32,7 +29,6 @@ exports.getPerformanceById = async (req, res) => {
   }
 };
 
-// Update record by id
 exports.updatePerformance = async (req, res) => {
   try {
     const updated = await DailyPerformance.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -43,7 +39,6 @@ exports.updatePerformance = async (req, res) => {
   }
 };
 
-// Delete record by id
 exports.deletePerformance = async (req, res) => {
   try {
     const deleted = await DailyPerformance.findByIdAndDelete(req.params.id);
