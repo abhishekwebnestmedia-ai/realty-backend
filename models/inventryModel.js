@@ -1,4 +1,4 @@
-// models/Inventory.js
+
 const mongoose = require('mongoose');
 
 const validInventoryTypes = [
