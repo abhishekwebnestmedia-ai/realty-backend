@@ -15,9 +15,14 @@ exports.addPerformance = async (req, res) => {
     await newRecord.save();
     res.status(201).json(newRecord);
   } catch (err) {
+    // Handle duplicate key error for unique constraint violation (code 11000)
+    if (err.code === 11000) {
+      return res.status(409).json({ error: 'A record for this user and date already exists' });
+    }
     res.status(400).json({ error: err.message });
   }
 };
+
 
 exports.getPerformanceById = async (req, res) => {
   try {

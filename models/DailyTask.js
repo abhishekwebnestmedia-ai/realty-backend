@@ -1,3 +1,29 @@
+// const mongoose = require('mongoose');
+
+// const performanceSchema = new mongoose.Schema({
+//   name: { type: String, required: true },
+//   date: { type: Date, required: true },
+//   morningCommitment: {
+//     onlinePortalChecked: { type: Boolean, required: true },
+//     whatsappStatus: { type: Boolean, required: true },
+//     emailWorking: { type: Number },       
+//     buyersWorking: { type: Number },
+//     sellersWorking: { type: Number, required: true }
+//   },
+//   eveningAchievements: {
+//     onlinePortalChecked: { type: Boolean, required: true },
+//     whatsappStatus: { type: Boolean, required: true },
+//     emailWorking: { type: Number },       
+//     buyersWorking: { type: Number },
+//     sellersWorking: { type: Number, required: true }
+//   },
+//   meetingVisits: { type: Number },       
+//   addNotes: { type: String }                
+// });
+
+// module.exports = mongoose.model('DailyPerformance', performanceSchema);
+
+
 const mongoose = require('mongoose');
 
 const performanceSchema = new mongoose.Schema({
@@ -6,19 +32,22 @@ const performanceSchema = new mongoose.Schema({
   morningCommitment: {
     onlinePortalChecked: { type: Boolean, required: true },
     whatsappStatus: { type: Boolean, required: true },
-    emailWorking: { type: Number },       // added according to your latest image
+    emailWorking: { type: Number },
     buyersWorking: { type: Number },
     sellersWorking: { type: Number, required: true }
   },
   eveningAchievements: {
     onlinePortalChecked: { type: Boolean, required: true },
     whatsappStatus: { type: Boolean, required: true },
-    emailWorking: { type: Number },       // added here too for evening
+    emailWorking: { type: Number },
     buyersWorking: { type: Number },
     sellersWorking: { type: Number, required: true }
   },
-  meetingVisits: { type: Number },         // field from your latest image
-  addNotes: { type: String }                // added field for 'Add notes'
+  meetingVisits: { type: Number },
+  addNotes: { type: String }
 });
+
+// Add compound unique index on name + date
+performanceSchema.index({ name: 1, date: 1 }, { unique: true });
 
 module.exports = mongoose.model('DailyPerformance', performanceSchema);
