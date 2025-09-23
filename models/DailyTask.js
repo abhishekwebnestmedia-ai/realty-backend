@@ -30,15 +30,15 @@ const performanceSchema = new mongoose.Schema({
   name: { type: String, required: true },
   date: { type: Date, required: true },
   morningCommitment: {
-    onlinePortalChecked: { type: Boolean, required: true },
-    whatsappStatus: { type: Boolean, required: true },
+    onlinePortalChecked: { type:  Number, required: true },
+    whatsappStatus: { type:  Number, required: true },
     emailWorking: { type: Number },
     buyersWorking: { type: Number },
     sellersWorking: { type: Number, required: true }
   },
   eveningAchievements: {
-    onlinePortalChecked: { type: Boolean, required: true },
-    whatsappStatus: { type: Boolean, required: true },
+    onlinePortalChecked: { type:  Number, required: true },
+    whatsappStatus: { type:  Number, required: true },
     emailWorking: { type: Number },
     buyersWorking: { type: Number },
     sellersWorking: { type: Number, required: true }
