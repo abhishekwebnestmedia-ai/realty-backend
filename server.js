@@ -32,21 +32,21 @@ app.use(cors({
 app.use(express.json());
 app.use(morgan('dev'));
 
-// Import routes
+
 const authRoutes = require('./routes/authroute');
 const contactRoutes = require('./routes/contactroute');
 const leadRoutes = require('./routes/leadroute');
 const inventryRoutes = require('./routes/inventryroute');
 const DailyTaskRoute = require("./routes/dailyroute");
 
-// Use routes
+
 app.use('/api/auth', authRoutes);
 app.use('/api/submitform', contactRoutes);
 app.use('/api/realtleads', leadRoutes);
 app.use('/api/inventry', inventryRoutes);
 app.use('/api/dailytask',DailyTaskRoute );
 
-// Root endpoint
+
 app.get('/', (req, res) => {
   res.send('CRM backend server is running');
 });

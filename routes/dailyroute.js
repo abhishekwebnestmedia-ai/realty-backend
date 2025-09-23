@@ -1,11 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const performanceController = require('../controllers/dailyTaskcontroller');
+const authMiddleware = require('../middleware/authmiddleware');
 
-router.get('/task', performanceController.getAllPerformances);
-router.post('/task', performanceController.addPerformance);
-router.get('/task/:id', performanceController.getPerformanceById);
-router.put('/task/:id', performanceController.updatePerformance);
-router.delete('/task/:id', performanceController.deletePerformance);
+
+router.get('/task',authMiddleware, performanceController.getAllPerformances);
+router.post('/task',authMiddleware, performanceController.addPerformance);
+router.get('/task/:id',authMiddleware,  performanceController.getPerformanceById);
+router.put('/task/:id',authMiddleware, performanceController.updatePerformance);
+router.delete('/task/:id',authMiddleware, performanceController.deletePerformance);
 
 module.exports = router;
