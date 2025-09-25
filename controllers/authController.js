@@ -321,4 +321,23 @@ exports.getLoggedInUsers = async (req, res) => {
 
 
 
+exports.getUsersLoginStatusSimple = async (req, res) => {
+  try {
+    // Get all users with only name, email, and isLoggedIn fields
+    const users = await User.find().select('name email isLoggedIn');
+
+    res.json({
+      success: true,
+      count: users.length,
+      users: users,
+    });
+  } catch (err) {
+    console.error("❌ getUsersLoginStatusSimple error:", err);
+    res.status(500).json({ success: false, message: 'Server error fetching users' });
+  }
+};
+
+
+
+
 
