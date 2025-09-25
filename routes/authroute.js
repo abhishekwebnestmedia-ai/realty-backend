@@ -7,13 +7,14 @@ router.post('/register', authController.register);
 router.post('/login', authController.login);
 router.post('/logout', authMiddleware, authController.logout);
 
-// Forgot Password route - send reset link
+ link
 router.post('/forgot-password', authController.forgotPassword);
 router.get('/profile', authMiddleware, authController.getProfile);
 
-// Reset Password route - submit new password along with token
+
 router.post('/reset-password', authController.resetPassword);
 router.get('/alluser', authMiddleware,authController.getAllUsers);
+router.get('/loggedinUser', authMiddleware, authController.getLoggedInUsers);
 
 
 

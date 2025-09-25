@@ -55,9 +55,45 @@ exports.register = async (req, res) => {
   }
 };
 
+// exports.login = async (req, res) => {
+//   try {
+   
+//     const { email, password } = req.body;
+
+//     // --- Field-specific validation ---
+//     let missingFields = [];
+//     if (!email) missingFields.push('Email is missing');
+//     if (!password) missingFields.push('Password is missing');
+
+//     if (missingFields.length > 0) {
+//       return res.status(400).json({ message: missingFields.join(', ') });
+//     }
+
+//     const user = await User.findOne({ email });
+//     if (!user) return res.status(400).json({ message: 'Invalid credentials' });
+
+//     const isMatch = await bcrypt.compare(password, user.password);
+//     if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
+
+//     user.lastLoginAt = new Date();
+//     await user.save();
+
+//     const token = jwt.sign(
+//       { userId: user._id, email: user.email },
+//       process.env.JWT_SECRET,
+//       { expiresIn: '1h' }
+//     );
+
+//     res.json({ token, message: 'Login successful' });
+
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// };
+
 exports.login = async (req, res) => {
   try {
-   
     const { email, password } = req.body;
 
     // --- Field-specific validation ---
@@ -76,6 +112,7 @@ exports.login = async (req, res) => {
     if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
 
     user.lastLoginAt = new Date();
+    user.isLoggedIn = true;   // <-- Set login status to true
     await user.save();
 
     const token = jwt.sign(
@@ -91,6 +128,7 @@ exports.login = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 
 exports.getProfile = async (req, res) => {
@@ -141,10 +179,6 @@ exports.getAllUsers = async (req, res) => {
 };
 
 
-
-
-
-
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -152,6 +186,8 @@ const transporter = nodemailer.createTransport({
     pass: 'geoe oqaq ngth kpfm'
   }
 });
+
+
 
 async function sendResetEmail(email, token) {
   const resetUrl = `https://realtyxpo.in/reset-password?token=${token}`;
@@ -228,6 +264,24 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
+
+
+exports.getLoggedInUsers = async (req, res) => {
+  try {
+    // Find all users who are currently logged in
+    const loggedInUsers = await User.find({ isLoggedIn: true }).select('-password'); 
+    // Exclude the password field for security
+
+    res.json({
+      success: true,
+      count: loggedInUsers.length,
+      users: loggedInUsers
+    });
+  } catch (err) {
+    console.error("❌ getLoggedInUsers error:", err);
+    res.status(500).json({ success: false, message: 'Server error fetching logged-in users' });
+  }
+};
 
 
 
