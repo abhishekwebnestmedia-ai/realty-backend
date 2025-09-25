@@ -7,7 +7,7 @@ router.post('/register', authController.register);
 router.post('/login', authController.login);
 router.post('/logout', authMiddleware, authController.logout);
 
- link
+ 
 router.post('/forgot-password', authController.forgotPassword);
 router.get('/profile', authMiddleware, authController.getProfile);
 
