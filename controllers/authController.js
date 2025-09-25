@@ -286,20 +286,36 @@ exports.resetPassword = async (req, res) => {
 
 
 
+// exports.getLoggedInUsers = async (req, res) => {
+//   try {
+//     // Find all users who are currently logged in
+//     const loggedInUsers = await User.find({ isLoggedIn: true }).select('-password'); 
+//     // Exclude the password field for security
+
+//     res.json({
+//       success: true,
+//       count: loggedInUsers.length,
+//       users: loggedInUsers
+//     });
+//   } catch (err) {
+//     console.error("❌ getLoggedInUsers error:", err);
+//     res.status(500).json({ success: false, message: 'Server error fetching logged-in users' });
+//   }
+// };
+
 exports.getLoggedInUsers = async (req, res) => {
   try {
-    // Find all users who are currently logged in
-    const loggedInUsers = await User.find({ isLoggedIn: true }).select('-password'); 
-    // Exclude the password field for security
+    // Fetch all users, including their isLoggedIn status
+    const users = await User.find().select('-password'); // no filter on isLoggedIn
 
     res.json({
       success: true,
-      count: loggedInUsers.length,
-      users: loggedInUsers
+      count: users.length,
+      users: users,
     });
   } catch (err) {
     console.error("❌ getLoggedInUsers error:", err);
-    res.status(500).json({ success: false, message: 'Server error fetching logged-in users' });
+    res.status(500).json({ success: false, message: 'Server error fetching users' });
   }
 };
 
