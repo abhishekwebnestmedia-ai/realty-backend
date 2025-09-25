@@ -144,14 +144,36 @@ exports.getProfile = async (req, res) => {
 
 
 
+// exports.logout = async (req, res) => {
+//   try {
+//     const userId = req.user.userId; // From auth middleware
+
+//     const user = await User.findById(userId);
+//     if (!user) return res.status(400).json({ message: 'User not found' });
+
+//     user.lastLogoutAt = new Date();
+//     await user.save();
+
+//     res.json({ message: 'Logout successful' });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// };
+
+
+// Get all users (only id, name, email)
+
+
 exports.logout = async (req, res) => {
   try {
-    const userId = req.user.userId; // From auth middleware
+    const userId = req.user.userId;
 
     const user = await User.findById(userId);
     if (!user) return res.status(400).json({ message: 'User not found' });
 
     user.lastLogoutAt = new Date();
+    user.isLoggedIn = false;  // Add this line
     await user.save();
 
     res.json({ message: 'Logout successful' });
@@ -161,8 +183,6 @@ exports.logout = async (req, res) => {
   }
 };
 
-
-// Get all users (only id, name, email)
 exports.getAllUsers = async (req, res) => {
   try {
     const users = await User.find({}, { _id: 1, name: 1, email: 1 });
