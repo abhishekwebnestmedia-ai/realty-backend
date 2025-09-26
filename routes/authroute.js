@@ -16,6 +16,7 @@ router.post('/reset-password', authController.resetPassword);
 router.get('/alluser', authMiddleware,authController.getAllUsers);
 router.get('/loggedinUser', authMiddleware, authController.getLoggedInUsers);
 router.get('/activeuser', authMiddleware, authController.getUsersLoginStatusSimple);
+router.put('/change-role/:userId', authMiddleware, authController.changeUserRole);
 
 
 module.exports = router;

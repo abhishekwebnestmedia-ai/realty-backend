@@ -56,83 +56,6 @@ exports.register = async (req, res) => {
 };
 
 
-// exports.login = async (req, res) => {
-//   try {
-   
-//     const { email, password } = req.body;
-
-//     // --- Field-specific validation ---
-//     let missingFields = [];
-//     if (!email) missingFields.push('Email is missing');
-//     if (!password) missingFields.push('Password is missing');
-
-//     if (missingFields.length > 0) {
-//       return res.status(400).json({ message: missingFields.join(', ') });
-//     }
-
-//     const user = await User.findOne({ email });
-//     if (!user) return res.status(400).json({ message: 'Invalid credentials' });
-
-//     const isMatch = await bcrypt.compare(password, user.password);
-//     if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
-
-//     user.lastLoginAt = new Date();
-//     await user.save();
-
-//     const token = jwt.sign(
-//       { userId: user._id, email: user.email },
-//       process.env.JWT_SECRET,
-//       { expiresIn: '1h' }
-//     );
-
-//     res.json({ token, message: 'Login successful' });
-
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-// exports.login = async (req, res) => {
-//   try {
-//     const { email, password } = req.body;
-
-//     // --- Field-specific validation ---
-//     let missingFields = [];
-//     if (!email) missingFields.push('Email is missing');
-//     if (!password) missingFields.push('Password is missing');
-
-//     if (missingFields.length > 0) {
-//       return res.status(400).json({ message: missingFields.join(', ') });
-//     }
-
-//     const user = await User.findOne({ email });
-//     if (!user) return res.status(400).json({ message: 'Invalid credentials' });
-
-//     const isMatch = await bcrypt.compare(password, user.password);
-//     if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
-
-//     user.lastLoginAt = new Date();
-//     user.isLoggedIn = true;   // <-- Set login status to true
-//     await user.save();
-
-//     const token = jwt.sign(
-
-//       { userId: user._id, email: user.email },
-
-//       process.env.JWT_SECRET,
-//       { expiresIn: '1h' }
-//     );
-
-//     res.json({ token, message: 'Login successful' });
-
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -178,7 +101,6 @@ exports.login = async (req, res) => {
   }
 };
 
-
 exports.getProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select('-password');
@@ -190,27 +112,6 @@ exports.getProfile = async (req, res) => {
   }
 };
 
-
-
-// exports.logout = async (req, res) => {
-//   try {
-//     const userId = req.user.userId; // From auth middleware
-
-//     const user = await User.findById(userId);
-//     if (!user) return res.status(400).json({ message: 'User not found' });
-
-//     user.lastLogoutAt = new Date();
-//     await user.save();
-
-//     res.json({ message: 'Logout successful' });
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-
-// Get all users (only id, name, email)
 
 
 exports.logout = async (req, res) => {
@@ -246,6 +147,35 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
+
+exports.changeUserRole = async (req, res) => {
+  try {
+    const { userId } = req.params;       // ID of the user to update
+    const { role } = req.body;           // new role
+
+    // Only superadmin can change roles
+    if (req.user.role !== 'superadmin') {
+      return res.status(403).json({ message: 'You are not authorized to change roles' });
+    }
+
+    // Validate role
+    const validRoles = ['admin', 'sales', 'user'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ message: 'Invalid role' });
+    }
+
+    const userToUpdate = await User.findById(userId);
+    if (!userToUpdate) return res.status(404).json({ message: 'User not found' });
+
+    userToUpdate.role = role;
+    await userToUpdate.save();
+
+    res.status(200).json({ message: 'Role updated successfully', user: userToUpdate });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
