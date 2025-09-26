@@ -13,7 +13,6 @@ const userSchema = new mongoose.Schema({
   registeredAt: { type: Date, default: Date.now },
     firstLoginAt: { type: Date },
     firstLogoutAt: { type: Date },
- 
   lastLoginAt: { type: Date },
   lastLogoutAt: { type: Date },
   isLoggedIn: { type: Boolean, default: false }

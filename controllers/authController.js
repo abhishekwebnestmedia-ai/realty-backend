@@ -56,6 +56,52 @@ exports.register = async (req, res) => {
 };
 
 
+
+// exports.login = async (req, res) => {
+//   try {
+//     const { email, password } = req.body;
+
+//     // --- Field-specific validation ---
+//     let missingFields = [];
+//     if (!email) missingFields.push('Email is missing');
+//     if (!password) missingFields.push('Password is missing');
+
+//     if (missingFields.length > 0) {
+//       return res.status(400).json({ message: missingFields.join(', ') });
+//     }
+
+//     const user = await User.findOne({ email });
+//     if (!user) return res.status(400).json({ message: 'Invalid credentials' });
+
+//     const isMatch = await bcrypt.compare(password, user.password);
+//     if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
+
+//     // Update login info
+//     user.lastLoginAt = new Date();
+//     user.isLoggedIn = true;
+//     await user.save();
+
+//     // Include role in JWT
+//     const token = jwt.sign(
+//       { userId: user._id, email: user.email, role: user.role }, // <-- added role
+//       process.env.JWT_SECRET,
+//       { expiresIn: '1h' }
+//     );
+
+    
+//     res.json({
+//       token,
+//       role: user.role,         // <-- send role to frontend
+//       userId: user._id,        // optional, for frontend use
+//       message: 'Login successful'
+//     });
+
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// };
+
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -75,31 +121,35 @@ exports.login = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
 
-    // Update login info
-    user.lastLoginAt = new Date();
+    // ✅ Update login info
+    if (!user.firstLoginAt) {
+      user.firstLoginAt = new Date();   // only once
+    }
+    user.lastLoginAt = new Date();      // always update
     user.isLoggedIn = true;
     await user.save();
 
-    // Include role in JWT
+    // ✅ Include role in JWT
     const token = jwt.sign(
-      { userId: user._id, email: user.email, role: user.role }, // <-- added role
+      { userId: user._id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
 
-    // Send token and role in response
     res.json({
       token,
-      role: user.role,         // <-- send role to frontend
-      userId: user._id,        // optional, for frontend use
-      message: 'Login successful'
+      role: user.role,
+      userId: user._id,
+      message: 'Login successful',
     });
 
   } catch (err) {
-    console.error(err);
+    console.error("❌ login error:", err);
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+
 
 exports.getProfile = async (req, res) => {
   try {
@@ -318,7 +368,7 @@ exports.getLoggedInUsers = async (req, res) => {
 
 exports.getUsersLoginStatusSimple = async (req, res) => {
   try {
-    const users = await User.find().select('name email isLoggedIn firstLoginAt firstLogoutAt  lastLogoutAt');
+    const users = await User.find().select('name email isLoggedIn firstLoginAt firstLogoutAt lastLogoutAt');
 
     res.json({
       success: true,
