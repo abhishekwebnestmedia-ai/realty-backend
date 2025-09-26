@@ -318,7 +318,7 @@ exports.getLoggedInUsers = async (req, res) => {
 
 exports.getUsersLoginStatusSimple = async (req, res) => {
   try {
-    const users = await User.find().select('name email isLoggedIn firstLoginAt firstLogoutAt');
+    const users = await User.find().select('name email isLoggedIn firstLoginAt firstLogoutAt  lastLogoutAt');
 
     res.json({
       success: true,
