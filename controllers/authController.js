@@ -153,7 +153,7 @@ exports.changeUserRole = async (req, res) => {
     const { userId } = req.params;       // ID of the user to update
     const { role } = req.body;           // new role
 
-    // Only superadmin can change roles
+    // Only admin can change roles
     if (req.user.role !== 'admin') {
       return res.status(403).json({ message: 'You are not authorized to change roles' });
     }
@@ -281,6 +281,7 @@ exports.resetPassword = async (req, res) => {
 //   }
 // };
 
+
 exports.getLoggedInUsers = async (req, res) => {
   try {
     // Fetch all users, including their isLoggedIn status
@@ -299,10 +300,25 @@ exports.getLoggedInUsers = async (req, res) => {
 
 
 
+// exports.getUsersLoginStatusSimple = async (req, res) => {
+//   try {
+   
+//     const users = await User.find().select('name email isLoggedIn');
+
+//     res.json({
+//       success: true,
+//       count: users.length,
+//       users: users,
+//     });
+//   } catch (err) {
+//     console.error("❌ getUsersLoginStatusSimple error:", err);
+//     res.status(500).json({ success: false, message: 'Server error fetching users' });
+//   }
+// };
+
 exports.getUsersLoginStatusSimple = async (req, res) => {
   try {
-    // Get all users with only name, email, and isLoggedIn fields
-    const users = await User.find().select('name email isLoggedIn');
+    const users = await User.find().select('name email isLoggedIn firstLoginAt firstLogoutAt');
 
     res.json({
       success: true,
@@ -314,6 +330,7 @@ exports.getUsersLoginStatusSimple = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error fetching users' });
   }
 };
+
 
 
 
