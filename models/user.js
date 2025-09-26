@@ -13,7 +13,7 @@ const userSchema = new mongoose.Schema({
   registeredAt: { type: Date, default: Date.now },
   lastLoginAt: { type: Date },
   lastLogoutAt: { type: Date },
- isLoggedIn: { type: Boolean, default: false }
+  isLoggedIn: { type: Boolean, default: false }
 
   
 }, {
