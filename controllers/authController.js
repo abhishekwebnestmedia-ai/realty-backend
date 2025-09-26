@@ -154,7 +154,7 @@ exports.changeUserRole = async (req, res) => {
     const { role } = req.body;           // new role
 
     // Only superadmin can change roles
-    if (req.user.role !== 'superadmin') {
+    if (req.user.role !== 'admin') {
       return res.status(403).json({ message: 'You are not authorized to change roles' });
     }
 
