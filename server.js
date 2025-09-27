@@ -38,6 +38,9 @@ const contactRoutes = require('./routes/contactroute');
 const leadRoutes = require('./routes/leadroute');
 const inventryRoutes = require('./routes/inventryroute');
 const DailyTaskRoute = require("./routes/dailyroute");
+const projectRoutes = require('./routes/projectroute');
+
+
 
 
 app.use('/api/auth', authRoutes);
@@ -45,7 +48,7 @@ app.use('/api/submitform', contactRoutes);
 app.use('/api/realtleads', leadRoutes);
 app.use('/api/inventry', inventryRoutes);
 app.use('/api/dailytask',DailyTaskRoute );
-
+app.use('/api/projects', projectRoutes);
 
 app.get('/', (req, res) => {
   res.send('CRM backend server is running');
