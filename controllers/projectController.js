@@ -469,10 +469,11 @@ exports.addTower = async (req, res) => {
 };
 
 // ✅ Step 7 - Add Unit
+// ✅ Step 7 - Add Unit (fixed)
 exports.addUnit = async (req, res) => {
   try {
     const { projectType, cityId, divisionId, sectorId, projectId, towerId } = req.params;
-    const { unitNumber } = req.body;
+    const unitData = req.body; // 👈 get full unit data
 
     const typeDoc = await ProjectType.findOne({ projectType });
     if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
@@ -483,10 +484,11 @@ exports.addUnit = async (req, res) => {
     const project = sector.projects.id(projectId);
     const tower = project.towers.id(towerId);
 
-    tower.units.push({ unitNumber });
+    // ✅ push the full unit data
+    tower.units.push(unitData);
     await typeDoc.save();
 
-    res.json(typeDoc); // ✅ full hierarchy
+    res.json(typeDoc); // return updated hierarchy
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -518,3 +520,7 @@ exports.updateUnit = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+
+
+
