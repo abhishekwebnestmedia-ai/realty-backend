@@ -451,7 +451,8 @@ const validStatuses = [
   "Serious",
   "Potential",
   "Futuristic",
-  "Dead Lead"
+  "Dead Lead",
+  "Completed"
 ];
 
 const validLeadTypes = ["Buyer", "Rental"];
