@@ -389,6 +389,7 @@ exports.updateUnit = async (req, res) => {
 };
 
 
+
 // Delete an entity at any level from ProjectType down to Unit
 exports.deleteEntity = async (req, res) => {
   try {
@@ -400,81 +401,83 @@ exports.deleteEntity = async (req, res) => {
       sectorId,
       projectId,
       towerId,
-      unitId
+      unitId,
     } = req.params;
 
     const typeDoc = await ProjectType.findOne({ category, projectcategory });
-    if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
+    if (!typeDoc) {
+      return res.status(404).json({ error: "ProjectType not found" });
+    }
 
-    // If only category and projectcategory provided, delete whole ProjectType doc
+    // ---- Delete entire ProjectType ----
     if (!cityId) {
       await ProjectType.deleteOne({ category, projectcategory });
       return res.json({ message: "ProjectType deleted" });
     }
 
-    // Find city
+    // ---- City ----
     const city = typeDoc.cities.id(cityId);
     if (!city) return res.status(404).json({ error: "City not found" });
 
     if (!divisionId) {
-      city.remove();
+      await city.deleteOne();
       await typeDoc.save();
-      return res.json({ message: "City deleted", typeDoc });
+      return res.json({ message: "City deleted" });
     }
 
-    // Find division
+    // ---- Division ----
     const division = city.divisions.id(divisionId);
     if (!division) return res.status(404).json({ error: "Division not found" });
 
     if (!sectorId) {
-      division.remove();
+      await division.deleteOne();
       await typeDoc.save();
-      return res.json({ message: "Division deleted", typeDoc });
+      return res.json({ message: "Division deleted" });
     }
 
-    // Find sector
+    // ---- Sector ----
     const sector = division.sectors.id(sectorId);
     if (!sector) return res.status(404).json({ error: "Sector not found" });
 
     if (!projectId) {
-      sector.remove();
+      await sector.deleteOne();
       await typeDoc.save();
-      return res.json({ message: "Sector deleted", typeDoc });
+      return res.json({ message: "Sector deleted" });
     }
 
-    // Find project
+    // ---- Project ----
     const project = sector.projects.id(projectId);
     if (!project) return res.status(404).json({ error: "Project not found" });
 
     if (!towerId) {
-      project.remove();
+      await project.deleteOne();
       await typeDoc.save();
-      return res.json({ message: "Project deleted", typeDoc });
+      return res.json({ message: "Project deleted" });
     }
 
-    // Find tower
+    // ---- Tower ----
     const tower = project.towers.id(towerId);
     if (!tower) return res.status(404).json({ error: "Tower not found" });
 
     if (!unitId) {
-      tower.remove();
+      await tower.deleteOne();
       await typeDoc.save();
-      return res.json({ message: "Tower deleted", typeDoc });
+      return res.json({ message: "Tower deleted" });
     }
 
-    // Find unit
+    // ---- Unit ----
     const unit = tower.units.id(unitId);
     if (!unit) return res.status(404).json({ error: "Unit not found" });
 
-    // Delete unit
-    unit.remove();
+    await unit.deleteOne();
     await typeDoc.save();
-    return res.json({ message: "Unit deleted", typeDoc });
+
+    return res.json({ message: "Unit deleted" });
   } catch (err) {
+    console.error("❌ deleteEntity error:", err);
     res.status(500).json({ error: err.message });
   }
 };
-
 
 
 
