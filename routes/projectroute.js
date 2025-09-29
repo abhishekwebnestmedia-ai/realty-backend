@@ -387,12 +387,12 @@ router.get(
 );
 
 
-
-
 // Delete entire ProjectType (root)
+
 
 router.delete(
   "/projectType/:category/:projectcategory",
+    authMiddleware,
   projectController.deleteEntity
 );
 
@@ -400,6 +400,7 @@ router.delete(
 
 router.delete(
   "/projectType/:category/:projectcategory/cities/:cityId",
+    authMiddleware,
   projectController.deleteEntity
 );
 
@@ -407,6 +408,7 @@ router.delete(
 
 router.delete(
   "/projectType/:category/:projectcategory/cities/:cityId/divisions/:divisionId",
+    authMiddleware,
   projectController.deleteEntity
 );
 
@@ -414,12 +416,14 @@ router.delete(
 
 router.delete(
   "/projectType/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId",
+    authMiddleware,
   projectController.deleteEntity
 );
 
 // Delete Project
 router.delete(
   "/projectType/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId",
+    authMiddleware,
   projectController.deleteEntity
 );
 
@@ -427,6 +431,7 @@ router.delete(
 
 router.delete(
   "/projectType/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId",
+    authMiddleware,
   projectController.deleteEntity
 );
 
@@ -435,6 +440,7 @@ router.delete(
 
 router.delete(
   "/projectType/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId/units/:unitId",
+    authMiddleware,
   projectController.deleteEntity
 );
 
