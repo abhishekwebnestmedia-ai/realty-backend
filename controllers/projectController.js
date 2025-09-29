@@ -480,4 +480,168 @@ exports.deleteEntity = async (req, res) => {
 };
 
 
+exports.deleteProjectTypeById = async (req, res) => {
+  try {
+    const deleted = await ProjectType.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ error: "ProjectType not found" });
+    }
+    res.json({ message: "ProjectType deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// -----------------------------
+// Delete City by ID
+// -----------------------------
+exports.deleteCityById = async (req, res) => {
+  try {
+    const typeDoc = await ProjectType.findOne({ "cities._id": req.params.cityId });
+    if (!typeDoc) return res.status(404).json({ error: "City not found" });
+
+    typeDoc.cities.id(req.params.cityId).deleteOne();
+    await typeDoc.save();
+
+    res.json({ message: "City deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// -----------------------------
+// Delete Division by ID
+// -----------------------------
+exports.deleteDivisionById = async (req, res) => {
+  try {
+    const typeDoc = await ProjectType.findOne({ "cities.divisions._id": req.params.divisionId });
+    if (!typeDoc) return res.status(404).json({ error: "Division not found" });
+
+    for (const city of typeDoc.cities) {
+      const division = city.divisions.id(req.params.divisionId);
+      if (division) {
+        division.deleteOne();
+        await typeDoc.save();
+        return res.json({ message: "Division deleted successfully" });
+      }
+    }
+
+    res.status(404).json({ error: "Division not found" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// -----------------------------
+// Delete Sector by ID
+// -----------------------------
+exports.deleteSectorById = async (req, res) => {
+  try {
+    const typeDoc = await ProjectType.findOne({ "cities.divisions.sectors._id": req.params.sectorId });
+    if (!typeDoc) return res.status(404).json({ error: "Sector not found" });
+
+    for (const city of typeDoc.cities) {
+      for (const division of city.divisions) {
+        const sector = division.sectors.id(req.params.sectorId);
+        if (sector) {
+          sector.deleteOne();
+          await typeDoc.save();
+          return res.json({ message: "Sector deleted successfully" });
+        }
+      }
+    }
+
+    res.status(404).json({ error: "Sector not found" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// -----------------------------
+// Delete Project by ID
+// -----------------------------
+exports.deleteProjectById = async (req, res) => {
+  try {
+    const typeDoc = await ProjectType.findOne({ "cities.divisions.sectors.projects._id": req.params.projectId });
+    if (!typeDoc) return res.status(404).json({ error: "Project not found" });
+
+    for (const city of typeDoc.cities) {
+      for (const division of city.divisions) {
+        for (const sector of division.sectors) {
+          const project = sector.projects.id(req.params.projectId);
+          if (project) {
+            project.deleteOne();
+            await typeDoc.save();
+            return res.json({ message: "Project deleted successfully" });
+          }
+        }
+      }
+    }
+
+    res.status(404).json({ error: "Project not found" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// -----------------------------
+// Delete Tower by ID
+// -----------------------------
+exports.deleteTowerById = async (req, res) => {
+  try {
+    const typeDoc = await ProjectType.findOne({ "cities.divisions.sectors.projects.towers._id": req.params.towerId });
+    if (!typeDoc) return res.status(404).json({ error: "Tower not found" });
+
+    for (const city of typeDoc.cities) {
+      for (const division of city.divisions) {
+        for (const sector of division.sectors) {
+          for (const project of sector.projects) {
+            const tower = project.towers.id(req.params.towerId);
+            if (tower) {
+              tower.deleteOne();
+              await typeDoc.save();
+              return res.json({ message: "Tower deleted successfully" });
+            }
+          }
+        }
+      }
+    }
+
+    res.status(404).json({ error: "Tower not found" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// -----------------------------
+// Delete Unit by ID
+// -----------------------------
+exports.deleteUnitById = async (req, res) => {
+  try {
+    const typeDoc = await ProjectType.findOne({ "cities.divisions.sectors.projects.towers.units._id": req.params.unitId });
+    if (!typeDoc) return res.status(404).json({ error: "Unit not found" });
+
+    for (const city of typeDoc.cities) {
+      for (const division of city.divisions) {
+        for (const sector of division.sectors) {
+          for (const project of sector.projects) {
+            for (const tower of project.towers) {
+              const unit = tower.units.id(req.params.unitId);
+              if (unit) {
+                unit.deleteOne();
+                await typeDoc.save();
+                return res.json({ message: "Unit deleted successfully" });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    res.status(404).json({ error: "Unit not found" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 

@@ -445,6 +445,54 @@ router.delete(
 );
 
 
+router.delete(
+  "/projectType/id/:id",
+  authMiddleware,
+  projectController.deleteProjectTypeById
+);
+
+// Delete City by ID
+router.delete(
+  "/city/:cityId",
+  authMiddleware,
+  projectController.deleteCityById
+);
+
+// Delete Division by ID
+router.delete(
+  "/division/:divisionId",
+  authMiddleware,
+  projectController.deleteDivisionById
+);
+
+// Delete Sector by ID
+router.delete(
+  "/sector/:sectorId",
+  authMiddleware,
+  projectController.deleteSectorById
+);
+
+// Delete Project by ID
+router.delete(
+  "/project/:projectId",
+  authMiddleware,
+  projectController.deleteProjectById
+);
+
+// Delete Tower by ID
+router.delete(
+  "/tower/:towerId",
+  authMiddleware,
+  projectController.deleteTowerById
+);
+
+// Delete Unit by ID
+router.delete(
+  "/unit/:unitId",
+  authMiddleware,
+  projectController.deleteUnitById
+);
+
 
 
 module.exports = router;
