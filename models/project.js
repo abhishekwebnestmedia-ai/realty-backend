@@ -95,14 +95,28 @@ const citySchema = new mongoose.Schema({
 });
 
 // --- PROJECT TYPE (ROOT) ---
+// const projectTypeSchema = new mongoose.Schema({
+//   projectType: { 
+//     type: String,
+//     enum: ["Residential", "Commercial", "UnderConstruction", "ReadyToMove"], 
+//     required: true,
+//     unique: true  // 👈 ensures one document per type
+//   },
+//   cities: [citySchema],
+// });
+
 const projectTypeSchema = new mongoose.Schema({
-  projectType: { 
+  category: {
     type: String,
-    enum: ["Residential", "Commercial", "UnderConstruction", "ReadyToMove"], 
-    required: true,
-    unique: true  // 👈 ensures one document per type
+    enum: ["Residential", "Commercial"],
+    required: true
   },
-  cities: [citySchema],
+  projectcategory: {
+    type: String,
+    enum: ["UnderConstruction", "ReadyToMove"],
+    required: true
+  },
+  cities: [citySchema]
 });
 
 module.exports = mongoose.model("ProjectType", projectTypeSchema);
