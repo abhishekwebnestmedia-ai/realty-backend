@@ -446,7 +446,7 @@ router.delete(
 
 
 router.delete(
-  "/projectType/id/:id",
+  "/projectType/:projectid",
   authMiddleware,
   projectController.deleteProjectTypeById
 );
