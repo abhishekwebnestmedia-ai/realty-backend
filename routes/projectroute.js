@@ -215,14 +215,14 @@
 
 // latest one 
 
+
+
+
 const express = require("express");
 const router = express.Router();
 const projectController = require("../controllers/projectController");
 const authMiddleware = require("../middleware/authmiddleware");
 
-// ==========================
-// CREATE / ADD ROUTES
-// ==========================
 
 // Step 1 - Create ProjectType (root)
 router.post("/project-types", authMiddleware, projectController.createProjectType);
@@ -292,7 +292,7 @@ router.get("/project-types", authMiddleware, async (req, res) => {
 });
 
 // Get a single projectType with hierarchy
-router.get("/project-types/:category/:projectcategory", authMiddleware, async (req, res) => {
+router.get("/project-types/:category/:projectcategory", authMiddleware, async (req, res) => { 
   try {
     const ProjectType = require("../models/project");
     const { category, projectcategory } = req.params;
@@ -360,6 +360,7 @@ router.get(
   }
 );
 
+
 // Get units of a tower
 router.get(
   "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId/units",
@@ -384,5 +385,8 @@ router.get(
     }
   }
 );
+
+
+
 
 module.exports = router;

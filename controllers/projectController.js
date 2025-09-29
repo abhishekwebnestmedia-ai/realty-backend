@@ -389,4 +389,92 @@ exports.updateUnit = async (req, res) => {
 };
 
 
+// Delete an entity at any level from ProjectType down to Unit
+exports.deleteEntity = async (req, res) => {
+  try {
+    const {
+      category,
+      projectcategory,
+      cityId,
+      divisionId,
+      sectorId,
+      projectId,
+      towerId,
+      unitId
+    } = req.params;
+
+    const typeDoc = await ProjectType.findOne({ category, projectcategory });
+    if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
+
+    // If only category and projectcategory provided, delete whole ProjectType doc
+    if (!cityId) {
+      await ProjectType.deleteOne({ category, projectcategory });
+      return res.json({ message: "ProjectType deleted" });
+    }
+
+    // Find city
+    const city = typeDoc.cities.id(cityId);
+    if (!city) return res.status(404).json({ error: "City not found" });
+
+    if (!divisionId) {
+      city.remove();
+      await typeDoc.save();
+      return res.json({ message: "City deleted", typeDoc });
+    }
+
+    // Find division
+    const division = city.divisions.id(divisionId);
+    if (!division) return res.status(404).json({ error: "Division not found" });
+
+    if (!sectorId) {
+      division.remove();
+      await typeDoc.save();
+      return res.json({ message: "Division deleted", typeDoc });
+    }
+
+    // Find sector
+    const sector = division.sectors.id(sectorId);
+    if (!sector) return res.status(404).json({ error: "Sector not found" });
+
+    if (!projectId) {
+      sector.remove();
+      await typeDoc.save();
+      return res.json({ message: "Sector deleted", typeDoc });
+    }
+
+    // Find project
+    const project = sector.projects.id(projectId);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+
+    if (!towerId) {
+      project.remove();
+      await typeDoc.save();
+      return res.json({ message: "Project deleted", typeDoc });
+    }
+
+    // Find tower
+    const tower = project.towers.id(towerId);
+    if (!tower) return res.status(404).json({ error: "Tower not found" });
+
+    if (!unitId) {
+      tower.remove();
+      await typeDoc.save();
+      return res.json({ message: "Tower deleted", typeDoc });
+    }
+
+    // Find unit
+    const unit = tower.units.id(unitId);
+    if (!unit) return res.status(404).json({ error: "Unit not found" });
+
+    // Delete unit
+    unit.remove();
+    await typeDoc.save();
+    return res.json({ message: "Unit deleted", typeDoc });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
+
 
