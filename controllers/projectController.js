@@ -482,7 +482,7 @@ exports.deleteEntity = async (req, res) => {
 
 exports.deleteProjectTypeById = async (req, res) => {
   try {
-    const deleted = await ProjectType.findByIdAndDelete(req.params.id);
+    const deleted = await ProjectType.findByIdAndDelete(req.params.projectid);
     if (!deleted) {
       return res.status(404).json({ error: "ProjectType not found" });
     }
@@ -491,6 +491,7 @@ exports.deleteProjectTypeById = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
 
 // -----------------------------
 // Delete City by ID
