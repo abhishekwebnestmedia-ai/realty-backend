@@ -646,8 +646,6 @@ exports.deleteUnitById = async (req, res) => {
 };
 
 
-
-
 // ✅ One-shot full hierarchy creation
 exports.createFullHierarchy = async (req, res) => {
   try {
@@ -663,15 +661,25 @@ exports.createFullHierarchy = async (req, res) => {
       return res.status(400).json({ error: "Invalid projectcategory" });
     }
 
-    // ✅ Ensure uniqueness of (category + projectcategory)
-    let typeDoc = await ProjectType.findOne({ category, projectcategory });
-    if (typeDoc) {
-      return res
-        .status(400)
-        .json({ error: "This category + projectcategory already exists" });
-    }
+    // ❌ Removed uniqueness check
+    const normalizedCities = cities.map(city => ({
+      cityName: city.cityName,
+      divisions: (city.divisions || []).map(division => ({
+        divisionName: division.divisionName,
+        sectors: (division.sectors || []).map(sector => ({
+          sectorName: sector.sectorName,
+          projects: (sector.projects || []).map(project => ({
+            projectName: project.projectName,
+            towers: (project.towers || []).map(tower => ({
+              towerName: tower.towerName,
+              units: tower.units || []
+            }))
+          }))
+        }))
+      }))
+    }));
 
-    typeDoc = new ProjectType({ category, projectcategory, cities });
+    const typeDoc = new ProjectType({ category, projectcategory, cities: normalizedCities });
     await typeDoc.save();
 
     res.status(201).json(typeDoc);
@@ -680,39 +688,7 @@ exports.createFullHierarchy = async (req, res) => {
   }
 };
 
-// ✅ Full hierarchy update (replace everything)
-exports.updateFullHierarchy = async (req, res) => {
-  try {
-    const { projectId } = req.params;
-    const { category, projectcategory, cities = [] } = req.body;
-
-    const allowedCategory = ["Residential", "Commercial"];
-    const allowedProjectCategory = ["UnderConstruction", "ReadyToMove"];
-
-    if (!allowedCategory.includes(category)) {
-      return res.status(400).json({ error: "Invalid category" });
-    }
-    if (!allowedProjectCategory.includes(projectcategory)) {
-      return res.status(400).json({ error: "Invalid projectcategory" });
-    }
-
-    const updated = await ProjectType.findByIdAndUpdate(
-      projectId,
-      { category, projectcategory, cities },
-      { new: true, runValidators: true }
-    );
-
-    if (!updated) {
-      return res.status(404).json({ error: "ProjectType not found" });
-    }
-
-    res.json(updated);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
-
-// ✅ Bulk Upload API
+// ✅ Bulk Upload API (no uniqueness check)
 exports.bulkUploadProjectTypes = async (req, res) => {
   try {
     const docs = req.body;
@@ -720,22 +696,42 @@ exports.bulkUploadProjectTypes = async (req, res) => {
       return res.status(400).json({ error: "Expected an array of project types" });
     }
 
-    // Validation check for all docs before inserting
-    for (const doc of docs) {
-      const { category, projectcategory } = doc;
+    const allowedCategory = ["Residential", "Commercial"];
+    const allowedProjectCategory = ["UnderConstruction", "ReadyToMove"];
 
-      const allowedCategory = ["Residential", "Commercial"];
-      const allowedProjectCategory = ["UnderConstruction", "ReadyToMove"];
+    const normalizedDocs = docs.map(doc => {
+      const { category, projectcategory, cities = [] } = doc;
 
       if (!allowedCategory.includes(category)) {
-        return res.status(400).json({ error: `Invalid category: ${category}` });
+        throw new Error(`Invalid category: ${category}`);
       }
       if (!allowedProjectCategory.includes(projectcategory)) {
-        return res.status(400).json({ error: `Invalid projectcategory: ${projectcategory}` });
+        throw new Error(`Invalid projectcategory: ${projectcategory}`);
       }
-    }
 
-    const inserted = await ProjectType.insertMany(docs, { ordered: false });
+      return {
+        category,
+        projectcategory,
+        cities: cities.map(city => ({
+          cityName: city.cityName,
+          divisions: (city.divisions || []).map(division => ({
+            divisionName: division.divisionName,
+            sectors: (division.sectors || []).map(sector => ({
+              sectorName: sector.sectorName,
+              projects: (sector.projects || []).map(project => ({
+                projectName: project.projectName,
+                towers: (project.towers || []).map(tower => ({
+                  towerName: tower.towerName,
+                  units: tower.units || []
+                }))
+              }))
+            }))
+          }))
+        }))
+      };
+    });
+
+    const inserted = await ProjectType.insertMany(normalizedDocs, { ordered: false });
     res.status(201).json({ message: "Bulk upload successful", data: inserted });
   } catch (err) {
     res.status(500).json({ error: err.message });
