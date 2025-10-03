@@ -57,3 +57,25 @@ exports.deleteRequirement = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+
+exports.bulkUpload = async (req, res) => {
+  try {
+    const data = req.body; // expecting an array of brokers
+
+    if (!Array.isArray(data) || data.length === 0) {
+      return res.status(400).json({ error: "Please send an array of broker requirements" });
+    }
+
+    // Insert many brokers at once
+    const brokers = await BrokerRequirement.insertMany(data, { ordered: false });
+
+    res.status(201).json({
+      message: "Bulk upload successful",
+      count: brokers.length,
+      brokers
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};

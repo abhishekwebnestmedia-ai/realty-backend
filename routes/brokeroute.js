@@ -17,8 +17,12 @@ router.put("/:id",authMiddleware, brokerRequirementController.updateRequirement)
 
 // Delete
 router.delete("/:id",authMiddleware, brokerRequirementController.deleteRequirement);
+router.post("/bulupload",authMiddleware, brokerRequirementController.bulkUpload);
 
 module.exports = router;
+
+
+
 
 
 
