@@ -195,6 +195,35 @@
 const ProjectType = require("../models/project"); // projectTypeSchema
 
 // ✅ Step 1 - Create a ProjectType (root)
+// exports.createProjectType = async (req, res) => {
+//   try {
+//     const { category, projectcategory } = req.body;
+
+//     const allowedCategory = ["Residential", "Commercial"];
+//     const allowedProjectCategory = ["UnderConstruction", "ReadyToMove"];
+
+//     if (!allowedCategory.includes(category)) {
+//       return res.status(400).json({ error: "Invalid category" });
+//     }
+//     if (!allowedProjectCategory.includes(projectcategory)) {
+//       return res.status(400).json({ error: "Invalid projectcategory" });
+//     }
+
+//     // ✅ Ensure uniqueness of combo
+//     let typeDoc = await ProjectType.findOne({ category, projectcategory });
+//     if (typeDoc) {
+//       return res.status(200).json(typeDoc); // already exists
+//     }
+
+//     typeDoc = new ProjectType({ category, projectcategory, cities: [] });
+//     await typeDoc.save();
+
+//     res.status(201).json(typeDoc);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
 exports.createProjectType = async (req, res) => {
   try {
     const { category, projectcategory } = req.body;
@@ -209,13 +238,7 @@ exports.createProjectType = async (req, res) => {
       return res.status(400).json({ error: "Invalid projectcategory" });
     }
 
-    // ✅ Ensure uniqueness of combo
-    let typeDoc = await ProjectType.findOne({ category, projectcategory });
-    if (typeDoc) {
-      return res.status(200).json(typeDoc); // already exists
-    }
-
-    typeDoc = new ProjectType({ category, projectcategory, cities: [] });
+    const typeDoc = new ProjectType({ category, projectcategory, cities: [] });
     await typeDoc.save();
 
     res.status(201).json(typeDoc);
@@ -646,7 +669,9 @@ exports.deleteUnitById = async (req, res) => {
 };
 
 
-// ✅ One-shot full hierarchy creation
+
+
+
 exports.createFullHierarchy = async (req, res) => {
   try {
     const { category, projectcategory, cities = [] } = req.body;
@@ -661,7 +686,6 @@ exports.createFullHierarchy = async (req, res) => {
       return res.status(400).json({ error: "Invalid projectcategory" });
     }
 
-    // ❌ Removed uniqueness check
     const normalizedCities = cities.map(city => ({
       cityName: city.cityName,
       divisions: (city.divisions || []).map(division => ({
@@ -688,7 +712,6 @@ exports.createFullHierarchy = async (req, res) => {
   }
 };
 
-
 // ✅ Full hierarchy update (replace everything)
 exports.updateFullHierarchy = async (req, res) => {
   try {
@@ -705,7 +728,6 @@ exports.updateFullHierarchy = async (req, res) => {
       return res.status(400).json({ error: "Invalid projectcategory" });
     }
 
-    // ✅ Normalize nested structure
     const normalizedCities = cities.map(city => ({
       cityName: city.cityName,
       divisions: (city.divisions || []).map(division => ({
@@ -739,8 +761,7 @@ exports.updateFullHierarchy = async (req, res) => {
   }
 };
 
-
-// ✅ Bulk Upload API (no uniqueness check)
+// ✅ Bulk Upload API (always inserts)
 exports.bulkUploadProjectTypes = async (req, res) => {
   try {
     const docs = req.body;
