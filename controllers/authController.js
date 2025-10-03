@@ -8,7 +8,7 @@ const nodemailer = require('nodemailer');
 
 exports.register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password,  phoneNumber, designation } = req.body;
 
  
     let missingFields = [];
@@ -44,7 +44,9 @@ exports.register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     // --- Save user ---
-    const user = new User({ name, email, password: hashedPassword });
+    const user = new User({ name, email, password: hashedPassword ,      phoneNumber,   // ✅ Added
+            // ✅ Added
+      designation    });
     await user.save();
 
     res.status(201).json({ message: 'User registered successfully' });

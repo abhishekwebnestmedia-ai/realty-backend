@@ -10,6 +10,10 @@ const userSchema = new mongoose.Schema({
     default: 'user',                  
     required: true
   },
+   phoneNumber: { type: String },  
+      
+  designation: { type: String },   
+
   registeredAt: { type: Date, default: Date.now },
     firstLoginAt: { type: Date },
     firstLogoutAt: { type: Date },
