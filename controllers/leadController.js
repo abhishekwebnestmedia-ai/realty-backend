@@ -699,20 +699,26 @@ exports.bulkUploadLeads = async (req, res) => {
   }
 };
 
-exports.getLeadsByAssignTo = async (req, res) => {
+exports.getLeadsByUserName = async (req, res) => {
   try {
-    const { assignTo } = req.query; // pass ?assignTo=<userId> in request
+    const { name } = req.query; // pass ?name=Abhishek Singh
 
-    let filter = {};
-    if (assignTo) {
-      filter.assignTo = assignTo; // userId
+    if (!name) {
+      return res.status(400).json({ error: "User name is required" });
     }
 
-    const leads = await Lead.find(filter)
-      .populate("assignTo", "name email") // show assigned user details
+    const leads = await Lead.find()
+      .populate({
+        path: "assignTo",
+        match: { name: { $regex: new RegExp("^" + name + "$", "i") } },
+        select: "name email"
+      })
       .sort({ createdAt: -1 });
 
-    res.status(200).json(leads);
+    // Filter out leads where assignTo was not matched
+    const filteredLeads = leads.filter(lead => lead.assignTo);
+
+    res.status(200).json(filteredLeads);
   } catch (err) {
     console.error("Error fetching leads:", err);
     res.status(500).json({ error: "Server error" });
