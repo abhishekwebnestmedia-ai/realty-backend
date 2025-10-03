@@ -648,41 +648,59 @@ exports.deleteUnitById = async (req, res) => {
 
 
 
-
 // ✅ One-shot full hierarchy creation
 exports.createFullHierarchy = async (req, res) => {
   try {
-    const data = req.body;
+    const { category, projectcategory, cities = [] } = req.body;
 
     const allowedCategory = ["Residential", "Commercial"];
     const allowedProjectCategory = ["UnderConstruction", "ReadyToMove"];
 
-    if (!allowedCategory.includes(data.category)) {
+    if (!allowedCategory.includes(category)) {
       return res.status(400).json({ error: "Invalid category" });
     }
-    if (!allowedProjectCategory.includes(data.projectcategory)) {
+    if (!allowedProjectCategory.includes(projectcategory)) {
       return res.status(400).json({ error: "Invalid projectcategory" });
     }
 
-    const doc = new ProjectType(data);
-    await doc.save();
+    // ✅ Ensure uniqueness of (category + projectcategory)
+    let typeDoc = await ProjectType.findOne({ category, projectcategory });
+    if (typeDoc) {
+      return res
+        .status(400)
+        .json({ error: "This category + projectcategory already exists" });
+    }
 
-    res.status(201).json(doc);
+    typeDoc = new ProjectType({ category, projectcategory, cities });
+    await typeDoc.save();
+
+    res.status(201).json(typeDoc);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-// ✅ Full hierarchy update (replace)
+// ✅ Full hierarchy update (replace everything)
 exports.updateFullHierarchy = async (req, res) => {
   try {
     const { projectId } = req.params;
-    const data = req.body;
+    const { category, projectcategory, cities = [] } = req.body;
 
-    const updated = await ProjectType.findByIdAndUpdate(projectId, data, {
-      new: true,
-      runValidators: true,
-    });
+    const allowedCategory = ["Residential", "Commercial"];
+    const allowedProjectCategory = ["UnderConstruction", "ReadyToMove"];
+
+    if (!allowedCategory.includes(category)) {
+      return res.status(400).json({ error: "Invalid category" });
+    }
+    if (!allowedProjectCategory.includes(projectcategory)) {
+      return res.status(400).json({ error: "Invalid projectcategory" });
+    }
+
+    const updated = await ProjectType.findByIdAndUpdate(
+      projectId,
+      { category, projectcategory, cities },
+      { new: true, runValidators: true }
+    );
 
     if (!updated) {
       return res.status(404).json({ error: "ProjectType not found" });
@@ -700,6 +718,21 @@ exports.bulkUploadProjectTypes = async (req, res) => {
     const docs = req.body;
     if (!Array.isArray(docs)) {
       return res.status(400).json({ error: "Expected an array of project types" });
+    }
+
+    // Validation check for all docs before inserting
+    for (const doc of docs) {
+      const { category, projectcategory } = doc;
+
+      const allowedCategory = ["Residential", "Commercial"];
+      const allowedProjectCategory = ["UnderConstruction", "ReadyToMove"];
+
+      if (!allowedCategory.includes(category)) {
+        return res.status(400).json({ error: `Invalid category: ${category}` });
+      }
+      if (!allowedProjectCategory.includes(projectcategory)) {
+        return res.status(400).json({ error: `Invalid projectcategory: ${projectcategory}` });
+      }
     }
 
     const inserted = await ProjectType.insertMany(docs, { ordered: false });
