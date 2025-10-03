@@ -38,6 +38,7 @@ router.patch('/assign/:id', authMiddleware, leadController.assignLead);
 
 // Delete a lead
 router.delete('/delete/:id', authMiddleware, leadController.deleteLead);
+router.get('/userbasedlead',authMiddleware,getLeadsByAssignTo);
 
 
 module.exports = router;

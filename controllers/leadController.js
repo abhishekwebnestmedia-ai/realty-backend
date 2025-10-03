@@ -566,16 +566,7 @@ exports.assignLead = async (req, res) => {
   }
 };
 
-// 🔹 Get All Leads
-// exports.getLeads = async (req, res) => {
-//   try {
-//     const leads = await Lead.find().populate("assignTo", "name email");
-//     res.json({ success: true, data: leads });
-//   } catch (err) {
-//     console.error("❌ getLeads error:", err);
-//     res.status(500).json({ success: false, message: "Error fetching leads" });
-//   }
-// };
+
 exports.getLeads = async (req, res) => {
   try {
     const leads = await Lead.find()
@@ -705,5 +696,25 @@ exports.bulkUploadLeads = async (req, res) => {
       message: "Error during bulk upload",
       error: error.message,
     });
+  }
+};
+
+exports.getLeadsByAssignTo = async (req, res) => {
+  try {
+    const { assignTo } = req.query; // pass ?assignTo=<userId> in request
+
+    let filter = {};
+    if (assignTo) {
+      filter.assignTo = assignTo; // userId
+    }
+
+    const leads = await Lead.find(filter)
+      .populate("assignTo", "name email") // show assigned user details
+      .sort({ createdAt: -1 });
+
+    res.status(200).json(leads);
+  } catch (err) {
+    console.error("Error fetching leads:", err);
+    res.status(500).json({ error: "Server error" });
   }
 };
