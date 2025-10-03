@@ -13,7 +13,8 @@ const userSchema = new mongoose.Schema({
    phoneNumber: { type: String },  
       
   designation: { type: String },   
-
+address: { type: String },
+empid: { type: String, unique: true },
   registeredAt: { type: Date, default: Date.now },
     firstLoginAt: { type: Date },
     firstLogoutAt: { type: Date },

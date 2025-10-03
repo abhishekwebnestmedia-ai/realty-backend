@@ -8,7 +8,7 @@ const nodemailer = require('nodemailer');
 
 exports.register = async (req, res) => {
   try {
-    const { name, email, password,  phoneNumber, designation } = req.body;
+    const { name, email, password,  phoneNumber, address, empid, designation } = req.body;
 
  
     let missingFields = [];
@@ -201,12 +201,14 @@ exports.getAllUsers = async (req, res) => {
 
 exports.getTeams = async (req, res) => {
   try {
-    const users = await User.find().sort({ createdAt: -1 });
+    const users = await User.find()
+      .select("_id name email role phoneNumber designation address empid") // ✅ Only include these fields
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       message: "Users fetched successfully",
       count: users.length,
-      users
+      users,
     });
 
   } catch (err) {
