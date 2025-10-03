@@ -23,3 +23,6 @@ const brokerRequirementSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model("BrokerRequirement", brokerRequirementSchema);
+
+
+
