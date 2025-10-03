@@ -494,5 +494,14 @@ router.delete(
 );
 
 
+router.post("/project-types/full", authMiddleware, projectController.createFullHierarchy);
+
+// Full hierarchy update
+router.put("/project-types/full/:projectId", authMiddleware, projectController.updateFullHierarchy);
+
+// Bulk upload (array of projectTypes)
+router.post("/project-types/bulk", authMiddleware, projectController.bulkUploadProjectTypes);
+
+
 
 module.exports = router;

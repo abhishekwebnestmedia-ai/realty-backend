@@ -646,3 +646,65 @@ exports.deleteUnitById = async (req, res) => {
 };
 
 
+
+
+
+// ✅ One-shot full hierarchy creation
+exports.createFullHierarchy = async (req, res) => {
+  try {
+    const data = req.body;
+
+    const allowedCategory = ["Residential", "Commercial"];
+    const allowedProjectCategory = ["UnderConstruction", "ReadyToMove"];
+
+    if (!allowedCategory.includes(data.category)) {
+      return res.status(400).json({ error: "Invalid category" });
+    }
+    if (!allowedProjectCategory.includes(data.projectcategory)) {
+      return res.status(400).json({ error: "Invalid projectcategory" });
+    }
+
+    const doc = new ProjectType(data);
+    await doc.save();
+
+    res.status(201).json(doc);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ✅ Full hierarchy update (replace)
+exports.updateFullHierarchy = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const data = req.body;
+
+    const updated = await ProjectType.findByIdAndUpdate(projectId, data, {
+      new: true,
+      runValidators: true,
+    });
+
+    if (!updated) {
+      return res.status(404).json({ error: "ProjectType not found" });
+    }
+
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ✅ Bulk Upload API
+exports.bulkUploadProjectTypes = async (req, res) => {
+  try {
+    const docs = req.body;
+    if (!Array.isArray(docs)) {
+      return res.status(400).json({ error: "Expected an array of project types" });
+    }
+
+    const inserted = await ProjectType.insertMany(docs, { ordered: false });
+    res.status(201).json({ message: "Bulk upload successful", data: inserted });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
