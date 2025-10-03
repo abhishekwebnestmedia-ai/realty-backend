@@ -688,6 +688,58 @@ exports.createFullHierarchy = async (req, res) => {
   }
 };
 
+
+// ✅ Full hierarchy update (replace everything)
+exports.updateFullHierarchy = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { category, projectcategory, cities = [] } = req.body;
+
+    const allowedCategory = ["Residential", "Commercial"];
+    const allowedProjectCategory = ["UnderConstruction", "ReadyToMove"];
+
+    if (!allowedCategory.includes(category)) {
+      return res.status(400).json({ error: "Invalid category" });
+    }
+    if (!allowedProjectCategory.includes(projectcategory)) {
+      return res.status(400).json({ error: "Invalid projectcategory" });
+    }
+
+    // ✅ Normalize nested structure
+    const normalizedCities = cities.map(city => ({
+      cityName: city.cityName,
+      divisions: (city.divisions || []).map(division => ({
+        divisionName: division.divisionName,
+        sectors: (division.sectors || []).map(sector => ({
+          sectorName: sector.sectorName,
+          projects: (sector.projects || []).map(project => ({
+            projectName: project.projectName,
+            towers: (project.towers || []).map(tower => ({
+              towerName: tower.towerName,
+              units: tower.units || []
+            }))
+          }))
+        }))
+      }))
+    }));
+
+    const updated = await ProjectType.findByIdAndUpdate(
+      projectId,
+      { category, projectcategory, cities: normalizedCities },
+      { new: true, runValidators: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ error: "ProjectType not found" });
+    }
+
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
 // ✅ Bulk Upload API (no uniqueness check)
 exports.bulkUploadProjectTypes = async (req, res) => {
   try {
