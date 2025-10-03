@@ -1,20 +1,24 @@
 const express = require("express");
 const router = express.Router();
 const brokerRequirementController = require("../controllers/brokerController");
+const authMiddleware = require("../middleware/authmiddleware");
 
 // Create
-router.post("/", brokerRequirementController.createRequirement);
+router.post("/", authMiddleware, brokerRequirementController.createRequirement);
 
 // Get All
-router.get("/", brokerRequirementController.getAllRequirements);
+router.get("/", authMiddleware, brokerRequirementController.getAllRequirements);
 
 // Get by ID
-router.get("/:id", brokerRequirementController.getRequirementById);
+router.get("/:id", authMiddleware, brokerRequirementController.getRequirementById);
 
 // Update
-router.put("/:id", brokerRequirementController.updateRequirement);
+router.put("/:id",authMiddleware, brokerRequirementController.updateRequirement);
 
 // Delete
-router.delete("/:id", brokerRequirementController.deleteRequirement);
+router.delete("/:id",authMiddleware, brokerRequirementController.deleteRequirement);
 
 module.exports = router;
+
+
+
