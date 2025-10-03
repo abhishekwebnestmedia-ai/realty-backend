@@ -17,6 +17,8 @@ router.get('/alluser', authMiddleware,authController.getAllUsers);
 router.get('/loggedinUser', authMiddleware, authController.getLoggedInUsers);
 router.get('/activeuser', authMiddleware, authController.getUsersLoginStatusSimple);
 router.put('/change-role/:userId', authMiddleware, authController.changeUserRole);
+router .get("/teams",authMiddleware,authController.getTeams);
+
 
 
 

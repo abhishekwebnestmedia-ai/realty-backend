@@ -199,6 +199,23 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
+exports.getTeams = async (req, res) => {
+  try {
+    const users = await User.find().sort({ createdAt: -1 });
+
+    res.status(200).json({
+      message: "Users fetched successfully",
+      count: users.length,
+      users
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+
 
 exports.changeUserRole = async (req, res) => {
   try {
