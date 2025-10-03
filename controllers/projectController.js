@@ -745,6 +745,15 @@ exports.updateFullHierarchy = async (req, res) => {
       }))
     }));
 
+    (async () => {
+  try {
+    await ProjectType.collection.dropIndex("projectType_1");
+    console.log("Index dropped successfully");
+  } catch (err) {
+    console.error("Error dropping index:", err.message);
+  }
+})();
+
     const updated = await ProjectType.findByIdAndUpdate(
       projectId,
       { category, projectcategory, cities: normalizedCities },
