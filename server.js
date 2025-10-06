@@ -3,6 +3,9 @@ const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const morgan = require('morgan');
 const cors = require('cors');
+const { Server } = require("socket.io");
+const http = require('http');
+const path = require('path');
 
 dotenv.config();
 connectDB();
@@ -41,7 +44,9 @@ const DailyTaskRoute = require("./routes/dailyroute");
 const projectRoutes = require('./routes/projectroute');
 const brokerRoutes = require('./routes/brokeroute');
 
-
+// Routes
+const groupRoutes = require("./routes/grouproute");
+const broadcastRoutes = require("./routes/broadcastroute");
 
 
 app.use('/api/auth', authRoutes);
@@ -52,8 +57,29 @@ app.use('/api/dailytask',DailyTaskRoute );
 app.use('/api/projects', projectRoutes);
 app.use('/api/broker', brokerRoutes);
 
+
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+
+
+app.use("/api/groups", groupRoutes);
+app.use("/api/broadcasts", broadcastRoutes);
+
+
 app.get('/', (req, res) => {
   res.send('CRM backend server is running');
+});
+
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: "*" },
+});
+
+app.set("io", io);
+
+io.on("connection", (socket) => {
+  console.log("🟢 Socket connected:", socket.id);
+  socket.on("disconnect", () => console.log("🔴 Socket disconnected:", socket.id));
 });
 
 const PORT = process.env.PORT || 5000;
