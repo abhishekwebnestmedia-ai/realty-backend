@@ -31,10 +31,11 @@ exports.createGroup = async (req, res) => {
     // ✅ Create group
     let group = await Group.create({
       name,
-      createdBy: req.user._id,
+     createdBy: req.user.userId,
       members: matchedUsers.map((u) => u._id),
     });
 
+    
     // ✅ Populate members & createdBy before sending response
     group = await group.populate("members", "name email role");
     group = await group.populate("createdBy", "name email role");

@@ -21,7 +21,7 @@ exports.createBroadcast = async (req, res) => {
       message,
       attachmentUrl,
       attachmentType,
-      createdBy: req.user._id,
+      createdBy: req.user.userId
     });
 
     const io = req.app.get("io");
