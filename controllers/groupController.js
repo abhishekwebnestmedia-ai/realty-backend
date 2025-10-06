@@ -4,7 +4,6 @@ const User = require("../models/user");
 // ✅ Create a new group (Admin only)
 exports.createGroup = async (req, res) => {
   try {
-    // Check admin
     if (!req.user || req.user.role !== "admin") {
       return res.status(403).json({ success: false, message: "Access denied" });
     }
@@ -14,13 +13,13 @@ exports.createGroup = async (req, res) => {
     if (!name) {
       return res.status(400).json({ success: false, message: "Group name is required" });
     }
-
-    if (!members || !Array.isArray(members) || members.length === 0) {
-      return res.status(400).json({ success: false, message: "Please select at least one member name" });
+    if (!Array.isArray(members) || members.length === 0) {
+      return res.status(400).json({ success: false, message: "Please provide at least one member name" });
     }
 
-    // 🔍 Find users by their names
-    const matchedUsers = await User.find({ name: { $in: members } });
+    const matchedUsers = await User.find({
+      name: { $in: members.map((n) => new RegExp(`^${n}$`, "i")) },
+    });
 
     if (matchedUsers.length === 0) {
       return res.status(400).json({
@@ -29,12 +28,16 @@ exports.createGroup = async (req, res) => {
       });
     }
 
-    // 🧱 Create the group using user IDs
-    const group = await Group.create({
+    // ✅ Create group
+    let group = await Group.create({
       name,
       createdBy: req.user._id,
       members: matchedUsers.map((u) => u._id),
     });
+
+    // ✅ Populate members & createdBy before sending response
+    group = await group.populate("members", "name email role");
+    group = await group.populate("createdBy", "name email role");
 
     res.status(201).json({
       success: true,
@@ -46,6 +49,7 @@ exports.createGroup = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
 
 // ✅ Get groups visible to the logged-in user
 exports.getAllGroups = async (req, res) => {
