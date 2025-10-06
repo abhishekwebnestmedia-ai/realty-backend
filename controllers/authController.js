@@ -186,7 +186,7 @@ exports.logout = async (req, res) => {
 
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find({}, { _id: 1, name: 1, email: 1 });
+    const users = await User.find({}, { _id: 1, name: 1, email: 1 , role:1});
 
     res.json({
       success: true,
