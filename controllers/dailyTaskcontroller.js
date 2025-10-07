@@ -53,6 +53,35 @@ exports.deletePerformance = async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 };
+
+// exports.getPerformanceByName = async (req, res) => {
+//   try {
+//     const { name } = req.body;
+
+//     if (!name) {
+//       return res.status(400).json({ error: "Name is required in request body" });
+//     }
+
+//     // Case-insensitive name match
+//     const records = await DailyPerformance.find({
+//       name: { $regex: new RegExp(`^${name}$`, "i") }
+//     }).sort({ date: -1 });
+
+//     if (records.length === 0) {
+//       return res.status(404).json({ message: `No records found for ${name}` });
+//     }
+
+//     res.status(200).json({
+//       success: true,
+//       count: records.length,
+//       data: records,
+//     });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+
 exports.getPerformanceByName = async (req, res) => {
   try {
     const { name } = req.body;
@@ -61,22 +90,24 @@ exports.getPerformanceByName = async (req, res) => {
       return res.status(400).json({ error: "Name is required in request body" });
     }
 
-    // Case-insensitive name match
+    // Find all records by name (case-insensitive)
     const records = await DailyPerformance.find({
       name: { $regex: new RegExp(`^${name}$`, "i") }
-    }).sort({ date: -1 });
+    })
+      .sort({ date: -1, _id: -1 }); // ✅ Latest by date, then newest created
 
-    if (records.length === 0) {
+    if (!records || records.length === 0) {
       return res.status(404).json({ message: `No records found for ${name}` });
     }
 
+    // ✅ Send newest record first
     res.status(200).json({
       success: true,
+      latest: records[0], // return the newest record separately
       count: records.length,
-      data: records,
+      data: records, // full history
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
-
