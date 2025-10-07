@@ -724,3 +724,43 @@ exports.getLeadsByUserName = async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 };
+
+
+exports.bulkAssignLeads = async (req, res) => {
+  try {
+    const { leadIds, assignTo } = req.body;
+
+    if (!Array.isArray(leadIds) || leadIds.length === 0) {
+      return res.status(400).json({ success: false, message: "leadIds array is required" });
+    }
+    if (!assignTo) {
+      return res.status(400).json({ success: false, message: "assignTo field is required" });
+    }
+
+    // Resolve the user
+    const user = await resolveAssignTo(assignTo);
+    if (!user) {
+      return res.status(400).json({ success: false, message: "Invalid assignTo user" });
+    }
+
+    // Bulk update
+    const result = await Lead.updateMany(
+      { _id: { $in: leadIds } },
+      { $set: { assignTo: user._id } }
+    );
+
+    res.json({
+      success: true,
+      message: `✅ ${result.modifiedCount} leads assigned successfully to ${user.name}`,
+      count: result.modifiedCount,
+      assignedTo: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+      },
+    });
+  } catch (err) {
+    console.error("❌ bulkAssignLeads error:", err);
+    res.status(500).json({ success: false, message: "Error assigning leads in bulk" });
+  }
+};
