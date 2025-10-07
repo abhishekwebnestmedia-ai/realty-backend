@@ -9,5 +9,9 @@ router.post('/task', authMiddleware, performanceController.addPerformance);
 router.get('/task/:id', authMiddleware, performanceController.getPerformanceById);
 router.put('/task/:id', authMiddleware, performanceController.updatePerformance);
 router.delete('/task/:id', authMiddleware, performanceController.deletePerformance);
+router.post('/task/byname', authMiddleware, performanceController.getPerformanceByName);
+
 
 module.exports = router;
+
+
