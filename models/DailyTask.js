@@ -28,27 +28,30 @@
 
 // module.exports = mongoose.model('DailyPerformance', performanceSchema);
 
+
+
 const mongoose = require('mongoose');
 
 const performanceSchema = new mongoose.Schema({
   name: { type: String, required: true },
   date: { type: Date, required: true },
   morningCommitment: {
-    onlinePortalChecked: { type: Boolean, required: true },
-    whatsappStatus: { type: Boolean, required: true },
+    onlinePortalChecked: { type: Boolean, default: false },
+    whatsappStatus: { type: Boolean, default: false },
     emailWorking: { type: Number },
     buyersWorking: { type: Number },
-    sellersWorking: { type: Number, required: true }
+    sellersWorking: { type: Number,}
   },
   eveningAchievements: {
-    onlinePortalChecked: { type: Boolean, required: true },
-    whatsappStatus: { type: Boolean, required: true },
+    onlinePortalChecked: { type: Boolean , default: false},
+    whatsappStatus: { type: Boolean , default: false},
     emailWorking: { type: Number },
     buyersWorking: { type: Number },
-    sellersWorking: { type: Number, required: true }
+    sellersWorking: { type: Number }
   },
   meetingVisits: { type: Number },
-  addNotes: { type: String }
+  addNotes: { type: String },
+  planstatus: { type: Number, default: 0 }
 });
 
 performanceSchema.index({ name: 1, date: 1 }, { unique: true });
