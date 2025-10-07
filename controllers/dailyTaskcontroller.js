@@ -121,12 +121,7 @@ function calculatePlanStatus(data) {
   if (mc.buyersWorking && mc.buyersWorking > 0) count++;
   if (mc.sellersWorking && mc.sellersWorking > 0) count++;
 
-  // ✅ Evening achievements
-  if (ea.onlinePortalChecked === true) count++;
-  if (ea.whatsappStatus === true) count++;
-  if (ea.emailWorking && ea.emailWorking > 0) count++;
-  if (ea.buyersWorking && ea.buyersWorking > 0) count++;
-  if (ea.sellersWorking && ea.sellersWorking > 0) count++;
+  
 
   // ✅ Meeting visits
   if (data.meetingVisits && data.meetingVisits > 0) count++;
@@ -256,3 +251,12 @@ exports.getPerformanceByName = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+
+
+
+
+
+
+
+
