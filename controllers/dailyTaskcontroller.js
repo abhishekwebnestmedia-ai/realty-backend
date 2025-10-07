@@ -88,31 +88,12 @@
 
 const DailyPerformance = require('../models/DailyTask');
 
-/**
- * 🔹 Helper: Calculate Plan Status
- * Counts how many key fields have valid or true values.
- * Morning + Evening + meetingVisits included.
- * 
- * Fields considered:
- * - morningCommitment.onlinePortalChecked (Boolean)
- * - morningCommitment.whatsappStatus (Boolean)
- * - morningCommitment.emailWorking (Number)
- * - morningCommitment.buyersWorking (Number)
- * - morningCommitment.sellersWorking (Number)
- * - eveningAchievements.onlinePortalChecked (Boolean)
- * - eveningAchievements.whatsappStatus (Boolean)
- * - eveningAchievements.emailWorking (Number)
- * - eveningAchievements.buyersWorking (Number)
- * - eveningAchievements.sellersWorking (Number)
- * - meetingVisits (Number)
- * 
- * ➤ Total possible = 11
- */
+
 function calculatePlanStatus(data) {
   let count = 0;
 
   const mc = data.morningCommitment || {};
-  const ea = data.eveningAchievements || {};
+
 
   // ✅ Morning commitment
   if (mc.onlinePortalChecked === true) count++;
@@ -120,10 +101,6 @@ function calculatePlanStatus(data) {
   if (mc.emailWorking && mc.emailWorking > 0) count++;
   if (mc.buyersWorking && mc.buyersWorking > 0) count++;
   if (mc.sellersWorking && mc.sellersWorking > 0) count++;
-
-  
-
-  // ✅ Meeting visits
   if (data.meetingVisits && data.meetingVisits > 0) count++;
 
   return count;
