@@ -531,7 +531,7 @@ exports.createLead = async (req, res) => {
     await lead.save();
     res.status(201).json({ success: true, data: lead });
   } catch (err) {
-    console.error("❌ createLead error:", err);
+    console.error(" createLead error:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
@@ -561,7 +561,7 @@ exports.assignLead = async (req, res) => {
 
     res.json({ success: true, message: "Lead assigned successfully", data: lead });
   } catch (err) {
-    console.error("❌ assignLead error:", err);
+    console.error(" assignLead error:", err);
     res.status(500).json({ success: false, message: "Error assigning lead" });
   }
 };
@@ -574,7 +574,7 @@ exports.getLeads = async (req, res) => {
       .sort({ createdAt: -1 }); // newest first
     res.json({ success: true, data: leads });
   } catch (err) {
-    console.error("❌ getLeads error:", err);
+    console.error(" getLeads error:", err);
     res.status(500).json({ success: false, message: "Error fetching leads" });
   }
 };
@@ -607,7 +607,7 @@ exports.updateLead = async (req, res) => {
 
     res.json({ success: true, data: lead });
   } catch (err) {
-    console.error("❌ updateLead error:", err);
+    console.error(" updateLead error:", err);
     res.status(500).json({ success: false, message: "Error updating lead" });
   }
 };
@@ -631,7 +631,7 @@ exports.getLeadById = async (req, res) => {
 
     res.json({ success: true, data: lead });
   } catch (err) {
-    console.error("❌ getLeadById error:", err);
+    console.error(" getLeadById error:", err);
     res.status(500).json({ success: false, message: "Error fetching lead" });
   }
 };
@@ -646,7 +646,7 @@ exports.deleteLead = async (req, res) => {
     }
     res.json({ success: true, message: "Lead deleted successfully" });
   } catch (err) {
-    console.error("❌ deleteLead error:", err);
+    console.error(" deleteLead error:", err);
     res.status(500).json({ success: false, message: "Error deleting lead" });
   }
 };
@@ -751,7 +751,7 @@ exports.bulkAssignLeads = async (req, res) => {
 
     res.json({
       success: true,
-      message: `✅ ${result.modifiedCount} leads assigned successfully to ${user.name}`,
+      message: ` ${result.modifiedCount} leads assigned successfully to ${user.name}`,
       count: result.modifiedCount,
       assignedTo: {
         id: user._id,
@@ -760,7 +760,7 @@ exports.bulkAssignLeads = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("❌ bulkAssignLeads error:", err);
+    console.error(" bulkAssignLeads error:", err);
     res.status(500).json({ success: false, message: "Error assigning leads in bulk" });
   }
 };
