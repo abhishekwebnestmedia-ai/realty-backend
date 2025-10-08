@@ -47,6 +47,7 @@ const brokerRoutes = require('./routes/brokeroute');
 // Routes
 const groupRoutes = require("./routes/grouproute");
 const broadcastRoutes = require("./routes/broadcastroute");
+const dailyReportRoutes = require('./routes/dailyreportroute');
 
 
 app.use('/api/auth', authRoutes);
@@ -57,6 +58,7 @@ app.use('/api/dailytask',DailyTaskRoute );
 app.use('/api/projects', projectRoutes);
 app.use('/api/broker', brokerRoutes);
 
+app.use('/api/dailyreport', dailyReportRoutes);
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
