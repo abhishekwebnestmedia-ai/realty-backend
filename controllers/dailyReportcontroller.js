@@ -125,6 +125,7 @@
 //   }
 // };
 
+
 const mongoose = require('mongoose');
 const Lead = require('../models/leadModel');
 const DailyPerformance = require('../models/DailyTask');
@@ -142,7 +143,7 @@ exports.getCombinedReport = async (req, res) => {
     const startOfDay = new Date(today.setHours(0, 0, 0, 0));
     const endOfDay = new Date(today.setHours(23, 59, 59, 999));
 
-    // 🧮 Count all unassigned leads
+    // 🧮 Find all unassigned leads safely
     const unassignedLeads = await Lead.find({
       $or: [
         { assignTo: { $exists: false } },
@@ -153,17 +154,29 @@ exports.getCombinedReport = async (req, res) => {
 
     const unassignedLeadCount = unassignedLeads.length;
 
-    // 🧾 Generate report for each user
+    // 🧾 Generate reports safely for each user
     const reports = await Promise.all(
       users.map(async (user) => {
-        // 🧮 Count leads per status assigned to this user (skip invalid assignTo)
+        // ✅ Filter only leads that have a valid ObjectId before matching
         const leadCounts = await Lead.aggregate([
           {
             $match: {
-              assignTo: { $type: "objectId", $eq: new mongoose.Types.ObjectId(user._id) }
+              assignTo: { $ne: null } // not null
             }
           },
-          { $group: { _id: "$status", count: { $sum: 1 } } }
+          {
+            $addFields: {
+              assignToStr: { $toString: "$assignTo" } // convert ObjectId to string safely
+            }
+          },
+          {
+            $match: {
+              assignToStr: user._id.toString() // match as string, no casting error!
+            }
+          },
+          {
+            $group: { _id: "$status", count: { $sum: 1 } }
+          }
         ]);
 
         const leadStats = {};
@@ -176,7 +189,7 @@ exports.getCombinedReport = async (req, res) => {
           totalLeads += count;
         });
 
-        // ✅ Fetch performance data (optional)
+        // ✅ Fetch daily performance (optional)
         const performance = await DailyPerformance.findOne({
           name: user.name,
           date: { $gte: startOfDay, $lte: endOfDay }
@@ -193,7 +206,7 @@ exports.getCombinedReport = async (req, res) => {
       })
     );
 
-    // ✅ Final response
+    // ✅ Send combined report safely
     res.status(200).json({
       success: true,
       data: reports,
