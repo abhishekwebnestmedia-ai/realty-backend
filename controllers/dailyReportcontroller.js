@@ -125,6 +125,7 @@
 //   }
 // };
 
+
 const mongoose = require('mongoose');
 const Lead = require('../models/leadModel');
 const DailyPerformance = require('../models/DailyTask');
@@ -142,30 +143,10 @@ exports.getCombinedReport = async (req, res) => {
     const startOfDay = new Date(today.setHours(0, 0, 0, 0));
     const endOfDay = new Date(today.setHours(23, 59, 59, 999));
 
-    // 🧮 Fetch unassigned leads globally
-    const unassignedLeads = await Lead.collection
-      .find({
-        $or: [
-          { assignTo: { $exists: false } },
-          { assignTo: null },
-          { assignTo: "" }
-        ]
-      })
-      .project({
-        customerName: 1,
-        contactNumber: 1,
-        status: 1,
-        leadType: 1,
-        createdAt: 1
-      })
-      .toArray();
-
-    const unassignedLeadCount = unassignedLeads.length;
-
     // 🧾 Generate per-user reports
     const reports = await Promise.all(
       users.map(async (user) => {
-        // ⚙️ Get all leads assigned to this user (safe via raw MongoDB collection)
+        // ⚙️ Get all leads assigned to this user
         const assignedLeads = await Lead.collection
           .find({
             assignTo: {
@@ -176,7 +157,7 @@ exports.getCombinedReport = async (req, res) => {
           .project({ status: 1 })
           .toArray();
 
-        const assignedLeadCount = assignedLeads.length; // ✅ total assigned leads
+        const assignedLeadCount = assignedLeads.length;
 
         // 🧮 Count leads per status
         const leadStats = {};
@@ -200,7 +181,7 @@ exports.getCombinedReport = async (req, res) => {
           name: user.name,
           userId: user._id,
           email: user.email,
-          assignedLeadCount, // ✅ number of leads assigned to this user
+          assignedLeadCount, // ✅ total assigned leads for this user
           leadStats: { ...leadStats, totalLeads },
           DailyPlanStatus: performance?.planstatus || 0,
           meetingVisits: performance?.meetingVisits || 0,
@@ -208,12 +189,10 @@ exports.getCombinedReport = async (req, res) => {
       })
     );
 
-    // ✅ Send final combined report
+    // ✅ Send only user data (no unassigned leads section)
     res.status(200).json({
       success: true,
       data: reports,
-      unassignedLeads: unassignedLeadCount,
-      unassignedLeadDetails: unassignedLeads,
     });
 
   } catch (error) {
