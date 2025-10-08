@@ -106,9 +106,7 @@ function calculatePlanStatus(data) {
   return count;
 }
 
-/**
- * 🔹 Get all performance records
- */
+
 exports.getAllPerformances = async (req, res) => {
   try {
     const records = await DailyPerformance.find().sort({ date: -1 });
@@ -163,6 +161,7 @@ exports.getPerformanceById = async (req, res) => {
  * Recalculates planstatus dynamically before saving
  */
 exports.updatePerformance = async (req, res) => {
+  
   try {
     const record = await DailyPerformance.findById(req.params.id);
     if (!record) return res.status(404).json({ error: 'Not found' });
