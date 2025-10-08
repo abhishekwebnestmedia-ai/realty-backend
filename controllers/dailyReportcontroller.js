@@ -126,6 +126,7 @@
 // };
 
 
+
 const mongoose = require('mongoose');
 const Lead = require('../models/leadModel');
 const DailyPerformance = require('../models/DailyTask');
@@ -137,62 +138,72 @@ const validStatuses = [
 
 exports.getCombinedReport = async (req, res) => {
   try {
+    // 🧾 Get all users
     const users = await User.find({}, "_id name email");
 
+    // 📅 Define date range (today or requested)
     const today = req.query.date ? new Date(req.query.date) : new Date();
     const startOfDay = new Date(today.setHours(0, 0, 0, 0));
     const endOfDay = new Date(today.setHours(23, 59, 59, 999));
 
-    // 🧮 Find all unassigned leads safely
-    const unassignedLeads = await Lead.find({
-      $or: [
-        { assignTo: { $exists: false } },
-        { assignTo: null },
-        { assignTo: "" }
-      ]
-    }).select("customerName contactNumber status leadType createdAt");
+    // 🧮 Fetch unassigned leads safely using raw MongoDB driver
+    const unassignedLeads = await Lead.collection
+      .find({
+        $or: [
+          { assignTo: { $exists: false } },
+          { assignTo: null },
+          { assignTo: "" }
+        ]
+      })
+      .project({
+        customerName: 1,
+        contactNumber: 1,
+        status: 1,
+        leadType: 1,
+        createdAt: 1
+      })
+      .toArray();
 
     const unassignedLeadCount = unassignedLeads.length;
 
-    // 🧾 Generate reports safely for each user
+    // 🧾 Generate report for each user
     const reports = await Promise.all(
       users.map(async (user) => {
-        // ✅ Filter only leads that have a valid ObjectId before matching
-        const leadCounts = await Lead.aggregate([
-          {
-            $match: {
-              assignTo: { $ne: null } // not null
+        // ⚙️ Use raw collection aggregation to avoid ObjectId casting
+        const leadCounts = await Lead.collection
+          .aggregate([
+            {
+              $match: {
+                assignTo: {
+                  $type: "objectId",
+                  $eq: new mongoose.Types.ObjectId(user._id)
+                }
+              }
+            },
+            {
+              $group: {
+                _id: "$status",
+                count: { $sum: 1 }
+              }
             }
-          },
-          {
-            $addFields: {
-              assignToStr: { $toString: "$assignTo" } // convert ObjectId to string safely
-            }
-          },
-          {
-            $match: {
-              assignToStr: user._id.toString() // match as string, no casting error!
-            }
-          },
-          {
-            $group: { _id: "$status", count: { $sum: 1 } }
-          }
-        ]);
+          ])
+          .toArray();
 
+        // 🧮 Build lead stats
         const leadStats = {};
         let totalLeads = 0;
 
-        validStatuses.forEach(status => {
-          const found = leadCounts.find(l => l._id === status);
+        validStatuses.forEach((status) => {
+          const found = leadCounts.find((l) => l._id === status);
           const count = found ? found.count : 0;
           leadStats[status.replace(/\s+/g, '')] = count;
           totalLeads += count;
         });
 
-        // ✅ Fetch daily performance (optional)
+        // 📊 Fetch Daily Performance
         const performance = await DailyPerformance.findOne({
           name: user.name,
-          date: { $gte: startOfDay, $lte: endOfDay }
+          date: { $gte: startOfDay, $lte: endOfDay },
         });
 
         return {
@@ -201,21 +212,24 @@ exports.getCombinedReport = async (req, res) => {
           email: user.email,
           leadStats: { ...leadStats, totalLeads },
           DailyPlanStatus: performance?.planstatus || 0,
-          meetingVisits: performance?.meetingVisits || 0
+          meetingVisits: performance?.meetingVisits || 0,
         };
       })
     );
 
-    // ✅ Send combined report safely
-    res.status(200).json({
+    // ✅ Send final response
+    return res.status(200).json({
       success: true,
       data: reports,
       unassignedLeads: unassignedLeadCount,
-      unassignedLeadDetails: unassignedLeads
+      unassignedLeadDetails: unassignedLeads,
     });
 
   } catch (error) {
-    console.error("Error generating combined report:", error);
-    res.status(500).json({ success: false, message: error.message });
+    console.error("❌ Error generating combined report:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Internal Server Error",
+    });
   }
 };
