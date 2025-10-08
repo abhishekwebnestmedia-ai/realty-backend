@@ -27,7 +27,7 @@ router.post('/bulk-assign',authMiddleware, leadController.bulkAssignLeads)
 // Delete a lead
 router.delete('/delete/:id', authMiddleware, leadController.deleteLead);
 router.get('/userbasedlead',authMiddleware, leadController.getLeadsByUserName);
-router.get('/count-by-captured', authMiddleware, leadController.getLeadCountByCapturedUser);
+router.get('/captured', authMiddleware, leadController.getLeadCountByCapturedUser);
 
 
 module.exports = router;
