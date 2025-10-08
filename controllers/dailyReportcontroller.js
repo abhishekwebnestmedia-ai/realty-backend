@@ -103,7 +103,7 @@ exports.getCombinedReport = async (req, res) => {
           userId: user._id,
           email: user.email,
           leadStats: { ...leadStats, totalLeads },
-          planstatus: performance?.planstatus || 0,
+          DailyPlanStatus : performance?.planstatus || 0,
           meetingVisits: performance?.meetingVisits || 0,
           addNotes: performance?.addNotes || ""
         };
