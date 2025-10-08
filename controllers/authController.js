@@ -59,50 +59,6 @@ exports.register = async (req, res) => {
 
 
 
-// exports.login = async (req, res) => {
-//   try {
-//     const { email, password } = req.body;
-
-//     // --- Field-specific validation ---
-//     let missingFields = [];
-//     if (!email) missingFields.push('Email is missing');
-//     if (!password) missingFields.push('Password is missing');
-
-//     if (missingFields.length > 0) {
-//       return res.status(400).json({ message: missingFields.join(', ') });
-//     }
-
-//     const user = await User.findOne({ email });
-//     if (!user) return res.status(400).json({ message: 'Invalid credentials' });
-
-//     const isMatch = await bcrypt.compare(password, user.password);
-//     if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
-
-//     // Update login info
-//     user.lastLoginAt = new Date();
-//     user.isLoggedIn = true;
-//     await user.save();
-
-//     // Include role in JWT
-//     const token = jwt.sign(
-//       { userId: user._id, email: user.email, role: user.role }, // <-- added role
-//       process.env.JWT_SECRET,
-//       { expiresIn: '1h' }
-//     );
-
-    
-//     res.json({
-//       token,
-//       role: user.role,         // <-- send role to frontend
-//       userId: user._id,        // optional, for frontend use
-//       message: 'Login successful'
-//     });
-
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
 
 exports.login = async (req, res) => {
   try {
@@ -270,7 +226,6 @@ async function sendResetEmail(email, token) {
   await transporter.sendMail(mailOptions);
 }
 
-
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -296,7 +251,6 @@ exports.forgotPassword = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
-
 
 exports.resetPassword = async (req, res) => {
   try {
@@ -333,26 +287,6 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
-
-
-// exports.getLoggedInUsers = async (req, res) => {
-//   try {
-//     // Find all users who are currently logged in
-//     const loggedInUsers = await User.find({ isLoggedIn: true }).select('-password'); 
-//     // Exclude the password field for security
-
-//     res.json({
-//       success: true,
-//       count: loggedInUsers.length,
-//       users: loggedInUsers
-//     });
-//   } catch (err) {
-//     console.error("❌ getLoggedInUsers error:", err);
-//     res.status(500).json({ success: false, message: 'Server error fetching logged-in users' });
-//   }
-// };
-
-
 exports.getLoggedInUsers = async (req, res) => {
   try {
     // Fetch all users, including their isLoggedIn status
@@ -370,23 +304,6 @@ exports.getLoggedInUsers = async (req, res) => {
 };
 
 
-
-// exports.getUsersLoginStatusSimple = async (req, res) => {
-//   try {
-   
-//     const users = await User.find().select('name email isLoggedIn');
-
-//     res.json({
-//       success: true,
-//       count: users.length,
-//       users: users,
-//     });
-//   } catch (err) {
-//     console.error("❌ getUsersLoginStatusSimple error:", err);
-//     res.status(500).json({ success: false, message: 'Server error fetching users' });
-//   }
-// };
-
 exports.getUsersLoginStatusSimple = async (req, res) => {
   try {
     const users = await User.find().select('name email isLoggedIn firstLoginAt firstLogoutAt lastLogoutAt');
@@ -399,6 +316,54 @@ exports.getUsersLoginStatusSimple = async (req, res) => {
   } catch (err) {
     console.error("❌ getUsersLoginStatusSimple error:", err);
     res.status(500).json({ success: false, message: 'Server error fetching users' });
+  }
+};
+
+
+exports.updateUser = async (req, res) => {
+  try {
+    const userId = req.user.userId; // from JWT middleware
+
+    const {
+      name,
+      email,
+      phoneNumber,
+      designation,
+      address,
+      empid,
+    } = req.body;
+
+    const updateData = {
+      name,
+      email,
+      phoneNumber,
+      designation,
+      address,
+      empid,
+    };
+
+    // Handle image upload
+    if (req.file) {
+      const imagePath = `/uploads/profileImages/${req.file.filename}`;
+      updateData.profileImage = imagePath;
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
+      new: true,
+    }).select('-password');
+
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: updatedUser,
+    });
+  } catch (err) {
+    console.error('❌ updateUser error:', err);
+    res.status(500).json({ success: false, message: 'Server error updating profile' });
   }
 };
 

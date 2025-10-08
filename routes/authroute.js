@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
 const authMiddleware = require('../middleware/authmiddleware');
+const Image = require('../middleware/image');
 
 router.post('/register', authController.register);
 router.post('/login', authController.login);
@@ -20,7 +21,12 @@ router.put('/change-role/:userId', authMiddleware, authController.changeUserRole
 router .get("/teams",authMiddleware,authController.getTeams);
 
 
-
+router.put(
+  '/update',
+  authMiddleware,
+   Image.single('profileImage'), // field name in frontend form
+  authController.updateUser
+);
 
 
 
