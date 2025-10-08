@@ -125,7 +125,6 @@
 //   }
 // };
 
-
 const mongoose = require('mongoose');
 const Lead = require('../models/leadModel');
 const DailyPerformance = require('../models/DailyTask');
@@ -143,20 +142,27 @@ exports.getCombinedReport = async (req, res) => {
     const startOfDay = new Date(today.setHours(0, 0, 0, 0));
     const endOfDay = new Date(today.setHours(23, 59, 59, 999));
 
-    // 🧮 Count all unassigned leads globally
-    const unassignedLeadCount = await Lead.countDocuments({
+    // 🧮 Count all unassigned leads
+    const unassignedLeads = await Lead.find({
       $or: [
         { assignTo: { $exists: false } },
         { assignTo: null },
         { assignTo: "" }
       ]
-    });
+    }).select("customerName contactNumber status leadType createdAt");
 
+    const unassignedLeadCount = unassignedLeads.length;
+
+    // 🧾 Generate report for each user
     const reports = await Promise.all(
       users.map(async (user) => {
-        // 🧮 Count leads per status assigned to this user
+        // 🧮 Count leads per status assigned to this user (skip invalid assignTo)
         const leadCounts = await Lead.aggregate([
-          { $match: { assignTo: new mongoose.Types.ObjectId(user._id) } },
+          {
+            $match: {
+              assignTo: { $type: "objectId", $eq: new mongoose.Types.ObjectId(user._id) }
+            }
+          },
           { $group: { _id: "$status", count: { $sum: 1 } } }
         ]);
 
@@ -170,7 +176,7 @@ exports.getCombinedReport = async (req, res) => {
           totalLeads += count;
         });
 
-        // ✅ Match DailyPerformance by user.name
+        // ✅ Fetch performance data (optional)
         const performance = await DailyPerformance.findOne({
           name: user.name,
           date: { $gte: startOfDay, $lte: endOfDay }
@@ -187,11 +193,12 @@ exports.getCombinedReport = async (req, res) => {
       })
     );
 
-    // ✅ Include unassigned lead count in final response
+    // ✅ Final response
     res.status(200).json({
       success: true,
       data: reports,
-      unassignedLeads: unassignedLeadCount
+      unassignedLeads: unassignedLeadCount,
+      unassignedLeadDetails: unassignedLeads
     });
 
   } catch (error) {
