@@ -125,8 +125,6 @@
 //   }
 // };
 
-
-
 const mongoose = require('mongoose');
 const Lead = require('../models/leadModel');
 const DailyPerformance = require('../models/DailyTask');
@@ -138,15 +136,13 @@ const validStatuses = [
 
 exports.getCombinedReport = async (req, res) => {
   try {
-    // 🧾 Get all users
     const users = await User.find({}, "_id name email");
 
-    // 📅 Define date range (today or requested)
     const today = req.query.date ? new Date(req.query.date) : new Date();
     const startOfDay = new Date(today.setHours(0, 0, 0, 0));
     const endOfDay = new Date(today.setHours(23, 59, 59, 999));
 
-    // 🧮 Fetch unassigned leads safely using raw MongoDB driver
+    // 🧮 Fetch unassigned leads globally
     const unassignedLeads = await Lead.collection
       .find({
         $or: [
@@ -166,41 +162,35 @@ exports.getCombinedReport = async (req, res) => {
 
     const unassignedLeadCount = unassignedLeads.length;
 
-    // 🧾 Generate report for each user
+    // 🧾 Generate per-user reports
     const reports = await Promise.all(
       users.map(async (user) => {
-        // ⚙️ Use raw collection aggregation to avoid ObjectId casting
-        const leadCounts = await Lead.collection
-          .aggregate([
-            {
-              $match: {
-                assignTo: {
-                  $type: "objectId",
-                  $eq: new mongoose.Types.ObjectId(user._id)
-                }
-              }
-            },
-            {
-              $group: {
-                _id: "$status",
-                count: { $sum: 1 }
-              }
+        // ⚙️ Get all leads assigned to this user (safe via raw MongoDB collection)
+        const assignedLeads = await Lead.collection
+          .find({
+            assignTo: {
+              $type: "objectId",
+              $eq: new mongoose.Types.ObjectId(user._id)
             }
-          ])
+          })
+          .project({ status: 1 })
           .toArray();
 
-        // 🧮 Build lead stats
-        const leadStats = {};
-        let totalLeads = 0;
+        const assignedLeadCount = assignedLeads.length; // ✅ total assigned leads
 
-        validStatuses.forEach((status) => {
-          const found = leadCounts.find((l) => l._id === status);
-          const count = found ? found.count : 0;
-          leadStats[status.replace(/\s+/g, '')] = count;
-          totalLeads += count;
+        // 🧮 Count leads per status
+        const leadStats = {};
+        validStatuses.forEach((status) => (leadStats[status.replace(/\s+/g, '')] = 0));
+
+        assignedLeads.forEach((lead) => {
+          if (lead.status && leadStats.hasOwnProperty(lead.status.replace(/\s+/g, ''))) {
+            leadStats[lead.status.replace(/\s+/g, '')]++;
+          }
         });
 
-        // 📊 Fetch Daily Performance
+        const totalLeads = assignedLeadCount;
+
+        // 📊 Fetch daily performance
         const performance = await DailyPerformance.findOne({
           name: user.name,
           date: { $gte: startOfDay, $lte: endOfDay },
@@ -210,6 +200,7 @@ exports.getCombinedReport = async (req, res) => {
           name: user.name,
           userId: user._id,
           email: user.email,
+          assignedLeadCount, // ✅ number of leads assigned to this user
           leadStats: { ...leadStats, totalLeads },
           DailyPlanStatus: performance?.planstatus || 0,
           meetingVisits: performance?.meetingVisits || 0,
@@ -217,8 +208,8 @@ exports.getCombinedReport = async (req, res) => {
       })
     );
 
-    // ✅ Send final response
-    return res.status(200).json({
+    // ✅ Send final combined report
+    res.status(200).json({
       success: true,
       data: reports,
       unassignedLeads: unassignedLeadCount,
@@ -226,10 +217,7 @@ exports.getCombinedReport = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ Error generating combined report:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message || "Internal Server Error",
-    });
+    console.error("Error generating combined report:", error);
+    res.status(500).json({ success: false, message: error.message });
   }
 };
