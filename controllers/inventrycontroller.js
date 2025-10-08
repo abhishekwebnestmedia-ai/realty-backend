@@ -119,38 +119,29 @@ exports.getInventryByAssignTo = async (req, res) => {
   }
 };
 
-exports.getInventoryCountByCapturedUser = async (req, res) => {
-  try {
-    const { capturedBy } = req.query;
 
-    if (!capturedBy) {
-      return res.status(400).json({
-        success: false,
-        message: "capturedBy parameter is required"
-      });
+exports.getInventryByCapturedBy = async (req, res) => {
+  try {
+    const { capturedBy } = req.query; // pass ?capturedBy=Abhishek
+
+    let filter = {};
+    if (capturedBy) {
+      filter.capturedBy = { $regex: new RegExp("^" + capturedBy + "$", "i") }; // case-insensitive
     }
 
-    // Count inventory records captured by this user (case-insensitive)
-    const inventoryCount = await Inventory.countDocuments({
-      capturedBy: { $regex: new RegExp(`^${capturedBy}$`, 'i') }
-    });
+    const records = await Inventory.find(filter).sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
-      capturedBy,
-      inventoryCount,
-      message: `Total inventory captured by ${capturedBy}: ${inventoryCount}`
+      capturedBy: capturedBy || "All",
+      totalRecords: records.length,
+      records
     });
-
   } catch (err) {
-    console.error("❌ getInventoryCountByCapturedUser error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Server error fetching inventory count"
-    });
+    console.error("❌ Error fetching inventory by capturedBy:", err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
-
 
 
 

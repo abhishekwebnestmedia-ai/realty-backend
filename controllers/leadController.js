@@ -766,28 +766,37 @@ exports.bulkAssignLeads = async (req, res) => {
 };
 
 // 🔹 Get Lead Count by capturedBy
-exports.getLeadCountByCapturedUser = async (req, res) => {
+// 🔹 Get Leads by capturedBy (specific user)
+exports.getLeadsByCapturedBy = async (req, res) => {
   try {
-    const { capturedBy } = req.query;
+    const { capturedBy } = req.query; // pass ?capturedBy=Abhishek
 
     if (!capturedBy) {
-      return res.status(400).json({ success: false, message: "capturedBy parameter is required" });
+      return res.status(400).json({
+        success: false,
+        message: "capturedBy query parameter is required (e.g. ?capturedBy=Abhishek)"
+      });
     }
 
-    // Count leads captured by this user (case-insensitive)
-    const leadCount = await Lead.countDocuments({
-      capturedBy: { $regex: new RegExp(`^${capturedBy}$`, 'i') }
-    });
+    // ✅ Case-insensitive match for capturedBy
+    const filter = { capturedBy: { $regex: new RegExp(`^${capturedBy}$`, "i") } };
+
+    // ✅ Fetch all matching leads (most recent first)
+    const leads = await Lead.find(filter).sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
       capturedBy,
-      leadCount,
-      message: `Total leads captured by ${capturedBy}: ${leadCount}`
+      totalLeads: leads.length,
+      leads,
+      message: `Total leads captured by ${capturedBy}: ${leads.length}`
     });
-
   } catch (err) {
-    console.error("❌ getLeadCountByCapturedUser error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("❌ getLeadsByCapturedBy error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error fetching leads by capturedBy"
+    });
   }
 };
+

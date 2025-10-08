@@ -14,7 +14,7 @@ router.delete('/delete/:id', authMiddleware,inventrycontroller.deleteInventry);
 router.post("/bulk-upload", authMiddleware, inventrycontroller.bulkUploadInventry);
 router.get('/userbasedinventry',authMiddleware,inventrycontroller.getInventryByAssignTo);
 
-router.get('/captured', authMiddleware, inventrycontroller.getInventoryCountByCapturedUser);
+router.get('/captured', authMiddleware, inventrycontroller.getInventryByCapturedBy);
 
 
 
