@@ -764,3 +764,30 @@ exports.bulkAssignLeads = async (req, res) => {
     res.status(500).json({ success: false, message: "Error assigning leads in bulk" });
   }
 };
+
+// 🔹 Get Lead Count by capturedBy
+exports.getLeadCountByCapturedUser = async (req, res) => {
+  try {
+    const { capturedBy } = req.query;
+
+    if (!capturedBy) {
+      return res.status(400).json({ success: false, message: "capturedBy parameter is required" });
+    }
+
+    // Count leads captured by this user (case-insensitive)
+    const leadCount = await Lead.countDocuments({
+      capturedBy: { $regex: new RegExp(`^${capturedBy}$`, 'i') }
+    });
+
+    res.status(200).json({
+      success: true,
+      capturedBy,
+      leadCount,
+      message: `Total leads captured by ${capturedBy}: ${leadCount}`
+    });
+
+  } catch (err) {
+    console.error("❌ getLeadCountByCapturedUser error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};

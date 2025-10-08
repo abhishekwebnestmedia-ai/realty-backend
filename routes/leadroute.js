@@ -1,17 +1,3 @@
-// const express = require('express');
-// const router = express.Router();
-// const leadController = require('../controllers/leadController');
-// const authMiddleware = require("../middleware/authmiddleware");
-
-
-// router.post('/create',authMiddleware,leadController.createLead);
-// router.post('/bulk-upload', authMiddleware,leadController.bulkUploadLeads);
-// router.get('/getlead',authMiddleware,leadController.getLeads);
-// router.put('/update/:id', authMiddleware,leadController.updateLead );
-// router.delete('/delete/:id' , authMiddleware,leadController.deleteLead);
-
-// module.exports = router;
-
 
 
 
@@ -41,7 +27,7 @@ router.post('/bulk-assign',authMiddleware, leadController.bulkAssignLeads)
 // Delete a lead
 router.delete('/delete/:id', authMiddleware, leadController.deleteLead);
 router.get('/userbasedlead',authMiddleware, leadController.getLeadsByUserName);
-
+router.get('/count-by-captured', authMiddleware, leadController.getLeadCountByCapturedUser);
 
 
 module.exports = router;

@@ -15,7 +15,7 @@ const app = express();
 const allowedOrigins = [
   'https://realtyxpo.in',
   'https://crm.realtyxpo.in',
-  'http://localhost:3000',  
+  'http://localhost:3000', 
 ];
 
 app.use(cors({
