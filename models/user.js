@@ -20,8 +20,9 @@ empid: { type: String, unique: true },
     firstLogoutAt: { type: Date },
   lastLoginAt: { type: Date },
   lastLogoutAt: { type: Date },
-  isLoggedIn: { type: Boolean, default: false }
-
+  isLoggedIn: { type: Boolean, default: false },
+passwordResetToken: { type: String },
+  passwordResetExpires: { type: Date },
   
 }, {
 
