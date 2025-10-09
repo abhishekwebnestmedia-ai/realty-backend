@@ -510,4 +510,47 @@ exports.updateUserPermissions = async (req, res) => {
 
 
 
+exports.bootstrapAdmin = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Please provide an email.' });
+    }
+
+    // Check if an admin already exists
+    const adminExists = await User.exists({ role: 'admin' });
+
+    if (adminExists) {
+      return res.status(403).json({
+        message: 'An admin already exists. Bootstrap admin is disabled.'
+      });
+    }
+
+    // Find the user by email
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    user.role = 'admin';
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `✅ ${user.name} has been promoted to admin (bootstrap).`,
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (err) {
+    console.error('❌ Bootstrap admin error:', err);
+    return res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
 
