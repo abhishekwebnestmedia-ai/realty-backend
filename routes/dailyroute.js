@@ -11,7 +11,7 @@ router.put('/task/:id', authMiddleware, performanceController.updatePerformance)
 router.delete('/task/:id', authMiddleware, performanceController.deletePerformance);
 router.post('/task/byname', authMiddleware, performanceController.getPerformanceByName);
 router.post('/task/today', authMiddleware, performanceController.getTodayPerformanceByName);
-router.get('/task/alltoday', authMiddleware, performanceController.getTodaysPlans);
+router.get('/task/today', authMiddleware, performanceController.getTodaysPlans);
 
 
 
