@@ -25,7 +25,6 @@ passwordResetToken: { type: String },
   passwordResetExpires: { type: Date },
 
 
-
   
 }, {
 

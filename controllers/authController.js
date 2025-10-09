@@ -471,6 +471,44 @@ exports.updateUser = async (req, res) => {
 
 
 
+exports.updateUserPermissions = async (req, res) => {
+  try {
+    const adminUser = req.user; // from auth middleware (decoded token)
+
+    // ✅ Check if logged-in user is a super admin
+    if (!adminUser.permissions?.superAdmin) {
+      return res.status(403).json({ message: 'Access denied. Super admin only.' });
+    }
+
+    const { userId, permissions } = req.body;
+
+    if (!userId || !permissions) {
+      return res.status(400).json({ message: 'Missing userId or permissions object.' });
+    }
+
+    // ✅ Update the user's permissions
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { permissions },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Permissions updated successfully.',
+      data: updatedUser.permissions
+    });
+
+  } catch (error) {
+    console.error('Error updating permissions:', error);
+    res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
 
 
 

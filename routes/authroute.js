@@ -28,6 +28,9 @@ router.put(
   authController.updateUser
 );
 
+router.put('/update-permissions', authMiddleware, authController.updateUserPermissions);
+
+
 
 
 module.exports = router;
