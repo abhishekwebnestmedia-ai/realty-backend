@@ -8,7 +8,7 @@ const User = require('./models/user'); // Ensure correct case: 'User.js', not 'u
     console.log('✅ Connected to MongoDB');
 
     // ✉️ Replace with your actual email
-    const email = 'your@email.com';
+    const email = 'abhishek@webnestmedia.com';
 
     const user = await User.findOne({ email });
 
