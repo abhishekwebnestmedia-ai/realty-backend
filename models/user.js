@@ -23,6 +23,9 @@ empid: { type: String, unique: true },
   isLoggedIn: { type: Boolean, default: false },
 passwordResetToken: { type: String },
   passwordResetExpires: { type: Date },
+
+
+
   
 }, {
 

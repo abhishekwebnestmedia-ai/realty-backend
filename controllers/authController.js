@@ -109,16 +109,37 @@ exports.login = async (req, res) => {
 
 
 
+// exports.getProfile = async (req, res) => {
+//   try {
+//     const user = await User.findById(req.user.userId).select('-password');
+//     if (!user) return res.status(404).json({ message: 'User not found' });
+//     res.json(user);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: 'Server error fetching profile' });
+//   }
+// };
+
 exports.getProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user.userId).select('-password');
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json(user);
+    // Extract userId from the authenticated user (from JWT)
+    const user = await User.findById(req.user.userId).select('-password'); // exclude password
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'User profile fetched successfully',
+      data: user,
+    });
   } catch (err) {
-    console.error(err);
+    console.error('Error fetching profile:', err);
     res.status(500).json({ message: 'Server error fetching profile' });
   }
 };
+
 
 
 
