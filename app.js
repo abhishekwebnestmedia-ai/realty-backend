@@ -1,28 +1,24 @@
 const mongoose = require('mongoose');
-const User = require('./models/user'); // Ensure correct case: 'User.js', not 'user.js'
+const User = require('./models/user');
 
 (async () => {
   try {
-    // 🔗 Connect to your MongoDB
     await mongoose.connect('mongodb://admin:StrongPassword123@localhost:27017/realtyexpo?authSource=admin');
     console.log('✅ Connected to MongoDB');
 
-    // ✉️ Replace with your actual email
-    const email = 'abhishek@webnestmedia.com';
-
-    const user = await User.findOne({ email });
+    const userId = '68e64108ccfbe146fe1b5ba6'; // Abhishek Singh's ID
+    const user = await User.findById(userId);
 
     if (!user) {
-      console.log('❌ User not found with that email.');
-      process.exit(1);
+      console.log('❌ User not found');
+      process.exit();
     }
 
     user.role = 'admin';
     await user.save();
 
-    console.log(`✅ User promoted to admin: ${user.email}`);
-    process.exit(0);
-
+    console.log(`✅ User promoted to admin: ${user.name} (${user.email})`);
+    process.exit();
   } catch (err) {
     console.error('❌ Error promoting user to admin:', err);
     process.exit(1);
