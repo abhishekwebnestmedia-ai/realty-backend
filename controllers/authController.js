@@ -470,14 +470,13 @@ exports.updateUser = async (req, res) => {
 };
 
 
-
 exports.updateUserPermissions = async (req, res) => {
   try {
     const adminUser = req.user; // from auth middleware (decoded token)
 
-    // ✅ Check if logged-in user is a super admin
-    if (!adminUser.permissions?.superAdmin) {
-      return res.status(403).json({ message: 'Access denied. Super admin only.' });
+    // ✅ Allow only admins to update permissions
+    if (adminUser.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied. Only admins can update permissions.' });
     }
 
     const { userId, permissions } = req.body;
@@ -486,7 +485,7 @@ exports.updateUserPermissions = async (req, res) => {
       return res.status(400).json({ message: 'Missing userId or permissions object.' });
     }
 
-    // ✅ Update the user's permissions
+    // ✅ Update target user's permissions
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { permissions },

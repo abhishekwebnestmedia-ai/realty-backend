@@ -28,7 +28,7 @@ router.put(
   authController.updateUser
 );
 
-router.put('/update-permissions', authMiddleware, authController.updateUserPermissions);
+router.put('/permissions', authMiddleware, authController.updateUserPermissions);
 
 
 
