@@ -30,7 +30,6 @@ router.put(
 
 router.put('/permissions', authMiddleware, authController.updateUserPermissions);
 
-router.post('/bootstrap-admin', authController.bootstrapAdmin);
 
 
 
