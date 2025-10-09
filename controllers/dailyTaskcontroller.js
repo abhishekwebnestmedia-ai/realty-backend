@@ -30,10 +30,6 @@ exports.getAllPerformances = async (req, res) => {
   }
 };
 
-/**
- * 🔹 Add new performance record
- * Auto-calculates planstatus before saving
- */
 exports.addPerformance = async (req, res) => {
   try {
     const body = req.body;
@@ -57,9 +53,7 @@ exports.addPerformance = async (req, res) => {
   }
 };
 
-/**
- * 🔹 Get performance record by ID
- */
+
 exports.getPerformanceById = async (req, res) => {
   try {
     const record = await DailyPerformance.findById(req.params.id);
@@ -70,10 +64,7 @@ exports.getPerformanceById = async (req, res) => {
   }
 };
 
-/**
- * 🔹 Update performance record
- * Recalculates planstatus dynamically before saving
- */
+
 exports.updatePerformance = async (req, res) => {
 
   try {
@@ -98,9 +89,7 @@ exports.updatePerformance = async (req, res) => {
   }
 };
 
-/**
- * 🔹 Delete performance record
- */
+
 exports.deletePerformance = async (req, res) => {
   try {
     const deleted = await DailyPerformance.findByIdAndDelete(req.params.id);
@@ -111,10 +100,7 @@ exports.deletePerformance = async (req, res) => {
   }
 };
 
-/**
- * 🔹 Get performance by name
- * Returns all records (sorted) and the latest record
- */
+
 exports.getPerformanceByName = async (req, res) => {
   try {
     const { name } = req.body;
@@ -143,6 +129,47 @@ exports.getPerformanceByName = async (req, res) => {
 };
 
 
+
+/**
+ * 🔹 Get today's performance by name
+ * Returns only the record for the current date (IST)
+ */
+exports.getTodayPerformanceByName = async (req, res) => {
+  try {
+    const { name } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: "Name is required in request body" });
+    }
+
+    // ✅ Get current date in IST (UTC+5:30)
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istNow = new Date(now.getTime() + istOffset);
+
+    // Get today's start and end in IST
+    const startOfDayIST = new Date(istNow.setHours(0, 0, 0, 0) - istOffset);
+    const endOfDayIST = new Date(istNow.setHours(23, 59, 59, 999) - istOffset);
+
+    // ✅ Find record where date is today (IST)
+    const record = await DailyPerformance.findOne({
+      name: { $regex: new RegExp(`^${name}$`, "i") },
+      date: { $gte: startOfDayIST, $lte: endOfDayIST }
+    });
+
+    if (!record) {
+      return res.status(404).json({ message: `No record found for ${name} today` });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: record
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
 
 
 

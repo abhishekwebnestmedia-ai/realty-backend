@@ -10,6 +10,7 @@ router.get('/task/:id', authMiddleware, performanceController.getPerformanceById
 router.put('/task/:id', authMiddleware, performanceController.updatePerformance);
 router.delete('/task/:id', authMiddleware, performanceController.deletePerformance);
 router.post('/task/byname', authMiddleware, performanceController.getPerformanceByName);
+router.post('/task/today', authMiddleware, performanceController.getTodayPerformanceByName);
 
 
 module.exports = router;
