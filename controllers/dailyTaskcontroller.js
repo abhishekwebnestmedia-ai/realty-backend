@@ -30,6 +30,33 @@ exports.getAllPerformances = async (req, res) => {
   }
 };
 
+// GET today's daily plans for all users
+exports.getTodaysPlans = async (req, res) => {
+  try {
+    // Get the current date (00:00 to 23:59)
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // Query for records where date is within today
+    const records = await DailyPerformance.find({
+      date: { $gte: startOfDay, $lte: endOfDay },
+    }).populate('userId', 'name email role'); // Optional: populate user info
+
+    res.status(200).json({
+      success: true,
+      count: records.length,
+      data: records,
+    });
+  } catch (err) {
+    console.error('Error fetching today’s plans:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+
 exports.addPerformance = async (req, res) => {
   try {
     const body = req.body;
