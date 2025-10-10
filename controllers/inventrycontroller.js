@@ -1,6 +1,8 @@
 
 const Inventory = require('../models/inventryModel'); 
 const InventoryHistory = require("../models/inventryHistory");
+const User = require('../models/user');
+const mongoose = require("mongoose");
 
 exports.createInventry = async (req, res) => {
   try {
