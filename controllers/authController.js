@@ -8,9 +8,9 @@ const nodemailer = require('nodemailer');
 
 exports.register = async (req, res) => {
   try {
-    const { name, email, password,  phoneNumber, address, empid, designation } = req.body;
+    const { name, email, password, phoneNumber, address, empid, designation } = req.body;
 
- 
+
     let missingFields = [];
     if (!name) missingFields.push('Name is missing');
     if (!email) missingFields.push('Email is missing');
@@ -33,7 +33,7 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
     }
 
-  
+
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ message: 'User already exists' });
@@ -44,9 +44,11 @@ exports.register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     // --- Save user ---
-    const user = new User({ name, email, password: hashedPassword ,      phoneNumber,   // ✅ Added
-            // ✅ Added
-      designation , address, empid,   });
+    const user = new User({
+      name, email, password: hashedPassword, phoneNumber,   // ✅ Added
+      // ✅ Added
+      designation, address, empid,
+    });
     await user.save();
 
     res.status(201).json({ message: 'User registered successfully' });
@@ -89,7 +91,12 @@ exports.login = async (req, res) => {
 
     // ✅ Include role in JWT
     const token = jwt.sign(
-      { userId: user._id, email: user.email, role: user.role },
+      {
+        userId: user._id,
+         name: user.name,
+        email: user.email,
+        role: user.role
+      },
       process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
@@ -144,7 +151,7 @@ exports.logout = async (req, res) => {
 
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find({}, { _id: 1, name: 1, email: 1 , role:1});
+    const users = await User.find({}, { _id: 1, name: 1, email: 1, role: 1 });
 
     res.json({
       success: true,
