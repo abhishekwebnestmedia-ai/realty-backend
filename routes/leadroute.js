@@ -28,6 +28,8 @@ router.post('/bulk-assign',authMiddleware, leadController.bulkAssignLeads)
 router.delete('/delete/:id', authMiddleware, leadController.deleteLead);
 router.get('/userbasedlead',authMiddleware, leadController.getLeadsByUserName);
 router.get('/captured', authMiddleware, leadController.getLeadsByCapturedBy);
+router.get('/:leadId/history', authMiddleware, leadController.getLeadChangeHistory);
+
 
 
 module.exports = router;

@@ -4,6 +4,8 @@
 const Lead = require('../models/leadModel');
 const User = require('../models/user');
 const mongoose = require("mongoose");
+const LeadHistory = require("../models/leadHistory");
+
 
 const validStatuses = [
   "Hot",
@@ -141,15 +143,48 @@ exports.getLeads = async (req, res) => {
 
 
 // 🔹 Update Lead
+// exports.updateLead = async (req, res) => {
+//   try {
+//     const errorMsg = validateLeadData(req.body, true);
+//     if (errorMsg) {
+//       return res.status(400).json({ success: false, message: errorMsg });
+//     }
+
+//     const updateData = { ...req.body };
+
+//     if (updateData.assignTo !== undefined) {
+//       const user = await resolveAssignTo(updateData.assignTo);
+//       if (!user) {
+//         return res.status(400).json({ success: false, message: "Invalid assignTo user" });
+//       }
+//       updateData.assignTo = user._id;
+//     }
+
+//     const lead = await Lead.findByIdAndUpdate(req.params.id, updateData, { new: true })
+//       .populate("assignTo", "name email");
+
+//     if (!lead) {
+//       return res.status(404).json({ success: false, message: "Lead not found" });
+//     }
+
+//     res.json({ success: true, data: lead });
+//   } catch (err) {
+//     console.error(" updateLead error:", err);
+//     res.status(500).json({ success: false, message: "Error updating lead" });
+//   }
+// };
+
 exports.updateLead = async (req, res) => {
   try {
-    const errorMsg = validateLeadData(req.body, true);
-    if (errorMsg) {
-      return res.status(400).json({ success: false, message: errorMsg });
-    }
-
+    const { id } = req.params;
     const updateData = { ...req.body };
 
+    const oldLead = await Lead.findById(id).populate("assignTo", "name email");
+    if (!oldLead) {
+      return res.status(404).json({ success: false, message: "Lead not found" });
+    }
+
+    // If assignTo provided, resolve to user ID
     if (updateData.assignTo !== undefined) {
       const user = await resolveAssignTo(updateData.assignTo);
       if (!user) {
@@ -158,19 +193,55 @@ exports.updateLead = async (req, res) => {
       updateData.assignTo = user._id;
     }
 
-    const lead = await Lead.findByIdAndUpdate(req.params.id, updateData, { new: true })
+    // Update the lead
+    const updatedLead = await Lead.findByIdAndUpdate(id, updateData, { new: true })
       .populate("assignTo", "name email");
 
-    if (!lead) {
-      return res.status(404).json({ success: false, message: "Lead not found" });
+    // TRACKED FIELDS
+    const trackedFields = ["status", "assignTo", "capturedBy", "transferTo", "remark"];
+
+    // Determine who made the change (from req.user)
+    let changedBy = null;
+    if (req.user) {
+      const user = await User.findById(req.user._id).select("name email");
+      if (user) {
+        changedBy = {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+        };
+      }
     }
 
-    res.json({ success: true, data: lead });
+    // Loop over tracked fields and create history entries for changed ones
+    for (const field of trackedFields) {
+      let oldValue = oldLead[field];
+      let newValue = updatedLead[field];
+
+      // Handle assignTo separately since it's an ObjectId
+      if (field === "assignTo") {
+        oldValue = oldLead.assignTo?.name || "";
+        newValue = updatedLead.assignTo?.name || "";
+      }
+
+      if (String(oldValue || "") !== String(newValue || "")) {
+        await LeadHistory.create({
+          leadId: id,
+          changedBy,
+          field,
+          oldValue,
+          newValue,
+        });
+      }
+    }
+
+    res.json({ success: true, message: "Lead updated successfully", data: updatedLead });
   } catch (err) {
-    console.error(" updateLead error:", err);
+    console.error("updateLead error:", err);
     res.status(500).json({ success: false, message: "Error updating lead" });
   }
 };
+
 
 
 // 🔹 Get Lead by ID
@@ -357,6 +428,29 @@ exports.getLeadsByCapturedBy = async (req, res) => {
       success: false,
       message: "Server error fetching leads by capturedBy"
     });
+  }
+};
+
+
+exports.getLeadChangeHistory = async (req, res) => {
+  try {
+    const { leadId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(leadId)) {
+      return res.status(400).json({ success: false, message: "Invalid lead ID" });
+    }
+
+    const history = await LeadHistory.find({ leadId })
+      .sort({ changedAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      totalChanges: history.length,
+      data: history,
+    });
+  } catch (err) {
+    console.error("getLeadChangeHistory error:", err);
+    res.status(500).json({ success: false, message: "Error fetching lead change history" });
   }
 };
 
