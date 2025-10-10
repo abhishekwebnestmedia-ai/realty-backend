@@ -65,18 +65,89 @@ exports.bulkUploadInventry = async (req, res) => {
   }
 };
 
+// exports.updateInventry = async (req, res) => {
+//   try {
+//     const record = await Inventory.findByIdAndUpdate(req.params.id, req.body, { new: true });
+//     if (!record) {
+//       return res.status(404).json({ error: 'Record not found' });
+//     }
+//     res.json(record);
+//   } catch (err) {
+//     res.status(400).json({ error: err.message });
+//   }
+// };
+
 exports.updateInventry = async (req, res) => {
   try {
-    const record = await Inventory.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!record) {
-      return res.status(404).json({ error: 'Record not found' });
+    const { id } = req.params;
+    const updateData = { ...req.body };
+
+    // Find the existing record before updating
+    const oldRecord = await Inventory.findById(id);
+    if (!oldRecord) {
+      return res.status(404).json({ success: false, message: "Inventory record not found" });
     }
-    res.json(record);
+
+    // Update the inventory record
+    const updatedRecord = await Inventory.findByIdAndUpdate(id, updateData, { new: true });
+    if (!updatedRecord) {
+      return res.status(404).json({ success: false, message: "Inventory not found after update" });
+    }
+
+    // Define tracked fields
+    const trackedFields = [
+      "capturedBy",
+      "assignTo",
+      "transferTo",
+      "followUpDate",
+      "remarks",
+      "requirement"
+    ];
+
+    // Identify who made the change
+    let changedBy = null;
+    if (req.user) {
+      const userId = req.user.userId || req.user._id || req.user.id;
+      const user = await User.findById(userId).select("name email");
+      if (user) {
+        changedBy = {
+          _id: user._id,
+          name: user.name,
+          email: user.email
+        };
+      }
+    }
+
+    // Compare old vs new values for tracked fields
+    for (const field of trackedFields) {
+      const oldValue = oldRecord[field];
+      const newValue = updatedRecord[field];
+
+      if (String(oldValue || "") !== String(newValue || "")) {
+        await InventoryHistory.create({
+          inventoryId: id,
+          changedBy,
+          field,
+          oldValue,
+          newValue
+        });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Inventory updated successfully",
+      data: updatedRecord
+    });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    console.error("updateInventry error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Error updating inventory",
+      error: err.message
+    });
   }
 };
-
 
 exports.deleteInventry = async (req, res) => {
   try {
@@ -144,6 +215,32 @@ exports.getInventryByCapturedBy = async (req, res) => {
 };
 
 
+
+// Get all change logs for a specific inventory record
+exports.getInventoryChangeHistory = async (req, res) => {
+  try {
+    const { inventoryId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(inventoryId)) {
+      return res.status(400).json({ success: false, message: "Invalid inventory ID" });
+    }
+
+    const history = await InventoryHistory.find({ inventoryId }).sort({ changedAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      totalChanges: history.length,
+      data: history
+    });
+  } catch (err) {
+    console.error("getInventoryChangeHistory error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching inventory history",
+      error: err.message
+    });
+  }
+};
 
 
 
