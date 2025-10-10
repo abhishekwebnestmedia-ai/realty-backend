@@ -1,5 +1,6 @@
 
 const Inventory = require('../models/inventryModel'); 
+const InventoryHistory = require("../models/inventryHistory");
 
 exports.createInventry = async (req, res) => {
   try {
