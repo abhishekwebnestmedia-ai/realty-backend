@@ -174,6 +174,7 @@ exports.getLeads = async (req, res) => {
 //   }
 // };
 
+
 exports.updateLead = async (req, res) => {
   try {
     const { id } = req.params;
@@ -198,7 +199,7 @@ exports.updateLead = async (req, res) => {
       .populate("assignTo", "name email");
 
     // TRACKED FIELDS
-    const trackedFields = ["status", "assignTo", "capturedBy", "transferTo", "remark"];
+    const trackedFields = ["status", "assignTo", "capturedBy", "transferTo", "remark" ,"followUp"];
 
     // Determine who made the change (from req.user)
     let changedBy = null;
