@@ -174,73 +174,80 @@ exports.getLeads = async (req, res) => {
 //   }
 // };
 
+
+// controllers/leadController.js (updated updateLead)
+
+
 exports.updateLead = async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body };
 
-    const oldLead = await Lead.findById(id).populate("assignTo", "name email");
+    // Fetch old lead (with assignTo populated so we can compare names)
+    const oldLead = await Lead.findById(id).populate('assignTo', 'name email');
     if (!oldLead) {
-      return res.status(404).json({ success: false, message: "Lead not found" });
+      return res.status(404).json({ success: false, message: 'Lead not found' });
     }
 
-    // If assignTo provided, resolve to user ID
+    // If assignTo provided, resolve to a user _id (allow id/name/email)
     if (updateData.assignTo !== undefined) {
-      const user = await resolveAssignTo(updateData.assignTo);
-      if (!user) {
-        return res.status(400).json({ success: false, message: "Invalid assignTo user" });
+      const assignedUser = await resolveAssignTo(updateData.assignTo);
+      if (!assignedUser) {
+        return res.status(400).json({ success: false, message: 'Invalid assignTo user' });
       }
-      updateData.assignTo = user._id;
+      updateData.assignTo = assignedUser._id;
     }
 
-    // Update the lead
+    // Perform update and populate assignTo for readable names
     const updatedLead = await Lead.findByIdAndUpdate(id, updateData, { new: true })
-      .populate("assignTo", "name email");
+      .populate('assignTo', 'name email');
 
-    // TRACKED FIELDS
-    const trackedFields = ["status", "assignTo", "capturedBy", "transferTo", "remark"];
+    // Tracked fields (only these will create history)
+    const trackedFields = ['status', 'assignTo', 'capturedBy', 'transferTo', 'remark'];
 
-    // Determine who made the change (from req.user)
-    let changedBy = null;
-    if (req.user) {
-      const user = await User.findById(req.user._id).select("name email");
-      if (user) {
-        changedBy = {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-        };
-      }
-    }
+    // Build changedBy data safely from req.user (works with different token shapes)
+    const userInfo = req.user || {}; // req.user should be set by auth middleware
+    const userId = userInfo.userId || userInfo._id || userInfo._id?.toString();
+    const changedBy = userId ? {
+      _id: mongoose.Types.ObjectId(userId),
+      name: userInfo.name || (userInfo.email ? userInfo.email.split('@')[0] : 'Unknown User'),
+      email: userInfo.email || null
+    } : null;
 
-    // Loop over tracked fields and create history entries for changed ones
+    // Compare tracked fields and create history entries for changed ones
     for (const field of trackedFields) {
       let oldValue = oldLead[field];
       let newValue = updatedLead[field];
 
-      // Handle assignTo separately since it's an ObjectId
-      if (field === "assignTo") {
-        oldValue = oldLead.assignTo?.name || "";
-        newValue = updatedLead.assignTo?.name || "";
+      // For assignTo, use populated name for clarity
+      if (field === 'assignTo') {
+        oldValue = oldLead.assignTo?.name || '';
+        newValue = updatedLead.assignTo?.name || '';
       }
 
-      if (String(oldValue || "") !== String(newValue || "")) {
+      // Normalize to string for comparison (handles undefined/null)
+      const oldStr = oldValue !== undefined && oldValue !== null ? String(oldValue) : '';
+      const newStr = newValue !== undefined && newValue !== null ? String(newValue) : '';
+
+      if (oldStr !== newStr) {
         await LeadHistory.create({
           leadId: id,
-          changedBy,
+          changedBy,          // will be object or null
           field,
-          oldValue,
-          newValue,
+          oldValue: oldStr,
+          newValue: newStr,
+          // changedAt will default to Date.now() from schema
         });
       }
     }
 
-    res.json({ success: true, message: "Lead updated successfully", data: updatedLead });
+    return res.json({ success: true, message: 'Lead updated successfully', data: updatedLead });
   } catch (err) {
-    console.error("updateLead error:", err);
-    res.status(500).json({ success: false, message: "Error updating lead" });
+    console.error('updateLead error:', err);
+    return res.status(500).json({ success: false, message: 'Error updating lead' });
   }
 };
+
 
 
 
@@ -432,25 +439,27 @@ exports.getLeadsByCapturedBy = async (req, res) => {
 };
 
 
+// controllers/leadController.js (history getter)
 exports.getLeadChangeHistory = async (req, res) => {
   try {
     const { leadId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(leadId)) {
-      return res.status(400).json({ success: false, message: "Invalid lead ID" });
+      return res.status(400).json({ success: false, message: 'Invalid lead ID' });
     }
 
     const history = await LeadHistory.find({ leadId })
       .sort({ changedAt: -1 });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       totalChanges: history.length,
-      data: history,
+      data: history
     });
   } catch (err) {
-    console.error("getLeadChangeHistory error:", err);
-    res.status(500).json({ success: false, message: "Error fetching lead change history" });
+    console.error('getLeadChangeHistory error:', err);
+    return res.status(500).json({ success: false, message: 'Error fetching lead change history' });
   }
 };
+
 
