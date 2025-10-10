@@ -183,13 +183,19 @@ exports.updateLead = async (req, res) => {
     const { id } = req.params;
     const updateData = { ...req.body };
 
-    // Fetch old lead (with assignTo populated so we can compare names)
+    // ✅ Step 1: Validate before updating
+    const errorMsg = validateLeadData(req.body, true);
+    if (errorMsg) {
+      return res.status(400).json({ success: false, message: errorMsg });
+    }
+
+    // ✅ Step 2: Find old lead
     const oldLead = await Lead.findById(id).populate('assignTo', 'name email');
     if (!oldLead) {
       return res.status(404).json({ success: false, message: 'Lead not found' });
     }
 
-    // If assignTo provided, resolve to a user _id (allow id/name/email)
+    // ✅ Step 3: Resolve assignTo if passed
     if (updateData.assignTo !== undefined) {
       const assignedUser = await resolveAssignTo(updateData.assignTo);
       if (!assignedUser) {
@@ -198,45 +204,48 @@ exports.updateLead = async (req, res) => {
       updateData.assignTo = assignedUser._id;
     }
 
-    // Perform update and populate assignTo for readable names
+    // ✅ Step 4: Update the lead
     const updatedLead = await Lead.findByIdAndUpdate(id, updateData, { new: true })
       .populate('assignTo', 'name email');
 
-    // Tracked fields (only these will create history)
+    if (!updatedLead) {
+      return res.status(404).json({ success: false, message: 'Lead not found after update' });
+    }
+
+    // ✅ Step 5: Track changes
     const trackedFields = ['status', 'assignTo', 'capturedBy', 'transferTo', 'remark'];
 
-    // Build changedBy data safely from req.user (works with different token shapes)
-    const userInfo = req.user || {}; // req.user should be set by auth middleware
-    const userId = userInfo.userId || userInfo._id || userInfo._id?.toString();
-    const changedBy = userId ? {
-      _id: mongoose.Types.ObjectId(userId),
-      name: userInfo.name || (userInfo.email ? userInfo.email.split('@')[0] : 'Unknown User'),
-      email: userInfo.email || null
-    } : null;
+    // ✅ Step 6: Determine who made the change
+    const userInfo = req.user || {};
+    const userId = userInfo.userId || userInfo._id || null;
+    const changedBy = userId
+      ? {
+          _id: mongoose.Types.ObjectId(userId),
+          name: userInfo.name || (userInfo.email ? userInfo.email.split('@')[0] : 'Unknown User'),
+          email: userInfo.email || null
+        }
+      : null;
 
-    // Compare tracked fields and create history entries for changed ones
+    // ✅ Step 7: Compare old vs new and log history
     for (const field of trackedFields) {
       let oldValue = oldLead[field];
       let newValue = updatedLead[field];
 
-      // For assignTo, use populated name for clarity
       if (field === 'assignTo') {
         oldValue = oldLead.assignTo?.name || '';
         newValue = updatedLead.assignTo?.name || '';
       }
 
-      // Normalize to string for comparison (handles undefined/null)
-      const oldStr = oldValue !== undefined && oldValue !== null ? String(oldValue) : '';
-      const newStr = newValue !== undefined && newValue !== null ? String(newValue) : '';
+      const oldStr = oldValue ? String(oldValue) : '';
+      const newStr = newValue ? String(newValue) : '';
 
       if (oldStr !== newStr) {
         await LeadHistory.create({
           leadId: id,
-          changedBy,          // will be object or null
+          changedBy,
           field,
           oldValue: oldStr,
-          newValue: newStr,
-          // changedAt will default to Date.now() from schema
+          newValue: newStr
         });
       }
     }
@@ -244,9 +253,14 @@ exports.updateLead = async (req, res) => {
     return res.json({ success: true, message: 'Lead updated successfully', data: updatedLead });
   } catch (err) {
     console.error('updateLead error:', err);
-    return res.status(500).json({ success: false, message: 'Error updating lead' });
+    return res.status(500).json({
+      success: false,
+      message: 'Error updating lead',
+      error: err.message // ✅ Added this for debugging
+    });
   }
 };
+
 
 
 
