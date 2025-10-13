@@ -43,7 +43,7 @@ const inventryRoutes = require('./routes/inventryroute');
 const DailyTaskRoute = require("./routes/dailyroute");
 const projectRoutes = require('./routes/projectroute');
 const brokerRoutes = require('./routes/brokeroute');
-const historyRoutes = require("./routes/historyroute");
+
 
 // Routes
 const groupRoutes = require("./routes/grouproute");
@@ -58,7 +58,7 @@ app.use('/api/inventry', inventryRoutes);
 app.use('/api/dailytask',DailyTaskRoute );
 app.use('/api/projects', projectRoutes);
 app.use('/api/broker', brokerRoutes);
-app.use("/api/history", historyRoutes);
+
 
 app.use('/api/dailyreport', dailyReportRoutes);
 
