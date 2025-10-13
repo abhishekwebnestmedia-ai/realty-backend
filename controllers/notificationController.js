@@ -1,25 +1,38 @@
 const Notification = require("../models/notification");
+const mongoose = require("mongoose");
 
-// ✅ Get notifications for logged-in user
-exports.getUserNotifications = async (req, res) => {
+/**
+ * ✅ Get all notifications (global, no user filter)
+ */
+exports.getAllNotifications = async (req, res) => {
   try {
-    const notifications = await Notification.find({ forUser: req.user._id })
-      .sort({ createdAt: -1 })
-      .limit(50);
+    const notifications = await Notification.find()
+      .sort({ createdAt: -1 });
 
-    res.json({ success: true, data: notifications });
+    res.json({
+      success: true,
+      total: notifications.length,
+      data: notifications,
+    });
   } catch (err) {
-    console.error("getUserNotifications error:", err);
+    console.error("getAllNotifications error:", err);
     res.status(500).json({ success: false, message: "Error fetching notifications" });
   }
 };
 
-// ✅ Mark one notification as read
+/**
+ * ✅ Mark a single notification as read
+ */
 exports.markAsRead = async (req, res) => {
   try {
     const { id } = req.params;
-    const notification = await Notification.findOneAndUpdate(
-      { _id: id, forUser: req.user._id },
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid notification ID" });
+    }
+
+    const notification = await Notification.findByIdAndUpdate(
+      id,
       { isRead: true },
       { new: true }
     );
@@ -34,25 +47,35 @@ exports.markAsRead = async (req, res) => {
   }
 };
 
-// ✅ Mark all notifications as read
+/**
+ * ✅ Mark all notifications as read (global)
+ */
 exports.markAllAsRead = async (req, res) => {
   try {
-    await Notification.updateMany({ forUser: req.user._id }, { isRead: true });
-    res.json({ success: true, message: "All notifications marked as read" });
+    const result = await Notification.updateMany({ isRead: false }, { isRead: true });
+
+    res.json({
+      success: true,
+      message: `${result.modifiedCount} notifications marked as read`,
+    });
   } catch (err) {
     console.error("markAllAsRead error:", err);
     res.status(500).json({ success: false, message: "Error marking all as read" });
   }
 };
 
-// ✅ Delete a notification
+/**
+ * ✅ Delete a single notification
+ */
 exports.deleteNotification = async (req, res) => {
   try {
     const { id } = req.params;
-    const deleted = await Notification.findOneAndDelete({
-      _id: id,
-      forUser: req.user._id,
-    });
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid notification ID" });
+    }
+
+    const deleted = await Notification.findByIdAndDelete(id);
 
     if (!deleted)
       return res.status(404).json({ success: false, message: "Notification not found" });
@@ -61,5 +84,34 @@ exports.deleteNotification = async (req, res) => {
   } catch (err) {
     console.error("deleteNotification error:", err);
     res.status(500).json({ success: false, message: "Error deleting notification" });
+  }
+};
+
+/**
+ * ✅ Delete all notifications (global)
+ */
+exports.deleteAllNotifications = async (req, res) => {
+  try {
+    const result = await Notification.deleteMany({});
+    res.json({
+      success: true,
+      message: `${result.deletedCount} notifications deleted`,
+    });
+  } catch (err) {
+    console.error("deleteAllNotifications error:", err);
+    res.status(500).json({ success: false, message: "Error deleting all notifications" });
+  }
+};
+
+/**
+ * ✅ Get count of unread notifications (global)
+ */
+exports.getUnreadCount = async (req, res) => {
+  try {
+    const count = await Notification.countDocuments({ isRead: false });
+    res.json({ success: true, unreadCount: count });
+  } catch (err) {
+    console.error("getUnreadCount error:", err);
+    res.status(500).json({ success: false, message: "Error fetching unread count" });
   }
 };
