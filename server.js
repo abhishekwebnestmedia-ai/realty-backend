@@ -45,10 +45,15 @@ const projectRoutes = require('./routes/projectroute');
 const brokerRoutes = require('./routes/brokeroute');
 
 
+
 // Routes
 const groupRoutes = require("./routes/grouproute");
 const broadcastRoutes = require("./routes/broadcastroute");
 const dailyReportRoutes = require('./routes/dailyreportroute');
+
+const notificationRoutes = require("./routes/notificationRoutes");
+
+
 
 
 app.use('/api/auth', authRoutes);
@@ -68,29 +73,59 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.use("/api/groups", groupRoutes);
 app.use("/api/broadcasts", broadcastRoutes);
-
+app.use("/api/notifications", notificationRoutes);
 
 app.get('/', (req, res) => {
   res.send('CRM backend server is running');
 });
+
+
+
+
+
+
+
+// const server = http.createServer(app);
+// const io = new Server(server, {
+//   cors: { origin: "*" },
+// });
+
+// app.set("io", io);
+
+// io.on("connection", (socket) => {
+//   console.log(" Socket connected:", socket.id);
+//   socket.on("disconnect", () => console.log(" Socket disconnected:", socket.id));
+// });
+
+// const PORT = process.env.PORT || 5000;
+// app.listen(PORT, () => {
+//   console.log(`Server running on port http://localhost:${PORT}`);
+// });
+
+
 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*" },
 });
 
-app.set("io", io);
+global.io = io; // ✅ <-- IMPORTANT: allows cron service to send socket events
 
 io.on("connection", (socket) => {
-  console.log(" Socket connected:", socket.id);
-  socket.on("disconnect", () => console.log(" Socket disconnected:", socket.id));
+  console.log("✅ Socket connected:", socket.id);
+  socket.on("disconnect", () => console.log("❌ Socket disconnected:", socket.id));
 });
 
+// ----------------------------------------
+// ✅ START FOLLOW-UP CRON SERVICE
+// ----------------------------------------
+require("./services/followupCronService"); // <--- ADD THIS LINE
+
+// ----------------------------------------
+// ✅ START SERVER
+// ----------------------------------------
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port http://localhost:${PORT}`);
+server.listen(PORT, () => {
+  console.log(` Server running on http://localhost:${PORT}`);
 });
-
-
-
 
