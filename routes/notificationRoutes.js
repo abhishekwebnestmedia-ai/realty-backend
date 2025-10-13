@@ -10,24 +10,16 @@
 
 // module.exports = router;
 
-
 const express = require("express");
 const router = express.Router();
-
 const {
   getAllNotifications,
-  markAsRead,
-  markAllAsRead,
   deleteNotification,
   deleteAllNotifications,
-  getUnreadCount,
 } = require("../controllers/notificationController");
 
-// ✅ These functions must exist and be exported in controller
+// ✅ Routes
 router.get("/", getAllNotifications);
-router.get("/unread-count", getUnreadCount);
-router.put("/:id/read", markAsRead);
-router.put("/read-all", markAllAsRead);
 router.delete("/:id", deleteNotification);
 router.delete("/", deleteAllNotifications);
 
