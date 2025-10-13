@@ -43,7 +43,7 @@ const inventryRoutes = require('./routes/inventryroute');
 const DailyTaskRoute = require("./routes/dailyroute");
 const projectRoutes = require('./routes/projectroute');
 const brokerRoutes = require('./routes/brokeroute');
-const historyRoutes = require("./routes/historyRoutes");
+const historyRoutes = require("./routes/historyroute");
 
 // Routes
 const groupRoutes = require("./routes/grouproute");

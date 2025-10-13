@@ -5,7 +5,7 @@ const authMiddleware = require("../middleware/authMiddleware");
 const {
   getCombinedHistory,
   getChangeHistory
-} = require("../controllers/historyController");
+} = require("../controllers/combinedHistoryController");
 
 
 router.get("/combined", authMiddleware, getCombinedHistory);

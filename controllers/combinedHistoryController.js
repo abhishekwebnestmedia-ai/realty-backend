@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const LeadHistory = require("../models/leadHistory");
-const InventoryHistory = require("../models/InventoryHistory");
+const InventoryHistory = require("../models/inventryHistory");
 
 exports.getCombinedHistory = async (req, res) => {
   try {
@@ -74,6 +74,63 @@ exports.getCombinedHistory = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Error fetching combined history",
+      error: err.message,
+    });
+  }
+};
+
+
+exports.getChangeHistory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type } = req.query; // "lead" or "inventory"
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid ID format" });
+    }
+
+    let history = [];
+
+    if (type === "lead") {
+      history = await LeadHistory.find({ leadId: id })
+        .sort({ changedAt: -1 })
+        .lean();
+    } else if (type === "inventory") {
+      history = await InventoryHistory.find({ inventoryId: id })
+        .sort({ changedAt: -1 })
+        .lean();
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or missing 'type' parameter. Use ?type=lead or ?type=inventory",
+      });
+    }
+
+    // ✅ Structure the response data
+    const structured = history.map((item) => ({
+      _id: item._id,
+      entityType: type === "lead" ? "Lead" : "Inventory",
+      entityId: type === "lead" ? item.leadId : item.inventoryId,
+      field: item.field,
+      oldValue: item.oldValue || "",
+      newValue: item.newValue || "",
+      changedBy: item.changedBy || {},
+      changedAt: item.changedAt,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      type,
+      totalChanges: structured.length,
+      data: structured,
+    });
+  } catch (err) {
+    console.error("getChangeHistory error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching history",
       error: err.message,
     });
   }
