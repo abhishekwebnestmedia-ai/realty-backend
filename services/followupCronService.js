@@ -103,7 +103,6 @@
 // console.log("✅ Follow-up cron job initialized (every minute).");
 
 
-
 const cron = require("node-cron");
 const Lead = require("../models/leadModel");
 const Inventory = require("../models/inventryModel");
@@ -111,19 +110,9 @@ const Notification = require("../models/notification");
 
 // ✅ Convert JS Date → IST string ("YYYY-MM-DD HH:mm:ss")
 function formatISTDate(date) {
-  const istOffset = 5.5 * 60 * 60 * 1000; // +5:30 hours
+  const istOffset = 5.5 * 60 * 60 * 1000; // +5:30 hrs
   const ist = new Date(date.getTime() + istOffset);
   return ist.toISOString().replace("T", " ").substring(0, 19);
-}
-
-// ✅ Format readable follow-up time (e.g. "1:45 PM")
-function formatReadableTime(dateStr) {
-  const date = new Date(dateStr.replace(" ", "T"));
-  const hours = date.getHours();
-  const minutes = date.getMinutes();
-  const ampm = hours >= 12 ? "PM" : "AM";
-  const hour12 = hours % 12 || 12;
-  return `${hour12}:${minutes.toString().padStart(2, "0")} ${ampm}`;
 }
 
 // ✅ Unified follow-up checker (runs every minute)
@@ -132,8 +121,8 @@ cron.schedule("* * * * *", async () => {
     const now = new Date();
 
     // --- Trigger 1 minute BEFORE follow-up time ---
-    const targetStart = new Date(now.getTime() + (60 * 1000 - 30 * 1000)); // +30 sec
-    const targetEnd = new Date(now.getTime() + (60 * 1000 + 30 * 1000));   // +90 sec
+    const targetStart = new Date(now.getTime() + 30 * 1000); // +30 sec
+    const targetEnd = new Date(now.getTime() + 90 * 1000);   // +90 sec
 
     const startStr = formatISTDate(targetStart);
     const endStr = formatISTDate(targetEnd);
@@ -146,31 +135,39 @@ cron.schedule("* * * * *", async () => {
     });
 
     for (const lead of leads) {
-      const followUpTime = formatReadableTime(lead.followUp);
-      const msg = `📞 Reminder: Follow up with ${lead.customerName} (${lead.contactNumber}) at ${followUpTime}. Requirement: ${lead.requirement || "Not specified"}.`;
+      const msg = `📞 Reminder: Follow up with ${lead.customerName} (${lead.contactNumber}) at ${new Date(lead.followUp).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}. Requirement: ${lead.requirement}.`;
 
-      // 🔹 Skip duplicate notifications
-      const exists = await Notification.findOne({ type: "Lead", itemId: lead._id, message: msg });
-      if (exists) {
-        console.log(`⚠️ Duplicate lead notification skipped: ${lead.customerName}`);
-        continue;
-      }
-
-      await Notification.create({
+      // 🔹 Prevent duplicates created within last 2 mins
+      const exists = await Notification.findOne({
         type: "Lead",
         itemId: lead._id,
         message: msg,
+        createdAt: { $gte: new Date(Date.now() - 2 * 60 * 1000) }
       });
 
-      if (global.io) {
-        global.io.emit("followup_notification", {
-          type: "Lead",
-          leadId: lead._id,
-          message: msg,
-        });
+      if (exists) {
+        console.log(`⚠️ Skipped duplicate lead notification for ${lead.customerName}`);
+        continue;
       }
 
-      console.log(`✅ Lead notification created for ${lead.customerName}`);
+      try {
+        await Notification.create({ type: "Lead", itemId: lead._id, message: msg });
+        console.log(`✅ Lead notification created for ${lead.customerName}`);
+
+        if (global.io) {
+          global.io.emit("followup_notification", {
+            type: "Lead",
+            leadId: lead._id,
+            message: msg,
+          });
+        }
+      } catch (err) {
+        if (err.code === 11000) {
+          console.log(`⚠️ Duplicate lead notification blocked by DB: ${lead.customerName}`);
+        } else {
+          console.error("❌ Lead notification error:", err);
+        }
+      }
     }
 
     // ----------------- INVENTORIES -----------------
@@ -179,38 +176,44 @@ cron.schedule("* * * * *", async () => {
     });
 
     for (const inv of inventories) {
-      const followUpTime = formatReadableTime(inv.followUpDate);
-      const msg = `🏠 Reminder: Follow up with ${inv.sellerName} (${inv.contactNumbers?.[0] || "N/A"}) at ${followUpTime} about their property in ${inv.Project?.[0] || "the listed project"}.`;
+      const msg = `🏠 Reminder: Follow up with ${inv.sellerName} (${inv.contactNumbers?.[0] || "N/A"}) at ${new Date(inv.followUpDate).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}. Property in sector ${inv.sector || "N/A"} — Demand: ${inv.demand || "N/A"}.`;
 
-      // 🔹 Skip duplicate notifications
-      const exists = await Notification.findOne({ type: "Inventory", itemId: inv._id, message: msg });
-      if (exists) {
-        console.log(`⚠️ Duplicate inventory notification skipped: ${inv.sellerName}`);
-        continue;
-      }
-
-      await Notification.create({
+      // 🔹 Prevent duplicates created within last 2 mins
+      const exists = await Notification.findOne({
         type: "Inventory",
         itemId: inv._id,
         message: msg,
+        createdAt: { $gte: new Date(Date.now() - 2 * 60 * 1000) }
       });
 
-      if (global.io) {
-        global.io.emit("followup_notification", {
-          type: "Inventory",
-          inventoryId: inv._id,
-          message: msg,
-        });
+      if (exists) {
+        console.log(`⚠️ Skipped duplicate inventory notification for ${inv.sellerName}`);
+        continue;
       }
 
-      console.log(`✅ Inventory notification created for ${inv.sellerName}`);
+      try {
+        await Notification.create({ type: "Inventory", itemId: inv._id, message: msg });
+        console.log(`✅ Inventory notification created for ${inv.sellerName}`);
+
+        if (global.io) {
+          global.io.emit("followup_notification", {
+            type: "Inventory",
+            inventoryId: inv._id,
+            message: msg,
+          });
+        }
+      } catch (err) {
+        if (err.code === 11000) {
+          console.log(`⚠️ Duplicate inventory notification blocked by DB: ${inv.sellerName}`);
+        } else {
+          console.error("❌ Inventory notification error:", err);
+        }
+      }
     }
 
-    // ----------------- LOG STATUS -----------------
     if (!leads.length && !inventories.length) {
       console.log("🔕 No follow-ups this minute.");
     }
-
   } catch (err) {
     console.error("❌ followUpCronService error:", err);
   }
