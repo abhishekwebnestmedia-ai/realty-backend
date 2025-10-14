@@ -2,6 +2,9 @@
 const Inventory = require('../models/inventryModel'); 
 const InventoryHistory = require("../models/inventryHistory");
 const User = require('../models/user');
+const Notification = require("../models/notification");
+
+
 const mongoose = require("mongoose");
 
 exports.createInventry = async (req, res) => {
@@ -80,34 +83,102 @@ exports.bulkUploadInventry = async (req, res) => {
 //   }
 // };
 
+
+
+// exports.updateInventry = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const updateData = { ...req.body };
+
+//     // Find the existing record before updating
+//     const oldRecord = await Inventory.findById(id);
+//     if (!oldRecord) {
+//       return res.status(404).json({ success: false, message: "Inventory record not found" });
+//     }
+
+//     // Update the inventory record
+//     const updatedRecord = await Inventory.findByIdAndUpdate(id, updateData, { new: true });
+//     if (!updatedRecord) {
+//       return res.status(404).json({ success: false, message: "Inventory not found after update" });
+//     }
+
+//     // Define tracked fields
+//     const trackedFields = [
+//       "capturedBy",
+//       "assignTo",
+//       "transferTo",
+//       "followUpDate",
+//       "remarks",
+//       "requirement"
+//     ];
+
+//     // Identify who made the change
+//     let changedBy = null;
+//     if (req.user) {
+//       const userId = req.user.userId || req.user._id || req.user.id;
+//       const user = await User.findById(userId).select("name email");
+//       if (user) {
+//         changedBy = {
+//           _id: user._id,
+//           name: user.name,
+//           email: user.email
+//         };
+//       }
+//     }
+
+//     // Compare old vs new values for tracked fields
+//     for (const field of trackedFields) {
+//       const oldValue = oldRecord[field];
+//       const newValue = updatedRecord[field];
+
+//       if (String(oldValue || "") !== String(newValue || "")) {
+//         await InventoryHistory.create({
+//           inventoryId: id,
+//           changedBy,
+//           field,
+//           oldValue,
+//           newValue
+//         });
+//       }
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Inventory updated successfully",
+//       data: updatedRecord
+//     });
+//   } catch (err) {
+//     console.error("updateInventry error:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Error updating inventory",
+//       error: err.message
+//     });
+//   }
+// };
+
+
 exports.updateInventry = async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body };
 
-    // Find the existing record before updating
+    // ✅ Find the existing record
     const oldRecord = await Inventory.findById(id);
     if (!oldRecord) {
       return res.status(404).json({ success: false, message: "Inventory record not found" });
     }
 
-    // Update the inventory record
+    // ✅ Update the record
     const updatedRecord = await Inventory.findByIdAndUpdate(id, updateData, { new: true });
     if (!updatedRecord) {
       return res.status(404).json({ success: false, message: "Inventory not found after update" });
     }
 
-    // Define tracked fields
-    const trackedFields = [
-      "capturedBy",
-      "assignTo",
-      "transferTo",
-      "followUpDate",
-      "remarks",
-      "requirement"
-    ];
+    // ✅ Tracked fields (unchanged)
+    const trackedFields = ["capturedBy", "assignTo", "transferTo", "followUpDate", "remarks", "requirement"];
 
-    // Identify who made the change
+    // ✅ Identify who made the change
     let changedBy = null;
     if (req.user) {
       const userId = req.user.userId || req.user._id || req.user.id;
@@ -116,38 +187,63 @@ exports.updateInventry = async (req, res) => {
         changedBy = {
           _id: user._id,
           name: user.name,
-          email: user.email
+          email: user.email,
         };
       }
     }
 
-    // Compare old vs new values for tracked fields
+    // ✅ Compare old vs new values
     for (const field of trackedFields) {
       const oldValue = oldRecord[field];
       const newValue = updatedRecord[field];
 
       if (String(oldValue || "") !== String(newValue || "")) {
+        // 🔹 Existing functionality — Create history
         await InventoryHistory.create({
           inventoryId: id,
           changedBy,
           field,
           oldValue,
-          newValue
+          newValue,
         });
+
+        // 🔹 NEW functionality — Notification only for assignTo
+        if (field === "assignTo") {
+          try {
+            const msg = `👤 Inventory "${oldRecord.sellerName}" was reassigned to ${newValue || "N/A"} by ${changedBy?.name || "System"}`;
+            await Notification.create({
+              type: "Inventory",
+              itemId: id,
+              message: msg,
+              changedBy: changedBy?.name || "System",
+            });
+
+            if (global.io) {
+              global.io.emit("inventory_update_notification", {
+                type: "Inventory",
+                inventoryId: id,
+                message: msg,
+                changedBy: changedBy?.name || "System",
+              });
+            }
+          } catch (notifErr) {
+            console.warn("⚠️ Notification creation failed (inventory):", notifErr.message);
+          }
+        }
       }
     }
 
     return res.status(200).json({
       success: true,
       message: "Inventory updated successfully",
-      data: updatedRecord
+      data: updatedRecord,
     });
   } catch (err) {
     console.error("updateInventry error:", err);
     return res.status(500).json({
       success: false,
       message: "Error updating inventory",
-      error: err.message
+      error: err.message,
     });
   }
 };

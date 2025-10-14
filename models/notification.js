@@ -1,9 +1,76 @@
+// const mongoose = require("mongoose");
+
+// // ✅ Helper to get IST Date object
+// function getISTDate() {
+//   const now = new Date();
+//   const istOffset = 5.5 * 60 * 60 * 1000; // +5:30 hrs
+//   return new Date(now.getTime() + istOffset);
+// }
+
+// const notificationSchema = new mongoose.Schema(
+//   {
+//     type: {
+//       type: String,
+//       enum: ["Lead", "Inventory"],
+//       required: true,
+//     },
+//     itemId: {
+//       type: mongoose.Schema.Types.ObjectId,
+//       required: true,
+//     },
+//     message: {
+//       type: String,
+//       required: true,
+//     },
+//     createdAt: {
+//       type: Date,
+//       default: getISTDate,
+//     },
+//   },
+//   {
+//     versionKey: false,
+//   }
+// );
+
+// // ✅ Always ensure IST time before save (even if created manually)
+// notificationSchema.pre("save", function (next) {
+//   if (!this.createdAt) {
+//     this.createdAt = getISTDate();
+//   }
+//   next();
+// });
+
+// // ✅ Prevent duplicate notifications for the same lead/inventory + message
+// notificationSchema.index(
+//   { type: 1, itemId: 1, message: 1 },
+//   { unique: true }
+// );
+
+// // ✅ Convert createdAt to readable IST string on response
+// notificationSchema.methods.toJSON = function () {
+//   const obj = this.toObject();
+//   const istOffset = 5.5 * 60 * 60 * 1000;
+//   if (obj.createdAt) {
+//     obj.createdAt = new Date(obj.createdAt.getTime() + istOffset)
+//       .toISOString()
+//       .replace("T", " ")
+//       .substring(0, 19); // "YYYY-MM-DD HH:mm:ss"
+//   }
+//   return obj;
+// };
+
+// module.exports = mongoose.model("Notification", notificationSchema);
+
+
+
+// models/notification.js
+
 const mongoose = require("mongoose");
 
-// ✅ Helper to get IST Date object
+// ✅ Helper to get IST time
 function getISTDate() {
   const now = new Date();
-  const istOffset = 5.5 * 60 * 60 * 1000; // +5:30 hrs
+  const istOffset = 5.5 * 60 * 60 * 1000;
   return new Date(now.getTime() + istOffset);
 }
 
@@ -22,31 +89,27 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    changedBy: {
+      type: String, // user name or user ID
+    },
     createdAt: {
       type: Date,
       default: getISTDate,
     },
   },
-  {
-    versionKey: false,
-  }
+  { versionKey: false }
 );
 
-// ✅ Always ensure IST time before save (even if created manually)
+// Always ensure IST time
 notificationSchema.pre("save", function (next) {
-  if (!this.createdAt) {
-    this.createdAt = getISTDate();
-  }
+  if (!this.createdAt) this.createdAt = getISTDate();
   next();
 });
 
-// ✅ Prevent duplicate notifications for the same lead/inventory + message
-notificationSchema.index(
-  { type: 1, itemId: 1, message: 1 },
-  { unique: true }
-);
+// Prevent duplicate notifications
+notificationSchema.index({ type: 1, itemId: 1, message: 1 }, { unique: true });
 
-// ✅ Convert createdAt to readable IST string on response
+// Format createdAt before sending to frontend
 notificationSchema.methods.toJSON = function () {
   const obj = this.toObject();
   const istOffset = 5.5 * 60 * 60 * 1000;
@@ -54,7 +117,7 @@ notificationSchema.methods.toJSON = function () {
     obj.createdAt = new Date(obj.createdAt.getTime() + istOffset)
       .toISOString()
       .replace("T", " ")
-      .substring(0, 19); // "YYYY-MM-DD HH:mm:ss"
+      .substring(0, 19);
   }
   return obj;
 };

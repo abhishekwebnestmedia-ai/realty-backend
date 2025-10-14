@@ -5,6 +5,8 @@ const Lead = require('../models/leadModel');
 const User = require('../models/user');
 const mongoose = require("mongoose");
 const LeadHistory = require("../models/leadHistory");
+const Notification = require("../models/notification");
+
 
 
 const validStatuses = [
@@ -175,6 +177,77 @@ exports.getLeads = async (req, res) => {
 // };
 
 
+
+
+// exports.updateLead = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const updateData = { ...req.body };
+
+//     const oldLead = await Lead.findById(id).populate("assignTo", "name email");
+//     if (!oldLead) {
+//       return res.status(404).json({ success: false, message: "Lead not found" });
+//     }
+
+//     // If assignTo provided, resolve to user ID
+//     if (updateData.assignTo !== undefined) {
+//       const user = await resolveAssignTo(updateData.assignTo);
+//       if (!user) {
+//         return res.status(400).json({ success: false, message: "Invalid assignTo user" });
+//       }
+//       updateData.assignTo = user._id;
+//     }
+
+//     // Update the lead
+//     const updatedLead = await Lead.findByIdAndUpdate(id, updateData, { new: true })
+//       .populate("assignTo", "name email");
+
+//     // TRACKED FIELDS
+//     const trackedFields = ["status", "assignTo", "capturedBy", "transferTo", "remark" ,"followUp"];
+
+//     // Determine who made the change (from req.user)
+//     let changedBy = null;
+//     if (req.user) {
+//       const user = await User.findById(req.user._id).select("name email");
+//       if (user) {
+//         changedBy = {
+//           _id: user._id,
+//           name: user.name,
+//           email: user.email,
+//         };
+//       }
+//     }
+
+//     // Loop over tracked fields and create history entries for changed ones
+//     for (const field of trackedFields) {
+//       let oldValue = oldLead[field];
+//       let newValue = updatedLead[field];
+
+//       // Handle assignTo separately since it's an ObjectId
+//       if (field === "assignTo") {
+//         oldValue = oldLead.assignTo?.name || "";
+//         newValue = updatedLead.assignTo?.name || "";
+//       }
+
+//       if (String(oldValue || "") !== String(newValue || "")) {
+//         await LeadHistory.create({
+//           leadId: id,
+//           changedBy,
+//           field,
+//           oldValue,
+//           newValue,
+//         });
+//       }
+//     }
+
+//     res.json({ success: true, message: "Lead updated successfully", data: updatedLead });
+//   } catch (err) {
+//     console.error("updateLead error:", err);
+//     res.status(500).json({ success: false, message: "Error updating lead" });
+//   }
+// };
+
+
 exports.updateLead = async (req, res) => {
   try {
     const { id } = req.params;
@@ -185,7 +258,7 @@ exports.updateLead = async (req, res) => {
       return res.status(404).json({ success: false, message: "Lead not found" });
     }
 
-    // If assignTo provided, resolve to user ID
+    // ✅ If assignTo provided, resolve to user ID
     if (updateData.assignTo !== undefined) {
       const user = await resolveAssignTo(updateData.assignTo);
       if (!user) {
@@ -194,14 +267,14 @@ exports.updateLead = async (req, res) => {
       updateData.assignTo = user._id;
     }
 
-    // Update the lead
+    // ✅ Update the lead
     const updatedLead = await Lead.findByIdAndUpdate(id, updateData, { new: true })
       .populate("assignTo", "name email");
 
-    // TRACKED FIELDS
-    const trackedFields = ["status", "assignTo", "capturedBy", "transferTo", "remark" ,"followUp"];
+    // ✅ Tracked fields
+    const trackedFields = ["status", "assignTo", "capturedBy", "transferTo", "remark", "followUp"];
 
-    // Determine who made the change (from req.user)
+    // ✅ Identify who made the change
     let changedBy = null;
     if (req.user) {
       const user = await User.findById(req.user._id).select("name email");
@@ -214,18 +287,18 @@ exports.updateLead = async (req, res) => {
       }
     }
 
-    // Loop over tracked fields and create history entries for changed ones
+    // ✅ Loop over tracked fields
     for (const field of trackedFields) {
       let oldValue = oldLead[field];
       let newValue = updatedLead[field];
 
-      // Handle assignTo separately since it's an ObjectId
       if (field === "assignTo") {
         oldValue = oldLead.assignTo?.name || "";
         newValue = updatedLead.assignTo?.name || "";
       }
 
       if (String(oldValue || "") !== String(newValue || "")) {
+        // 🔹 Existing functionality — Create history
         await LeadHistory.create({
           leadId: id,
           changedBy,
@@ -233,6 +306,49 @@ exports.updateLead = async (req, res) => {
           oldValue,
           newValue,
         });
+
+        // 🔹 NEW functionality — Create notifications (safely)
+        try {
+          if (field === "assignTo") {
+            const msg = `👤 Lead "${oldLead.customerName}" was reassigned to ${newValue || "N/A"} by ${changedBy?.name || "System"}`;
+            await Notification.create({
+              type: "Lead",
+              itemId: id,
+              message: msg,
+              changedBy: changedBy?.name || "System",
+            });
+
+            if (global.io) {
+              global.io.emit("lead_update_notification", {
+                type: "Lead",
+                leadId: id,
+                message: msg,
+                changedBy: changedBy?.name || "System",
+              });
+            }
+          }
+
+          if (field === "status") {
+            const msg = `🔄 Lead "${oldLead.customerName}" status changed from ${oldValue || "N/A"} → ${newValue} by ${changedBy?.name || "System"}`;
+            await Notification.create({
+              type: "Lead",
+              itemId: id,
+              message: msg,
+              changedBy: changedBy?.name || "System",
+            });
+
+            if (global.io) {
+              global.io.emit("lead_update_notification", {
+                type: "Lead",
+                leadId: id,
+                message: msg,
+                changedBy: changedBy?.name || "System",
+              });
+            }
+          }
+        } catch (notifErr) {
+          console.warn("⚠️ Notification creation failed (lead):", notifErr.message);
+        }
       }
     }
 
@@ -242,7 +358,6 @@ exports.updateLead = async (req, res) => {
     res.status(500).json({ success: false, message: "Error updating lead" });
   }
 };
-
 
 
 // 🔹 Get Lead by ID
