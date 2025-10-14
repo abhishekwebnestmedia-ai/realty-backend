@@ -120,3 +120,30 @@ exports.getGroupBroadcasts = async (req, res) => {
 };
 
 
+// exports.getGroupBroadcasts = async (req, res) => {
+//   try {
+//     const { groupId } = req.params;
+
+//     const broadcasts = await Broadcast.find({ group: groupId })
+//       .populate("createdBy", "name email")
+//       .sort({ createdAt: -1 });
+
+//     // ✅ Convert relative file paths into full URLs
+//     const formatted = broadcasts.map((b) => ({
+//       _id: b._id,
+//       message: b.message,
+//       createdBy: b.createdBy,
+//       createdAt: b.createdAt,
+//       attachmentUrl: b.attachmentUrl
+//         ? `${req.protocol}://${req.get("host")}${b.attachmentUrl}`
+//         : null,
+//       attachmentType: b.attachmentType,
+//     }));
+
+//     res.json({ success: true, broadcasts: formatted });
+//   } catch (err) {
+//     console.error("Error fetching broadcasts:", err);
+//     res.status(500).json({ success: false, message: "Server error" });
+//   }
+// };
+
