@@ -4,7 +4,6 @@
 const Notification = require("../models/notification");
 const mongoose = require("mongoose");
 
-
 exports.getAllNotifications = async (req, res) => {
   try {
     const notifications = await Notification.find().sort({ createdAt: -1 });

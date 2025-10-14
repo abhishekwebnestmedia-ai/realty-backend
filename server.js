@@ -53,7 +53,7 @@ const dailyReportRoutes = require('./routes/dailyreportroute');
 
 const notificationRoutes = require("./routes/notificationRoutes");
 
-
+const dashboardRoutes = require("./routes/card");
 
 
 app.use('/api/auth', authRoutes);
@@ -80,6 +80,8 @@ app.get('/', (req, res) => {
 });
 
 
+
+app.use("/api/card", dashboardRoutes);
 
 
 
