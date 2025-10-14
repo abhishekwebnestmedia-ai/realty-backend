@@ -4,36 +4,34 @@ const DailyPerformance = require("../models/DailyTask");
 
 exports.getDashboardData = async (req, res) => {
   try {
+    // Run all DB queries in parallel
     const [
       siteVisit,
-      callingToBuyers,
       saleInventory,
       hotLeads,
       tenants,
       buyers,
-      callingToSellers,
       rentInventory
     ] = await Promise.all([
-      DailyPerformance.countDocuments({ meetingVisits: { $gt: 0 } }), // ✅ counts only if meetingVisits > 0
-      Lead.countDocuments({ leadType: "Buyer" }),
-      Inventory.countDocuments({ inventoryType: "Sales" }),
-      Lead.countDocuments({ status: "Hot" }),
-      Lead.countDocuments({ leadType: "Rental" }),
-      Lead.countDocuments({ leadType: "Buyer" }),
-      Lead.countDocuments({ status: "Potential" }),
-      Inventory.countDocuments({ inventoryType: "Rent" }),
+      DailyPerformance.countDocuments({ meetingVisits: { $gt: 0 } }), // ✅ Site Visits
+      Inventory.countDocuments({ inventoryType: "Sales" }),           // ✅ Sale Inventory
+      Lead.countDocuments({ status: "Hot" }),                         // ✅ Hot Leads
+      Lead.countDocuments({ leadType: "Rental" }),                    // ✅ Tenants
+      Lead.countDocuments({ leadType: "Buyer" }),                     // ✅ Buyers
+      Inventory.countDocuments({ inventoryType: "Rent" })             // ✅ Rent Inventory
     ]);
 
-    res.json({
-      siteVisit: siteVisit || 0,
-    //   callingToBuyers: callingToBuyers || 0,
-      saleInventory: saleInventory || 0,
-      hotLeads: hotLeads || 0,
-      tenants: tenants || 0,
-      buyers: buyers || 0,
-    //   callingToSellers: callingToSellers || 0,
-      rentInventory: rentInventory || 0,
-    });
+    // Send as array of objects (better for frontend)
+    const dashboardData = [
+      { title: "Site Visit", value: siteVisit || 0 },
+      { title: "Sale Inventory", value: saleInventory || 0 },
+      { title: "Hot Leads", value: hotLeads || 0 },
+      { title: "Tenants", value: tenants || 0 },
+      { title: "Buyers", value: buyers || 0 },
+      { title: "Rent Inventory", value: rentInventory || 0 },
+    ];
+
+    res.json(dashboardData);
   } catch (error) {
     console.error("Dashboard error:", error);
     res.status(500).json({ message: "Server error", error });

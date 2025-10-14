@@ -74,14 +74,15 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/api/groups", groupRoutes);
 app.use("/api/broadcasts", broadcastRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/card", dashboardRoutes);
+
+
 
 app.get('/', (req, res) => {
   res.send('CRM backend server is running');
 });
 
 
-
-app.use("/api/card", dashboardRoutes);
 
 
 
