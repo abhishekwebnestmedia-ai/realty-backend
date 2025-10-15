@@ -170,19 +170,22 @@ exports.addTower = async (req, res) => {
 
 
 // ✅ Step 7 - Add Floor
-exports.addFloor = async (req, res) => {
+
+
+
+//✅ Step 7 - Add Unit
+exports.addUnit = async (req, res) => {
   try {
-    const { category, projectcategory, cityId, divisionId, sectorId, projectId, towerId } = req.params;
-    const { floorName } = req.body;
+    const { category, projectcategory, cityId, divisionId, sectorId, projectId, towerId } =
+      req.params;
+    const unitData = req.body;
 
     const result = await ProjectType.updateOne(
       { category, projectcategory },
       {
         $push: {
-          "cities.$[city].divisions.$[div].sectors.$[sec].projects.$[proj].towers.$[tow].floors": {
-            floorName,
-            units: [],
-          },
+          "cities.$[city].divisions.$[div].sectors.$[sec].projects.$[proj].towers.$[tow].units":
+            unitData,
         },
       },
       {
@@ -199,85 +202,14 @@ exports.addFloor = async (req, res) => {
     if (result.modifiedCount === 0)
       return res.status(404).json({ error: "Tower not found" });
 
-    res.json({ message: "Floor added successfully" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
-
-
-
-// ✅ Step 7 - Add Unit
-// exports.addUnit = async (req, res) => {
-//   try {
-//     const { category, projectcategory, cityId, divisionId, sectorId, projectId, towerId } =
-//       req.params;
-//     const unitData = req.body;
-
-//     const result = await ProjectType.updateOne(
-//       { category, projectcategory },
-//       {
-//         $push: {
-//           "cities.$[city].divisions.$[div].sectors.$[sec].projects.$[proj].towers.$[tow].units":
-//             unitData,
-//         },
-//       },
-//       {
-//         arrayFilters: [
-//           { "city._id": cityId },
-//           { "div._id": divisionId },
-//           { "sec._id": sectorId },
-//           { "proj._id": projectId },
-//           { "tow._id": towerId },
-//         ],
-//       }
-//     );
-
-//     if (result.modifiedCount === 0)
-//       return res.status(404).json({ error: "Tower not found" });
-
-//     res.json({ message: "Unit added successfully" });
-//   } catch (err) {
-//     res.status(500).json({ error: err.message });
-//   }
-// };
-
-
-// ✅ Step 8 - Add Unit (now inside Floor)
-exports.addUnit = async (req, res) => {
-  try {
-    const { category, projectcategory, cityId, divisionId, sectorId, projectId, towerId, floorId } =
-      req.params;
-    const unitData = req.body;
-
-    const result = await ProjectType.updateOne(
-      { category, projectcategory },
-      {
-        $push: {
-          "cities.$[city].divisions.$[div].sectors.$[sec].projects.$[proj].towers.$[tow].floors.$[floor].units":
-            unitData,
-        },
-      },
-      {
-        arrayFilters: [
-          { "city._id": cityId },
-          { "div._id": divisionId },
-          { "sec._id": sectorId },
-          { "proj._id": projectId },
-          { "tow._id": towerId },
-          { "floor._id": floorId },
-        ],
-      }
-    );
-
-    if (result.modifiedCount === 0)
-      return res.status(404).json({ error: "Floor not found" });
-
     res.json({ message: "Unit added successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
+
+
+
 
 
 // ✅ Step 8 - Update Unit (uses $set)
@@ -554,35 +486,7 @@ exports.deleteTowerById = async (req, res) => {
 // -----------------------------
 // Delete Floor by ID
 // -----------------------------
-exports.deleteFloorById = async (req, res) => {
-  try {
-    const typeDoc = await ProjectType.findOne({
-      "cities.divisions.sectors.projects.towers.floors._id": req.params.floorId,
-    });
-    if (!typeDoc) return res.status(404).json({ error: "Floor not found" });
 
-    for (const city of typeDoc.cities) {
-      for (const division of city.divisions) {
-        for (const sector of division.sectors) {
-          for (const project of sector.projects) {
-            for (const tower of project.towers) {
-              const floor = tower.floors.id(req.params.floorId);
-              if (floor) {
-                floor.deleteOne();
-                await typeDoc.save();
-                return res.json({ message: "Floor deleted successfully" });
-              }
-            }
-          }
-        }
-      }
-    }
-
-    res.status(404).json({ error: "Floor not found" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
 
 // -----------------------------
 // Delete Unit by ID
@@ -774,104 +678,6 @@ exports.bulkUploadProjectTypes = async (req, res) => {
 
 
 // ✅ Merge or create hierarchy dynamically (smart insert)
-// exports.mergeOrCreateHierarchy = async (req, res) => {
-//   try {
-//     const { category, projectcategory, cities = [] } = req.body;
-
-//     // Validate input
-//     if (!category || !projectcategory)
-//       return res.status(400).json({ error: "Missing category or projectcategory" });
-
-//     const allowedCategory = ["Residential", "Commercial"];
-//     const allowedProjectCategory = ["UnderConstruction", "ReadyToMove"];
-
-//     if (!allowedCategory.includes(category))
-//       return res.status(400).json({ error: "Invalid category" });
-//     if (!allowedProjectCategory.includes(projectcategory))
-//       return res.status(400).json({ error: "Invalid projectcategory" });
-
-//     let typeDoc = await ProjectType.findOne({ category, projectcategory });
-//     if (!typeDoc) {
-//       typeDoc = new ProjectType({ category, projectcategory, cities: [] });
-//     }
-
-//     // Merge cities
-//     for (const city of cities) {
-//       let existingCity = typeDoc.cities.find((c) => c.cityName === city.cityName);
-//       if (!existingCity) {
-//         typeDoc.cities.push(city);
-//         continue;
-//       }
-
-//       // Merge divisions
-//       for (const div of city.divisions || []) {
-//         let existingDiv = existingCity.divisions.find(
-//           (d) => d.divisionName === div.divisionName
-//         );
-//         if (!existingDiv) {
-//           existingCity.divisions.push(div);
-//           continue;
-//         }
-
-//         // Merge sectors
-//         for (const sec of div.sectors || []) {
-//           let existingSec = existingDiv.sectors.find(
-//             (s) => s.sectorName === sec.sectorName
-//           );
-//           if (!existingSec) {
-//             existingDiv.sectors.push(sec);
-//             continue;
-//           }
-
-//           // Merge projects
-//           for (const proj of sec.projects || []) {
-//             let existingProj = existingSec.projects.find(
-//               (p) => p.projectName === proj.projectName
-//             );
-//             if (!existingProj) {
-//               existingSec.projects.push(proj);
-//               continue;
-//             }
-
-//             // Merge towers
-//             for (const tower of proj.towers || []) {
-//               let existingTower = existingProj.towers.find(
-//                 (t) => t.towerName === tower.towerName
-//               );
-//               if (!existingTower) {
-//                 existingProj.towers.push(tower);
-//                 continue;
-//               }
-
-//               // Merge units
-//               for (const unit of tower.units || []) {
-//                 const exists = existingTower.units.some(
-//                   (u) => u.unitNumber === unit.unitNumber
-//                 );
-//                 if (!exists) {
-//                   existingTower.units.push(unit);
-//                 }
-//               }
-//             }
-//           }
-//         }
-//       }
-//     }
-
-//     await typeDoc.save();
-
-//     res.status(200).json({
-//       success: true,
-//       message: "Hierarchy merged successfully",
-//       data: typeDoc,
-//     });
-//   } catch (err) {
-//     console.error("❌ mergeOrCreateHierarchy error:", err);
-//     res.status(500).json({ error: err.message });
-//   }
-// };
-
-
 exports.mergeOrCreateHierarchy = async (req, res) => {
   try {
     const { category, projectcategory, cities = [] } = req.body;
@@ -941,24 +747,13 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
                 continue;
               }
 
-              // 🆕 Merge floors
-              for (const floor of tower.floors || []) {
-                let existingFloor = existingTower.floors.find(
-                  (f) => f.floorName === floor.floorName
+              // Merge units
+              for (const unit of tower.units || []) {
+                const exists = existingTower.units.some(
+                  (u) => u.unitNumber === unit.unitNumber
                 );
-                if (!existingFloor) {
-                  existingTower.floors.push(floor);
-                  continue;
-                }
-
-                // 🆕 Merge units (inside floors)
-                for (const unit of floor.units || []) {
-                  const exists = existingFloor.units.some(
-                    (u) => u.unitNumber === unit.unitNumber
-                  );
-                  if (!exists) {
-                    existingFloor.units.push(unit);
-                  }
+                if (!exists) {
+                  existingTower.units.push(unit);
                 }
               }
             }
@@ -971,7 +766,7 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Hierarchy merged successfully (with floor support)",
+      message: "Hierarchy merged successfully",
       data: typeDoc,
     });
   } catch (err) {
@@ -979,4 +774,7 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+
+
 
