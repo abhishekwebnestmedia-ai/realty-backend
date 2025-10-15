@@ -215,7 +215,309 @@
 
 // latest one 
 
+////////////////////
 
+
+
+
+// const express = require("express");
+// const router = express.Router();
+// const projectController = require("../controllers/projectController");
+// const authMiddleware = require("../middleware/authmiddleware");
+
+
+// // Step 1 - Create ProjectType (root)
+// router.post("/project-types", authMiddleware, projectController.createProjectType);
+
+// // Step 2 - Cities
+// router.post(
+//   "/project-types/:category/:projectcategory/cities",
+//   authMiddleware,
+//   projectController.createCity
+// );
+
+// // Step 3 - Divisions
+// router.post(
+//   "/project-types/:category/:projectcategory/cities/:cityId/divisions",
+//   authMiddleware,
+//   projectController.addDivision
+// );
+
+// // Step 4 - Sectors
+// router.post(
+//   "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors",
+//   authMiddleware,
+//   projectController.addSector
+// );
+
+// // Step 5 - Projects
+// router.post(
+//   "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects",
+//   authMiddleware,
+//   projectController.addProject
+// );
+
+// // Step 6 - Towers
+// router.post(
+//   "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers",
+//   authMiddleware,
+//   projectController.addTower
+// );
+
+// // Step 7 - Units
+// router.post(
+//   "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId/units",
+//   authMiddleware,
+//   projectController.addUnit
+// );
+
+// // Step 8 - Update Unit
+// router.patch(
+//   "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId/units/:unitId",
+//   authMiddleware,
+//   projectController.updateUnit
+// );
+
+// // ==========================
+// // READ ROUTES (GET APIs)
+// // ==========================
+
+// // Get ALL projectTypes with hierarchy
+// router.get("/project-types", authMiddleware, async (req, res) => {
+//   try {
+//     const ProjectType = require("../models/project");
+//     const docs = await ProjectType.find();
+//     res.json(docs);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+
+// // Get a single projectType with hierarchy
+// router.get("/project-types/:category/:projectcategory", authMiddleware, async (req, res) => { 
+//   try {
+//     const ProjectType = require("../models/project");
+//     const { category, projectcategory } = req.params;
+
+//     const doc = await ProjectType.findOne({ category, projectcategory });
+//     if (!doc) return res.status(404).json({ error: "ProjectType not found" });
+//     res.json(doc);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+
+// // Get a single project inside a sector
+// router.get(
+//   "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId",
+//   authMiddleware,
+//   async (req, res) => {
+//     try {
+//       const ProjectType = require("../models/project");
+//       const { category, projectcategory, cityId, divisionId, sectorId, projectId } = req.params;
+
+//       const typeDoc = await ProjectType.findOne({ category, projectcategory });
+//       if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
+
+//       const city = typeDoc.cities.id(cityId);
+//       if (!city) return res.status(404).json({ error: "City not found" });
+
+//       const division = city.divisions.id(divisionId);
+//       if (!division) return res.status(404).json({ error: "Division not found" });
+
+//       const sector = division.sectors.id(sectorId);
+//       if (!sector) return res.status(404).json({ error: "Sector not found" });
+
+//       const project = sector.projects.id(projectId);
+//       if (!project) return res.status(404).json({ error: "Project not found" });
+
+//       res.json(project);
+//     } catch (err) {
+//       res.status(500).json({ error: err.message });
+//     }
+//   }
+// );
+
+// // Get towers of a project
+// router.get(
+//   "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers",
+//   authMiddleware,
+//   async (req, res) => {
+//     try {
+//       const ProjectType = require("../models/project");
+//       const { category, projectcategory, cityId, divisionId, sectorId, projectId } = req.params;
+
+//       const typeDoc = await ProjectType.findOne({ category, projectcategory });
+//       if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
+
+//       const city = typeDoc.cities.id(cityId);
+//       const division = city.divisions.id(divisionId);
+//       const sector = division.sectors.id(sectorId);
+//       const project = sector.projects.id(projectId);
+
+//       res.json(project.towers);
+//     } catch (err) {
+//       res.status(500).json({ error: err.message });
+//     }
+//   }
+// );
+
+
+// // Get units of a tower
+// router.get(
+//   "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId/units",
+//   authMiddleware,
+//   async (req, res) => {
+//     try {
+//       const ProjectType = require("../models/project");
+//       const { category, projectcategory, cityId, divisionId, sectorId, projectId, towerId } = req.params;
+
+//       const typeDoc = await ProjectType.findOne({ category, projectcategory });
+//       if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
+
+//       const city = typeDoc.cities.id(cityId);
+//       const division = city.divisions.id(divisionId);
+//       const sector = division.sectors.id(sectorId);
+//       const project = sector.projects.id(projectId);
+//       const tower = project.towers.id(towerId);
+
+//       res.json(tower.units);
+//     } catch (err) {
+//       res.status(500).json({ error: err.message });
+//     }
+//   }
+// );
+
+
+// // Delete entire ProjectType (root)
+
+
+// router.delete(
+//   "/projectType/:category/:projectcategory",
+//     authMiddleware,
+//   projectController.deleteEntity
+// );
+
+// // Delete City
+
+// router.delete(
+//   "/projectType/:category/:projectcategory/cities/:cityId",
+//     authMiddleware,
+//   projectController.deleteEntity
+// );
+
+// // Delete Division
+
+// router.delete(
+//   "/projectType/:category/:projectcategory/cities/:cityId/divisions/:divisionId",
+//     authMiddleware,
+//   projectController.deleteEntity
+// );
+
+// // Delete Sector
+
+// router.delete(
+//   "/projectType/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId",
+//     authMiddleware,
+//   projectController.deleteEntity
+// );
+
+// // Delete Project
+// router.delete(
+//   "/projectType/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId",
+//     authMiddleware,
+//   projectController.deleteEntity
+// );
+
+// // Delete Tower
+
+// router.delete(
+//   "/projectType/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId",
+//     authMiddleware,
+//   projectController.deleteEntity
+// );
+
+// // Delete Unit
+
+
+// router.delete(
+//   "/projectType/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId/units/:unitId",
+//     authMiddleware,
+//   projectController.deleteEntity
+// );
+
+
+// router.delete(
+//   "/projectType/:projectid",
+//   authMiddleware,
+//   projectController.deleteProjectTypeById
+// );
+
+// // Delete City by ID
+// router.delete(
+//   "/city/:cityId",
+//   authMiddleware,
+//   projectController.deleteCityById
+// );
+
+// // Delete Division by ID
+// router.delete(
+//   "/division/:divisionId",
+//   authMiddleware,
+//   projectController.deleteDivisionById
+// );
+
+// // Delete Sector by ID
+// router.delete(
+//   "/sector/:sectorId",
+//   authMiddleware,
+//   projectController.deleteSectorById
+// );
+
+// // Delete Project by ID
+// router.delete(
+//   "/project/:projectId",
+//   authMiddleware,
+//   projectController.deleteProjectById
+// );
+
+// // Delete Tower by ID
+// router.delete(
+//   "/tower/:towerId",
+//   authMiddleware,
+//   projectController.deleteTowerById
+// );
+
+// // Delete Unit by ID
+// router.delete(
+//   "/unit/:unitId",
+//   authMiddleware,
+//   projectController.deleteUnitById
+// );
+
+
+// router.post("/project-types/full", authMiddleware, projectController.createFullHierarchy);
+
+// // Full hierarchy update
+// router.put("/project-types/full/:projectId", authMiddleware, projectController.updateFullHierarchy);
+
+// // Bulk upload (array of projectTypes)
+// router.post("/project-types/bulk", authMiddleware, projectController.bulkUploadProjectTypes);
+
+// // ✅ Merge or Create Hierarchy (smart endpoint)
+// router.post(
+//   "/project-types/merge",
+//   authMiddleware,
+//   projectController.mergeOrCreateHierarchy
+// );
+
+
+// module.exports = router;
+
+
+
+
+/////////////////////////////////////////////////////////
 
 
 const express = require("express");
@@ -223,64 +525,74 @@ const router = express.Router();
 const projectController = require("../controllers/projectController");
 const authMiddleware = require("../middleware/authmiddleware");
 
+// ==========================
+// 🏗️ CREATE ROUTES
+// ==========================
 
 // Step 1 - Create ProjectType (root)
 router.post("/project-types", authMiddleware, projectController.createProjectType);
 
-// Step 2 - Cities
+// Step 2 - Add City
 router.post(
   "/project-types/:category/:projectcategory/cities",
   authMiddleware,
   projectController.createCity
 );
 
-// Step 3 - Divisions
+// Step 3 - Add Division
 router.post(
   "/project-types/:category/:projectcategory/cities/:cityId/divisions",
   authMiddleware,
   projectController.addDivision
 );
 
-// Step 4 - Sectors
+// Step 4 - Add Sector
 router.post(
   "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors",
   authMiddleware,
   projectController.addSector
 );
 
-// Step 5 - Projects
+// Step 5 - Add Project
 router.post(
   "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects",
   authMiddleware,
   projectController.addProject
 );
 
-// Step 6 - Towers
+// Step 6 - Add Tower
 router.post(
   "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers",
   authMiddleware,
   projectController.addTower
 );
 
-// Step 7 - Units
+// Step 7 - Add Floor
 router.post(
-  "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId/units",
+  "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId/floors",
+  authMiddleware,
+  projectController.addFloor
+);
+
+// Step 8 - Add Unit (inside Floor)
+router.post(
+  "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId/floors/:floorId/units",
   authMiddleware,
   projectController.addUnit
 );
 
-// Step 8 - Update Unit
+// Step 9 - Update Unit (inside Floor)
 router.patch(
-  "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId/units/:unitId",
+  "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId/floors/:floorId/units/:unitId",
   authMiddleware,
   projectController.updateUnit
 );
 
 // ==========================
-// READ ROUTES (GET APIs)
+// 📖 READ ROUTES (GET APIs)
 // ==========================
 
-// Get ALL projectTypes with hierarchy
+// Get ALL ProjectTypes
 router.get("/project-types", authMiddleware, async (req, res) => {
   try {
     const ProjectType = require("../models/project");
@@ -291,21 +603,24 @@ router.get("/project-types", authMiddleware, async (req, res) => {
   }
 });
 
-// Get a single projectType with hierarchy
-router.get("/project-types/:category/:projectcategory", authMiddleware, async (req, res) => { 
-  try {
-    const ProjectType = require("../models/project");
-    const { category, projectcategory } = req.params;
-
-    const doc = await ProjectType.findOne({ category, projectcategory });
-    if (!doc) return res.status(404).json({ error: "ProjectType not found" });
-    res.json(doc);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+// Get a specific ProjectType
+router.get(
+  "/project-types/:category/:projectcategory",
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const ProjectType = require("../models/project");
+      const { category, projectcategory } = req.params;
+      const doc = await ProjectType.findOne({ category, projectcategory });
+      if (!doc) return res.status(404).json({ error: "ProjectType not found" });
+      res.json(doc);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
-});
+);
 
-// Get a single project inside a sector
+// Get a single project
 router.get(
   "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId",
   authMiddleware,
@@ -336,7 +651,7 @@ router.get(
   }
 );
 
-// Get towers of a project
+// Get towers under a project
 router.get(
   "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers",
   authMiddleware,
@@ -344,7 +659,6 @@ router.get(
     try {
       const ProjectType = require("../models/project");
       const { category, projectcategory, cityId, divisionId, sectorId, projectId } = req.params;
-
       const typeDoc = await ProjectType.findOne({ category, projectcategory });
       if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
 
@@ -360,10 +674,9 @@ router.get(
   }
 );
 
-
-// Get units of a tower
+// Get floors of a tower
 router.get(
-  "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId/units",
+  "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId/floors",
   authMiddleware,
   async (req, res) => {
     try {
@@ -379,135 +692,67 @@ router.get(
       const project = sector.projects.id(projectId);
       const tower = project.towers.id(towerId);
 
-      res.json(tower.units);
+      res.json(tower.floors);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
   }
 );
 
+// Get units under a floor
+router.get(
+  "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId/floors/:floorId/units",
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const ProjectType = require("../models/project");
+      const { category, projectcategory, cityId, divisionId, sectorId, projectId, towerId, floorId } =
+        req.params;
 
-// Delete entire ProjectType (root)
+      const typeDoc = await ProjectType.findOne({ category, projectcategory });
+      if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
 
+      const city = typeDoc.cities.id(cityId);
+      const division = city.divisions.id(divisionId);
+      const sector = division.sectors.id(sectorId);
+      const project = sector.projects.id(projectId);
+      const tower = project.towers.id(towerId);
+      const floor = tower.floors.id(floorId);
 
+      res.json(floor.units);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// ==========================
+// 🗑️ DELETE ROUTES (fixed!)
+// ==========================
+
+// ✅ Fixed generic delete route (removed invalid `?`)
 router.delete(
-  "/projectType/:category/:projectcategory",
-    authMiddleware,
+  "/projectType/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId/floors/:floorId/units/:unitId",
+  authMiddleware,
   projectController.deleteEntity
 );
 
-// Delete City
+// Delete by ID (fallbacks)
+router.delete("/projectType/:projectid", authMiddleware, projectController.deleteProjectTypeById);
+router.delete("/city/:cityId", authMiddleware, projectController.deleteCityById);
+router.delete("/division/:divisionId", authMiddleware, projectController.deleteDivisionById);
+router.delete("/sector/:sectorId", authMiddleware, projectController.deleteSectorById);
+router.delete("/project/:projectId", authMiddleware, projectController.deleteProjectById);
+router.delete("/tower/:towerId", authMiddleware, projectController.deleteTowerById);
+router.delete("/unit/:unitId", authMiddleware, projectController.deleteUnitById);
 
-router.delete(
-  "/projectType/:category/:projectcategory/cities/:cityId",
-    authMiddleware,
-  projectController.deleteEntity
-);
-
-// Delete Division
-
-router.delete(
-  "/projectType/:category/:projectcategory/cities/:cityId/divisions/:divisionId",
-    authMiddleware,
-  projectController.deleteEntity
-);
-
-// Delete Sector
-
-router.delete(
-  "/projectType/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId",
-    authMiddleware,
-  projectController.deleteEntity
-);
-
-// Delete Project
-router.delete(
-  "/projectType/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId",
-    authMiddleware,
-  projectController.deleteEntity
-);
-
-// Delete Tower
-
-router.delete(
-  "/projectType/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId",
-    authMiddleware,
-  projectController.deleteEntity
-);
-
-// Delete Unit
-
-
-router.delete(
-  "/projectType/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId/units/:unitId",
-    authMiddleware,
-  projectController.deleteEntity
-);
-
-
-router.delete(
-  "/projectType/:projectid",
-  authMiddleware,
-  projectController.deleteProjectTypeById
-);
-
-// Delete City by ID
-router.delete(
-  "/city/:cityId",
-  authMiddleware,
-  projectController.deleteCityById
-);
-
-// Delete Division by ID
-router.delete(
-  "/division/:divisionId",
-  authMiddleware,
-  projectController.deleteDivisionById
-);
-
-// Delete Sector by ID
-router.delete(
-  "/sector/:sectorId",
-  authMiddleware,
-  projectController.deleteSectorById
-);
-
-// Delete Project by ID
-router.delete(
-  "/project/:projectId",
-  authMiddleware,
-  projectController.deleteProjectById
-);
-
-// Delete Tower by ID
-router.delete(
-  "/tower/:towerId",
-  authMiddleware,
-  projectController.deleteTowerById
-);
-
-// Delete Unit by ID
-router.delete(
-  "/unit/:unitId",
-  authMiddleware,
-  projectController.deleteUnitById
-);
-
+// ==========================
+// 🧰 UTIL ROUTES
+// ==========================
 
 router.post("/project-types/full", authMiddleware, projectController.createFullHierarchy);
-
-// Full hierarchy update
 router.put("/project-types/full/:projectId", authMiddleware, projectController.updateFullHierarchy);
-
-// Bulk upload (array of projectTypes)
 router.post("/project-types/bulk", authMiddleware, projectController.bulkUploadProjectTypes);
-
-// ✅ Merge or Create Hierarchy (smart endpoint)
-router.post(
-  "/project-types/merge",
-  authMiddleware,
-  projectController.mergeOrCreateHierarchy
-);
-
+router.post("/project-types/merge", authMiddleware, projectController.mergeOrCreateHierarchy);
 
 module.exports = router;
