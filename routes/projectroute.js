@@ -45,11 +45,26 @@ router.post(
 );
 
 // Step 7 - Units
+// router.post(
+//   "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId/units",
+//   authMiddleware,
+//   projectController.addUnit
+// );
+
+// Add Floor
 router.post(
-  "/project-types/:category/:projectcategory/cities/:cityId/divisions/:divisionId/sectors/:sectorId/projects/:projectId/towers/:towerId/units",
+  "/add-floor/:category/:projectcategory/:cityId/:divisionId/:sectorId/:projectId/:towerId",
+  authMiddleware,
+  projectController.addFloor
+);
+
+// Add Unit (inside floor)
+router.post(
+  "/add-unit/:category/:projectcategory/:cityId/:divisionId/:sectorId/:projectId/:towerId/:floorId",
   authMiddleware,
   projectController.addUnit
 );
+
 
 // Step 8 - Update Unit
 router.patch(
@@ -57,6 +72,10 @@ router.patch(
   authMiddleware,
   projectController.updateUnit
 );
+
+// Delete Floor
+router.delete("/delete-floor/:floorId", authMiddleware, projectController.deleteFloorById);
+
 
 // ==========================
 // READ ROUTES (GET APIs)
