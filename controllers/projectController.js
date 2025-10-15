@@ -846,3 +846,102 @@ exports.bulkUploadProjectTypes = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+
+// ✅ Merge or create hierarchy dynamically (smart insert)
+exports.mergeOrCreateHierarchy = async (req, res) => {
+  try {
+    const { category, projectcategory, cities = [] } = req.body;
+
+    // Validate input
+    if (!category || !projectcategory)
+      return res.status(400).json({ error: "Missing category or projectcategory" });
+
+    const allowedCategory = ["Residential", "Commercial"];
+    const allowedProjectCategory = ["UnderConstruction", "ReadyToMove"];
+
+    if (!allowedCategory.includes(category))
+      return res.status(400).json({ error: "Invalid category" });
+    if (!allowedProjectCategory.includes(projectcategory))
+      return res.status(400).json({ error: "Invalid projectcategory" });
+
+    let typeDoc = await ProjectType.findOne({ category, projectcategory });
+    if (!typeDoc) {
+      typeDoc = new ProjectType({ category, projectcategory, cities: [] });
+    }
+
+    // Merge cities
+    for (const city of cities) {
+      let existingCity = typeDoc.cities.find((c) => c.cityName === city.cityName);
+      if (!existingCity) {
+        typeDoc.cities.push(city);
+        continue;
+      }
+
+      // Merge divisions
+      for (const div of city.divisions || []) {
+        let existingDiv = existingCity.divisions.find(
+          (d) => d.divisionName === div.divisionName
+        );
+        if (!existingDiv) {
+          existingCity.divisions.push(div);
+          continue;
+        }
+
+        // Merge sectors
+        for (const sec of div.sectors || []) {
+          let existingSec = existingDiv.sectors.find(
+            (s) => s.sectorName === sec.sectorName
+          );
+          if (!existingSec) {
+            existingDiv.sectors.push(sec);
+            continue;
+          }
+
+          // Merge projects
+          for (const proj of sec.projects || []) {
+            let existingProj = existingSec.projects.find(
+              (p) => p.projectName === proj.projectName
+            );
+            if (!existingProj) {
+              existingSec.projects.push(proj);
+              continue;
+            }
+
+            // Merge towers
+            for (const tower of proj.towers || []) {
+              let existingTower = existingProj.towers.find(
+                (t) => t.towerName === tower.towerName
+              );
+              if (!existingTower) {
+                existingProj.towers.push(tower);
+                continue;
+              }
+
+              // Merge units
+              for (const unit of tower.units || []) {
+                const exists = existingTower.units.some(
+                  (u) => u.unitNumber === unit.unitNumber
+                );
+                if (!exists) {
+                  existingTower.units.push(unit);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    await typeDoc.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Hierarchy merged successfully",
+      data: typeDoc,
+    });
+  } catch (err) {
+    console.error("❌ mergeOrCreateHierarchy error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};

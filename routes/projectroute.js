@@ -502,6 +502,12 @@ router.put("/project-types/full/:projectId", authMiddleware, projectController.u
 // Bulk upload (array of projectTypes)
 router.post("/project-types/bulk", authMiddleware, projectController.bulkUploadProjectTypes);
 
+// ✅ Merge or Create Hierarchy (smart endpoint)
+router.post(
+  "/project-types/merge",
+  authMiddleware,
+  projectController.mergeOrCreateHierarchy
+);
 
 
 module.exports = router;
