@@ -4,6 +4,203 @@ const ProjectType = require("../models/project"); // projectTypeSchema
 
 
 
+// exports.createProjectType = async (req, res) => {
+//   try {
+//     const { category, projectcategory } = req.body;
+
+//     const allowedCategory = ["Residential", "Commercial"];
+//     const allowedProjectCategory = ["UnderConstruction", "ReadyToMove"];
+
+//     if (!allowedCategory.includes(category)) {
+//       return res.status(400).json({ error: "Invalid category" });
+//     }
+//     if (!allowedProjectCategory.includes(projectcategory)) {
+//       return res.status(400).json({ error: "Invalid projectcategory" });
+//     }
+
+//     const typeDoc = new ProjectType({ category, projectcategory, cities: [] });
+//     await typeDoc.save();
+
+//     res.status(201).json(typeDoc);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+// // ✅ Step 2 - Create City
+// exports.createCity = async (req, res) => {
+//   try {
+//     const { category, projectcategory } = req.params;
+//     const { cityName } = req.body;
+
+//     const typeDoc = await ProjectType.findOne({ category, projectcategory });
+//     if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
+
+//     typeDoc.cities.push({ cityName });
+//     await typeDoc.save();
+
+//     res.status(201).json(typeDoc);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+// // ✅ Step 3 - Add Division
+// exports.addDivision = async (req, res) => {
+//   try {
+//     const { category, projectcategory, cityId } = req.params;
+//     const { divisionName } = req.body;
+
+//     const typeDoc = await ProjectType.findOne({ category, projectcategory });
+//     if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
+
+//     const city = typeDoc.cities.id(cityId);
+//     if (!city) return res.status(404).json({ error: "City not found" });
+
+//     city.divisions.push({ divisionName });
+//     await typeDoc.save();
+
+//     res.json(typeDoc);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+// // ✅ Step 4 - Add Sector
+// exports.addSector = async (req, res) => {
+//   try {
+//     const { category, projectcategory, cityId, divisionId } = req.params;
+//     const { sectorName } = req.body;
+
+//     const typeDoc = await ProjectType.findOne({ category, projectcategory });
+//     if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
+
+//     const city = typeDoc.cities.id(cityId);
+//     if (!city) return res.status(404).json({ error: "City not found" });
+
+//     const division = city.divisions.id(divisionId);
+//     if (!division) return res.status(404).json({ error: "Division not found" });
+
+//     division.sectors.push({ sectorName });
+//     await typeDoc.save();
+
+//     res.json(typeDoc);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+// // ✅ Step 5 - Add Project
+// exports.addProject = async (req, res) => {
+//   try {
+//     const { category, projectcategory, cityId, divisionId, sectorId } = req.params;
+//     const { projectName } = req.body;
+
+//     const typeDoc = await ProjectType.findOne({ category, projectcategory });
+//     if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
+
+//     const city = typeDoc.cities.id(cityId);
+//     if (!city) return res.status(404).json({ error: "City not found" });
+
+//     const division = city.divisions.id(divisionId);
+//     if (!division) return res.status(404).json({ error: "Division not found" });
+
+//     const sector = division.sectors.id(sectorId);
+//     if (!sector) return res.status(404).json({ error: "Sector not found" });
+
+//     sector.projects.push({ projectName, towers: [] });
+//     await typeDoc.save();
+
+//     res.status(201).json(typeDoc);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+// // ✅ Step 6 - Add Tower
+// exports.addTower = async (req, res) => {
+//   try {
+//     const { category, projectcategory, cityId, divisionId, sectorId, projectId } = req.params;
+//     const { towerName } = req.body;
+
+//     const typeDoc = await ProjectType.findOne({ category, projectcategory });
+//     if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
+
+//     const city = typeDoc.cities.id(cityId);
+//     const division = city.divisions.id(divisionId);
+//     const sector = division.sectors.id(sectorId);
+//     const project = sector.projects.id(projectId);
+
+//     project.towers.push({ towerName });
+//     await typeDoc.save();
+
+//     res.json(typeDoc);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+// // ✅ Step 7 - Add Unit
+// exports.addUnit = async (req, res) => {
+//   try {
+//     const { category, projectcategory, cityId, divisionId, sectorId, projectId, towerId } = req.params;
+//     const unitData = req.body; // 👈 full unit data
+
+//     const typeDoc = await ProjectType.findOne({ category, projectcategory });
+//     if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
+
+//     const city = typeDoc.cities.id(cityId);
+//     const division = city.divisions.id(divisionId);
+//     const sector = division.sectors.id(sectorId);
+//     const project = sector.projects.id(projectId);
+//     const tower = project.towers.id(towerId);
+
+//     tower.units.push(unitData);
+//     await typeDoc.save();
+
+//     res.json(typeDoc); 
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+// // ✅ Step 8 - Update Unit
+// exports.updateUnit = async (req, res) => {
+//   try {
+//     const { category, projectcategory, cityId, divisionId, sectorId, projectId, towerId, unitId } = req.params;
+//     const updateData = req.body;
+
+//     const typeDoc = await ProjectType.findOne({ category, projectcategory });
+//     if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
+
+//     const city = typeDoc.cities.id(cityId);
+//     const division = city.divisions.id(divisionId);
+//     const sector = division.sectors.id(sectorId);
+//     const project = sector.projects.id(projectId);
+//     const tower = project.towers.id(towerId);
+//     const unit = tower.units.id(unitId);
+
+//     if (!unit) return res.status(404).json({ error: "Unit not found" });
+
+//     Object.assign(unit, updateData);
+//     await typeDoc.save();
+
+//     res.json(typeDoc); 
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+
+
+// Delete an entity at any level from ProjectType down to Unit
+
+
+
+
+
+
+// ✅ Step 1 - Create ProjectType (root)
 exports.createProjectType = async (req, res) => {
   try {
     const { category, projectcategory } = req.body;
@@ -33,13 +230,15 @@ exports.createCity = async (req, res) => {
     const { category, projectcategory } = req.params;
     const { cityName } = req.body;
 
-    const typeDoc = await ProjectType.findOne({ category, projectcategory });
-    if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
+    const result = await ProjectType.updateOne(
+      { category, projectcategory },
+      { $push: { cities: { cityName, divisions: [] } } }
+    );
 
-    typeDoc.cities.push({ cityName });
-    await typeDoc.save();
+    if (result.modifiedCount === 0)
+      return res.status(404).json({ error: "ProjectType not found" });
 
-    res.status(201).json(typeDoc);
+    res.json({ message: "City added successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -51,16 +250,15 @@ exports.addDivision = async (req, res) => {
     const { category, projectcategory, cityId } = req.params;
     const { divisionName } = req.body;
 
-    const typeDoc = await ProjectType.findOne({ category, projectcategory });
-    if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
+    const result = await ProjectType.updateOne(
+      { category, projectcategory, "cities._id": cityId },
+      { $push: { "cities.$.divisions": { divisionName, sectors: [] } } }
+    );
 
-    const city = typeDoc.cities.id(cityId);
-    if (!city) return res.status(404).json({ error: "City not found" });
+    if (result.modifiedCount === 0)
+      return res.status(404).json({ error: "City not found" });
 
-    city.divisions.push({ divisionName });
-    await typeDoc.save();
-
-    res.json(typeDoc);
+    res.json({ message: "Division added successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -72,19 +270,25 @@ exports.addSector = async (req, res) => {
     const { category, projectcategory, cityId, divisionId } = req.params;
     const { sectorName } = req.body;
 
-    const typeDoc = await ProjectType.findOne({ category, projectcategory });
-    if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
+    const result = await ProjectType.updateOne(
+      { category, projectcategory },
+      {
+        $push: {
+          "cities.$[city].divisions.$[div].sectors": { sectorName, projects: [] },
+        },
+      },
+      {
+        arrayFilters: [
+          { "city._id": cityId },
+          { "div._id": divisionId },
+        ],
+      }
+    );
 
-    const city = typeDoc.cities.id(cityId);
-    if (!city) return res.status(404).json({ error: "City not found" });
+    if (result.modifiedCount === 0)
+      return res.status(404).json({ error: "Division not found" });
 
-    const division = city.divisions.id(divisionId);
-    if (!division) return res.status(404).json({ error: "Division not found" });
-
-    division.sectors.push({ sectorName });
-    await typeDoc.save();
-
-    res.json(typeDoc);
+    res.json({ message: "Sector added successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -96,22 +300,29 @@ exports.addProject = async (req, res) => {
     const { category, projectcategory, cityId, divisionId, sectorId } = req.params;
     const { projectName } = req.body;
 
-    const typeDoc = await ProjectType.findOne({ category, projectcategory });
-    if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
+    const result = await ProjectType.updateOne(
+      { category, projectcategory },
+      {
+        $push: {
+          "cities.$[city].divisions.$[div].sectors.$[sec].projects": {
+            projectName,
+            towers: [],
+          },
+        },
+      },
+      {
+        arrayFilters: [
+          { "city._id": cityId },
+          { "div._id": divisionId },
+          { "sec._id": sectorId },
+        ],
+      }
+    );
 
-    const city = typeDoc.cities.id(cityId);
-    if (!city) return res.status(404).json({ error: "City not found" });
+    if (result.modifiedCount === 0)
+      return res.status(404).json({ error: "Sector not found" });
 
-    const division = city.divisions.id(divisionId);
-    if (!division) return res.status(404).json({ error: "Division not found" });
-
-    const sector = division.sectors.id(sectorId);
-    if (!sector) return res.status(404).json({ error: "Sector not found" });
-
-    sector.projects.push({ projectName, towers: [] });
-    await typeDoc.save();
-
-    res.status(201).json(typeDoc);
+    res.json({ message: "Project added successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -123,18 +334,30 @@ exports.addTower = async (req, res) => {
     const { category, projectcategory, cityId, divisionId, sectorId, projectId } = req.params;
     const { towerName } = req.body;
 
-    const typeDoc = await ProjectType.findOne({ category, projectcategory });
-    if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
+    const result = await ProjectType.updateOne(
+      { category, projectcategory },
+      {
+        $push: {
+          "cities.$[city].divisions.$[div].sectors.$[sec].projects.$[proj].towers": {
+            towerName,
+            units: [],
+          },
+        },
+      },
+      {
+        arrayFilters: [
+          { "city._id": cityId },
+          { "div._id": divisionId },
+          { "sec._id": sectorId },
+          { "proj._id": projectId },
+        ],
+      }
+    );
 
-    const city = typeDoc.cities.id(cityId);
-    const division = city.divisions.id(divisionId);
-    const sector = division.sectors.id(sectorId);
-    const project = sector.projects.id(projectId);
+    if (result.modifiedCount === 0)
+      return res.status(404).json({ error: "Project not found" });
 
-    project.towers.push({ towerName });
-    await typeDoc.save();
-
-    res.json(typeDoc);
+    res.json({ message: "Tower added successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -143,49 +366,77 @@ exports.addTower = async (req, res) => {
 // ✅ Step 7 - Add Unit
 exports.addUnit = async (req, res) => {
   try {
-    const { category, projectcategory, cityId, divisionId, sectorId, projectId, towerId } = req.params;
-    const unitData = req.body; // 👈 full unit data
+    const { category, projectcategory, cityId, divisionId, sectorId, projectId, towerId } =
+      req.params;
+    const unitData = req.body;
 
-    const typeDoc = await ProjectType.findOne({ category, projectcategory });
-    if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
+    const result = await ProjectType.updateOne(
+      { category, projectcategory },
+      {
+        $push: {
+          "cities.$[city].divisions.$[div].sectors.$[sec].projects.$[proj].towers.$[tow].units":
+            unitData,
+        },
+      },
+      {
+        arrayFilters: [
+          { "city._id": cityId },
+          { "div._id": divisionId },
+          { "sec._id": sectorId },
+          { "proj._id": projectId },
+          { "tow._id": towerId },
+        ],
+      }
+    );
 
-    const city = typeDoc.cities.id(cityId);
-    const division = city.divisions.id(divisionId);
-    const sector = division.sectors.id(sectorId);
-    const project = sector.projects.id(projectId);
-    const tower = project.towers.id(towerId);
+    if (result.modifiedCount === 0)
+      return res.status(404).json({ error: "Tower not found" });
 
-    tower.units.push(unitData);
-    await typeDoc.save();
-
-    res.json(typeDoc); 
+    res.json({ message: "Unit added successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-// ✅ Step 8 - Update Unit
+// ✅ Step 8 - Update Unit (uses $set)
 exports.updateUnit = async (req, res) => {
   try {
-    const { category, projectcategory, cityId, divisionId, sectorId, projectId, towerId, unitId } = req.params;
+    const {
+      category,
+      projectcategory,
+      cityId,
+      divisionId,
+      sectorId,
+      projectId,
+      towerId,
+      unitId,
+    } = req.params;
     const updateData = req.body;
 
-    const typeDoc = await ProjectType.findOne({ category, projectcategory });
-    if (!typeDoc) return res.status(404).json({ error: "ProjectType not found" });
+    const result = await ProjectType.updateOne(
+      { category, projectcategory },
+      {
+        $set: {
+          "cities.$[city].divisions.$[div].sectors.$[sec].projects.$[proj].towers.$[tow].units.$[unit]":
+            updateData,
+        },
+      },
+      {
+        arrayFilters: [
+          { "city._id": cityId },
+          { "div._id": divisionId },
+          { "sec._id": sectorId },
+          { "proj._id": projectId },
+          { "tow._id": towerId },
+          { "unit._id": unitId },
+        ],
+      }
+    );
 
-    const city = typeDoc.cities.id(cityId);
-    const division = city.divisions.id(divisionId);
-    const sector = division.sectors.id(sectorId);
-    const project = sector.projects.id(projectId);
-    const tower = project.towers.id(towerId);
-    const unit = tower.units.id(unitId);
+    if (result.modifiedCount === 0)
+      return res.status(404).json({ error: "Unit not found" });
 
-    if (!unit) return res.status(404).json({ error: "Unit not found" });
-
-    Object.assign(unit, updateData);
-    await typeDoc.save();
-
-    res.json(typeDoc); 
+    res.json({ message: "Unit updated successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -193,7 +444,6 @@ exports.updateUnit = async (req, res) => {
 
 
 
-// Delete an entity at any level from ProjectType down to Unit
 exports.deleteEntity = async (req, res) => {
   try {
     const {
@@ -447,9 +697,6 @@ exports.deleteUnitById = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
-
-
 
 
 exports.createFullHierarchy = async (req, res) => {
