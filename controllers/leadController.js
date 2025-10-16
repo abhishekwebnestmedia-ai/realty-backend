@@ -259,21 +259,24 @@ exports.getLeads = async (req, res) => {
     const userRole = req.user.role || "user";
     let filter = {};
 
-    // ✅ Step 2 - Restrict non-admins to their assigned leads only
+    // ✅ Step 2 - Restrict non-admin users
     if (userRole !== "admin") {
-      // Validate the ID before using it in a Mongo query
+      // Validate the user ID before using it in a Mongo query
       if (!mongoose.Types.ObjectId.isValid(userId)) {
         console.warn("⚠️ Invalid user ID:", userId);
         return res.status(400).json({ success: false, message: "Invalid user ID" });
       }
 
       const userObjectId = new mongoose.Types.ObjectId(userId);
-      filter = { assignTo: userObjectId };
+
+      // ✅ Restrict by transferTo instead of assignTo
+      filter = { transferTo: userObjectId };
     }
 
     // ✅ Step 3 - Fetch filtered leads
     const leads = await Lead.find(filter)
       .populate("assignTo", "name email role")
+      .populate("transferTo", "name email role")
       .sort({ createdAt: -1 });
 
     // ✅ Step 4 - Send response

@@ -272,23 +272,32 @@ exports.deleteInventry = async (req, res) => {
 
 exports.getAllInventry = async (req, res) => {
   try {
-    // ✅ Ensure user is authenticated
+    // ✅ Step 1 - Ensure user is authenticated
     if (!req.user || !req.user._id) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
+      return res
+        .status(401)
+        .json({ success: false, message: "Unauthorized access" });
     }
 
     const userId = req.user._id?.toString();
     const userRole = req.user.role || "user";
     let filter = {};
 
-    // ✅ Restrict non-admin users (compare as string)
+    // ✅ Step 2 - Restrict access for non-admin users
     if (userRole !== "admin") {
-      filter = { assignTo: userId }; // since assignTo is a string field
+      // Since transferTo may be stored as a string or ObjectId, handle both safely
+      filter = {
+        $or: [
+          { transferTo: userId }, // when stored as string
+          { transferTo: new mongoose.Types.ObjectId(userId) }, // when stored as ObjectId
+        ],
+      };
     }
 
-    // ✅ Fetch data
+    // ✅ Step 3 - Fetch filtered inventory
     const records = await Inventory.find(filter).sort({ createdAt: -1 });
 
+    // ✅ Step 4 - Respond
     res.status(200).json({
       success: true,
       role: userRole,
@@ -297,7 +306,9 @@ exports.getAllInventry = async (req, res) => {
     });
   } catch (err) {
     console.error("❌ getAllInventry error:", err.message);
-    res.status(500).json({ success: false, message: "Server error fetching inventory" });
+    res
+      .status(500)
+      .json({ success: false, message: "Server error fetching inventory" });
   }
 };
 
