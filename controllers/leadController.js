@@ -260,9 +260,13 @@ exports.getLeads = async (req, res) => {
     let filter = {};
 
     // 🔒 Restrict access — only admin sees all leads
+    // if (userRole !== "admin") {
+    //   filter = { assignTo: userId };
+    // }
+
     if (userRole !== "admin") {
-      filter = { assignTo: userId };
-    }
+  filter = { assignTo: { $eq: userObjectId } }; // strictly match only their leads
+}
 
     const leads = await Lead.find(filter)
       .populate("assignTo", "name email")
