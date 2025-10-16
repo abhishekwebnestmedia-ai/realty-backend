@@ -272,32 +272,31 @@ exports.deleteInventry = async (req, res) => {
 
 exports.getAllInventry = async (req, res) => {
   try {
-    // ✅ Step 1 - Ensure user is authenticated
+    // ✅ Step 1 - Verify authentication
     if (!req.user || !req.user._id) {
-      return res
-        .status(401)
-        .json({ success: false, message: "Unauthorized access" });
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized access",
+      });
     }
 
-    const userId = req.user._id?.toString();
+    const userId = req.user._id.toString();
     const userRole = req.user.role || "user";
+
     let filter = {};
 
-    // ✅ Step 2 - Restrict access for non-admin users
+    // ✅ Step 2 - Only filter for non-admin users
     if (userRole !== "admin") {
-      // Since transferTo may be stored as a string or ObjectId, handle both safely
-      filter = {
-        $or: [
-          { transferTo: userId }, // when stored as string
-          { transferTo: new mongoose.Types.ObjectId(userId) }, // when stored as ObjectId
-        ],
-      };
+      // Your DB stores transferTo as a string, so match by string only
+      filter = { transferTo: userId };
     }
 
-    // ✅ Step 3 - Fetch filtered inventory
-    const records = await Inventory.find(filter).sort({ createdAt: -1 });
+    // ✅ Step 3 - Fetch filtered inventory records
+    const records = await Inventory.find(filter)
+      .sort({ createdAt: -1 })
+      .lean();
 
-    // ✅ Step 4 - Respond
+    // ✅ Step 4 - Send standardized response
     res.status(200).json({
       success: true,
       role: userRole,
@@ -305,10 +304,11 @@ exports.getAllInventry = async (req, res) => {
       data: records,
     });
   } catch (err) {
-    console.error("❌ getAllInventry error:", err.message);
-    res
-      .status(500)
-      .json({ success: false, message: "Server error fetching inventory" });
+    console.error("❌ getAllInventry error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error fetching inventory",
+    });
   }
 };
 
