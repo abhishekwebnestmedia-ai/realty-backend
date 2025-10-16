@@ -261,15 +261,45 @@ exports.deleteInventry = async (req, res) => {
 };
 
 
+// exports.getAllInventry = async (req, res) => {
+//   try {
+//     const records = await Inventory.find().sort({ createdAt: -1 }); // Sort by createdAt descending
+//     res.json(records);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
 exports.getAllInventry = async (req, res) => {
   try {
-    const records = await Inventory.find().sort({ createdAt: -1 }); // Sort by createdAt descending
-    res.json(records);
+    // ✅ Ensure user is authenticated
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const userId = req.user._id?.toString();
+    const userRole = req.user.role || "user";
+    let filter = {};
+
+    // ✅ Restrict non-admin users (compare as string)
+    if (userRole !== "admin") {
+      filter = { assignTo: userId }; // since assignTo is a string field
+    }
+
+    // ✅ Fetch data
+    const records = await Inventory.find(filter).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      role: userRole,
+      count: records.length,
+      data: records,
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("❌ getAllInventry error:", err.message);
+    res.status(500).json({ success: false, message: "Server error fetching inventory" });
   }
 };
-
 
 
 exports.getInventryByAssignTo = async (req, res) => {
