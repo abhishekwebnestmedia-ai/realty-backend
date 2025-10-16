@@ -250,35 +250,41 @@ exports.assignLead = async (req, res) => {
 
 exports.getLeads = async (req, res) => {
   try {
+    // ✅ Step 1 - Validate user
     if (!req.user || !req.user._id) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const userId = req.user._id;
-    const userRole = req.user.role;
-
+    const userId = req.user._id?.toString();
+    const userRole = req.user.role || "user";
     let filter = {};
 
-    // 🔒 Restrict access — only admin sees all leads
-    // if (userRole !== "admin") {
-    //   filter = { assignTo: userId };
-    // }
-
+    // ✅ Step 2 - Restrict non-admins to their assigned leads only
     if (userRole !== "admin") {
-  filter = { assignTo: { $eq: userObjectId } }; // strictly match only their leads
-}
+      // Validate the ID before using it in a Mongo query
+      if (!mongoose.Types.ObjectId.isValid(userId)) {
+        console.warn("⚠️ Invalid user ID:", userId);
+        return res.status(400).json({ success: false, message: "Invalid user ID" });
+      }
 
+      const userObjectId = new mongoose.Types.ObjectId(userId);
+      filter = { assignTo: userObjectId };
+    }
+
+    // ✅ Step 3 - Fetch filtered leads
     const leads = await Lead.find(filter)
-      .populate("assignTo", "name email")
+      .populate("assignTo", "name email role")
       .sort({ createdAt: -1 });
 
-    res.json({
+    // ✅ Step 4 - Send response
+    res.status(200).json({
       success: true,
+      role: userRole,
       count: leads.length,
       data: leads,
     });
   } catch (err) {
-    console.error("getLeads error:", err);
+    console.error("❌ getLeads error:", err.message);
     res.status(500).json({ success: false, message: "Error fetching leads" });
   }
 };
