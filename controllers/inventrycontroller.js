@@ -261,53 +261,16 @@ exports.deleteInventry = async (req, res) => {
 };
 
 
-// exports.getAllInventry = async (req, res) => {
-//   try {
-//     const records = await Inventory.find().sort({ createdAt: -1 }); // Sort by createdAt descending
-//     res.json(records);
-//   } catch (err) {
-//     res.status(500).json({ error: err.message });
-//   }
-// };
-
 exports.getAllInventry = async (req, res) => {
   try {
-    // ✅ Ensure user is authenticated
-    if (!req.user || !req.user._id) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
-    }
-
-    const userId = req.user._id?.toString();
-    const userRole = req.user.role || "user";
-    let filter = {};
-
-    // ✅ Restrict access for non-admin users
-    if (userRole !== "admin") {
-      if (!mongoose.Types.ObjectId.isValid(userId)) {
-        console.warn("⚠️ Invalid user ID:", userId);
-        return res.status(400).json({ success: false, message: "Invalid user ID" });
-      }
-
-      const userObjectId = new mongoose.Types.ObjectId(userId);
-      filter = { assignTo: userObjectId }; // Assuming you have `assignTo` field in Inventory model
-    }
-
-    // ✅ Fetch inventory with proper filter
-    const records = await Inventory.find(filter)
-      .populate("assignTo", "name email role")
-      .sort({ createdAt: -1 });
-
-    res.status(200).json({
-      success: true,
-      role: userRole,
-      count: records.length,
-      data: records,
-    });
+    const records = await Inventory.find().sort({ createdAt: -1 }); // Sort by createdAt descending
+    res.json(records);
   } catch (err) {
-    console.error("❌ getAllInventry error:", err.message);
-    res.status(500).json({ success: false, message: "Server error fetching inventory" });
+    res.status(500).json({ error: err.message });
   }
 };
+
+
 
 exports.getInventryByAssignTo = async (req, res) => {
   try {
