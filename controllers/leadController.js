@@ -131,17 +131,17 @@ exports.assignLead = async (req, res) => {
 };
 
 
-exports.getLeads = async (req, res) => {
-  try {
-    const leads = await Lead.find()
-      .populate("assignTo", "name email")
-      .sort({ createdAt: -1 }); // newest first
-    res.json({ success: true, data: leads });
-  } catch (err) {
-    console.error(" getLeads error:", err);
-    res.status(500).json({ success: false, message: "Error fetching leads" });
-  }
-};
+// exports.getLeads = async (req, res) => {
+//   try {
+//     const leads = await Lead.find()
+//       .populate("assignTo", "name email")
+//       .sort({ createdAt: -1 }); // newest first
+//     res.json({ success: true, data: leads });
+//   } catch (err) {
+//     console.error(" getLeads error:", err);
+//     res.status(500).json({ success: false, message: "Error fetching leads" });
+//   }
+// };
 
 
 // 🔹 Update Lead
@@ -246,6 +246,38 @@ exports.getLeads = async (req, res) => {
 //     res.status(500).json({ success: false, message: "Error updating lead" });
 //   }
 // };
+
+
+exports.getLeads = async (req, res) => {
+  try {
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const userId = req.user._id;
+    const userRole = req.user.role;
+
+    let filter = {};
+
+    // 🔒 Restrict access — only admin sees all leads
+    if (userRole !== "admin") {
+      filter = { assignTo: userId };
+    }
+
+    const leads = await Lead.find(filter)
+      .populate("assignTo", "name email")
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      count: leads.length,
+      data: leads,
+    });
+  } catch (err) {
+    console.error("getLeads error:", err);
+    res.status(500).json({ success: false, message: "Error fetching leads" });
+  }
+};
 
 
 exports.updateLead = async (req, res) => {
