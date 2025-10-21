@@ -1,6 +1,7 @@
 
 
 const DailyPerformance = require('../models/DailyTask');
+const User = require("../models/user");
 
 
 function calculatePlanStatus(data) {
