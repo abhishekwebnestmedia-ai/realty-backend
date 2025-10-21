@@ -32,6 +32,39 @@ exports.getAllPerformances = async (req, res) => {
 
 // GET today's daily plans for all users
 // ✅ Get today's daily performance for all users
+// exports.getTodaysPlans = async (req, res) => {
+//   try {
+//     // Define start and end of the current day
+//     const startOfDay = new Date();
+//     startOfDay.setHours(0, 0, 0, 0);
+
+//     const endOfDay = new Date();
+//     endOfDay.setHours(23, 59, 59, 999);
+
+//     // Fetch all records created today
+//     const records = await DailyPerformance.find({
+//       date: { $gte: startOfDay, $lte: endOfDay },
+//     }).sort({ createdAt: -1 });
+
+//     // Optional: Group by user name
+//     const groupedByUser = records.reduce((acc, record) => {
+//       if (!acc[record.name]) acc[record.name] = [];
+//       acc[record.name].push(record);
+//       return acc;
+//     }, {});
+
+//     res.status(200).json({
+//       success: true,
+//       count: records.length,
+//       data: groupedByUser, // change to `records` if you want raw list
+//     });
+//   } catch (err) {
+//     console.error("Error fetching today's daily plans:", err);
+//     res.status(500).json({ success: false, error: err.message });
+//   }
+// };
+
+
 exports.getTodaysPlans = async (req, res) => {
   try {
     // Define start and end of the current day
@@ -41,22 +74,49 @@ exports.getTodaysPlans = async (req, res) => {
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
-    // Fetch all records created today
+    // Fetch all users
+    const users = await User.find().select("name email role");
+
+    // Fetch all today's records
     const records = await DailyPerformance.find({
       date: { $gte: startOfDay, $lte: endOfDay },
     }).sort({ createdAt: -1 });
 
-    // Optional: Group by user name
-    const groupedByUser = records.reduce((acc, record) => {
+    // Group performance data by user name
+    const groupedRecords = records.reduce((acc, record) => {
       if (!acc[record.name]) acc[record.name] = [];
       acc[record.name].push(record);
       return acc;
     }, {});
 
+    // Combine users with their records
+    const result = {};
+    users.forEach((user) => {
+      result[user.name] = groupedRecords[user.name] || [
+        {
+          morningCommitment: {
+            onlinePortalChecked: false,
+            whatsappStatus: false,
+            emailWorking: 0,
+            buyersWorking: 0,
+            sellersWorking: 0,
+          },
+          eveningAchievements: {
+            onlinePortalChecked: false,
+            whatsappStatus: false,
+          },
+          name: user.name,
+          date: new Date().toISOString().split("T")[0],
+          meetingVisits: 0,
+          planstatus: 0,
+        },
+      ];
+    });
+
     res.status(200).json({
       success: true,
-      count: records.length,
-      data: groupedByUser, // change to `records` if you want raw list
+      count: Object.keys(result).length,
+      data: result,
     });
   } catch (err) {
     console.error("Error fetching today's daily plans:", err);
