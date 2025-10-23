@@ -128,6 +128,13 @@
 // ✅ server.js — Real-time CRM backend (fixed)
 // =============================================
 
+
+
+
+// =============================================
+// ✅ server.js — Real-time CRM backend (final)
+// =============================================
+
 const express = require("express");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
@@ -154,8 +161,7 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      // allow server-to-server or curl
-      if (!origin) return callback(null, true);
+      if (!origin) return callback(null, true); // allow server-to-server or curl
       if (!allowedOrigins.includes(origin)) {
         const msg = `❌ CORS blocked: ${origin}`;
         console.warn(msg);
@@ -195,17 +201,13 @@ app.get("/", (req, res) => {
 });
 
 // ----------------------------------------
-// ✅ SOCKET.IO SETUP (Corrected + Safe)
+// ✅ SOCKET.IO SETUP
 // ----------------------------------------
 const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: [
-      "https://realtyxpo.in",
-      "https://crm.realtyxpo.in",
-      "http://localhost:3000",
-    ],
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -215,19 +217,21 @@ const io = new Server(server, {
 });
 
 app.set("io", io);
-global.io = io; // ✅ allows emits from cron/controllers
+global.io = io;
 
-// ------------------ Socket Events ------------------
+// ----------------------------------------
+// ✅ SOCKET.IO Events
+// ----------------------------------------
 io.on("connection", (socket) => {
   console.log(`✅ Socket connected: ${socket.id}`);
 
-  // Handle custom user registration (optional future feature)
+  // Optional: join a user room later if needed
   socket.on("register_user", (userId) => {
     socket.join(userId);
-    console.log(`👤 User ${userId} joined personal room`);
+    console.log(`👤 User ${userId} joined room`);
   });
 
-  // Ping test for debugging
+  // Ping test
   socket.on("ping_test", (msg) => {
     console.log("Ping from client:", msg);
     socket.emit("pong_test", "Pong working fine 👌");
@@ -239,14 +243,16 @@ io.on("connection", (socket) => {
 });
 
 // ----------------------------------------
-// ✅ FOLLOW-UP CRON SERVICE (import AFTER io is ready)
+// ✅ FOLLOW-UP CRON SERVICE
 // ----------------------------------------
 require("./services/followupCronService");
 
 // ----------------------------------------
-// ✅ Test endpoint to trigger manual socket notification
+// ✅ TEST SOCKET ENDPOINT (manual trigger)
 // ----------------------------------------
 app.get("/api/test-socket", (req, res) => {
+  res.set("Cache-Control", "no-store"); // prevents 304 caching
+
   if (global.io) {
     console.log("📢 Manual test emit triggered");
     global.io.emit("followup_notification", {
@@ -254,26 +260,28 @@ app.get("/api/test-socket", (req, res) => {
       message: "Manual test notification from /api/test-socket endpoint",
       createdAt: new Date().toISOString(),
     });
-    res.json({ success: true, message: "Test notification emitted ✅" });
-  } else {
-    res
-      .status(500)
-      .json({ success: false, message: "Socket.IO not initialized ❌" });
+    return res.json({
+      success: true,
+      message: "Test notification emitted ✅",
+    });
   }
+
+  res
+    .status(500)
+    .json({ success: false, message: "Socket.IO not initialized ❌" });
 });
 
 // ----------------------------------------
 // ✅ START SERVER
 // ----------------------------------------
 const PORT = process.env.PORT || 5000;
-
 server
   .listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
   })
   .on("error", (err) => {
     if (err.code === "EADDRINUSE") {
-      console.log(`⚠️ Port ${PORT} in use, retrying ${PORT + 1}...`);
+      console.log(`⚠️ Port ${PORT} in use, trying ${PORT + 1}...`);
       server.listen(PORT + 1);
     } else {
       console.error("❌ Server error:", err);
