@@ -1,13 +1,148 @@
 
 
-const express = require('express');
-const dotenv = require('dotenv');
-const connectDB = require('./config/db');
-const morgan = require('morgan');
-const cors = require('cors');
+// const express = require('express');
+// const dotenv = require('dotenv');
+// const connectDB = require('./config/db');
+// const morgan = require('morgan');
+// const cors = require('cors');
+// const { Server } = require("socket.io");
+// const http = require('http');
+// const path = require('path');
+
+// dotenv.config();
+// connectDB();
+
+// const app = express();
+
+// // ----------------------------------------
+// // ✅ CORS Configuration
+// // ----------------------------------------
+// const allowedOrigins = [
+//   'https://realtyxpo.in',
+//   'https://crm.realtyxpo.in',
+//   'http://localhost:3000',
+// ];
+
+// app.use(cors({
+//   origin: function (origin, callback) {
+//     if (!origin) return callback(null, true); // allow server-to-server or curl
+//     if (allowedOrigins.indexOf(origin) === -1) {
+//       const msg = 'The CORS policy does not allow access from the specified Origin.';
+//       return callback(new Error(msg), false);
+//     }
+//     return callback(null, true);
+//   },
+//   credentials: true,
+// }));
+
+// app.use(express.json());
+// app.use(morgan('dev'));
+
+// // ----------------------------------------
+// // ✅ Routes
+// // ----------------------------------------
+// app.use('/api/auth', require('./routes/authroute'));
+// app.use('/api/submitform', require('./routes/contactroute'));
+// app.use('/api/realtleads', require('./routes/leadroute'));
+// app.use('/api/inventry', require('./routes/inventryroute'));
+// app.use('/api/dailytask', require("./routes/dailyroute"));
+// app.use('/api/projects', require('./routes/projectroute'));
+// app.use('/api/broker', require('./routes/brokeroute'));
+// app.use('/api/dailyreport', require('./routes/dailyreportroute'));
+// app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// app.use("/api/groups", require("./routes/grouproute"));
+// app.use("/api/broadcasts", require("./routes/broadcastroute"));
+// app.use("/api/notifications", require("./routes/notificationRoutes"));
+// app.use("/api/card", require("./routes/card"));
+
+// // ----------------------------------------
+// // ✅ Root Route
+// // ----------------------------------------
+// app.get('/', (req, res) => {
+//   res.send('CRM backend server is running 🚀');
+// });
+
+// // ----------------------------------------
+// // ✅ SOCKET.IO SETUP
+// // ----------------------------------------
+// const server = http.createServer(app);
+
+// const io = new Server(server, {
+//   cors: {
+//     origin: "*", // for now allow all; tighten later
+//     methods: ["GET", "POST"],
+//   },
+// });
+
+// app.set("io", io);
+// global.io = io; // ✅ allows emits from other files (like cron or controllers)
+
+// io.on("connection", (socket) => {
+//   console.log("✅ Socket connected:", socket.id);
+
+//   socket.on("disconnect", () => {
+//     console.log("❌ Socket disconnected:", socket.id);
+//   });
+// });
+
+// // ----------------------------------------
+// // ✅ FOLLOW-UP CRON SERVICE (import AFTER io is ready)
+// // ----------------------------------------
+// require("./services/followupCronService");
+
+// // ----------------------------------------
+// // ✅ TEST SOCKET ENDPOINT (for manual verification)
+// // ----------------------------------------
+// app.get("/test-socket", (req, res) => {
+//   if (global.io) {
+//     console.log("📢 Manual test emit triggered");
+//     global.io.emit("followup_notification", {
+//       type: "Test",
+//       message: "Manual test notification from /test-socket endpoint",
+//     });
+//     res.json({ success: true, message: "Test notification emitted" });
+//   } else {
+//     res.status(500).json({ success: false, message: "Socket.IO not initialized" });
+//   }
+// });
+
+// // ----------------------------------------
+// // ✅ START SERVER
+// // ----------------------------------------
+// const PORT = process.env.PORT || 5000;
+// server
+//   .listen(PORT, () => {
+//     console.log(`🚀 Server running on port ${PORT}`);
+//   })
+//   .on('error', (err) => {
+//     if (err.code === 'EADDRINUSE') {
+//       console.log(`⚠️ Port ${PORT} is in use, trying ${PORT + 1}...`);
+//       server.listen(PORT + 1);
+//     } else {
+//       console.error('❌ Server error:', err);
+//     }
+//   });
+
+
+// =============================================
+// ✅ server.js — Real-time CRM backend (fixed)
+// =============================================
+
+
+
+
+// =============================================
+// ✅ server.js — Real-time CRM backend (final)
+// =============================================
+
+const express = require("express");
+const dotenv = require("dotenv");
+const connectDB = require("./config/db");
+const morgan = require("morgan");
+const cors = require("cors");
 const { Server } = require("socket.io");
-const http = require('http');
-const path = require('path');
+const http = require("http");
+const path = require("path");
 
 dotenv.config();
 connectDB();
@@ -18,48 +153,51 @@ const app = express();
 // ✅ CORS Configuration
 // ----------------------------------------
 const allowedOrigins = [
-  'https://realtyxpo.in',
-  'https://crm.realtyxpo.in',
-  'http://localhost:3000',
+  "https://realtyxpo.in",
+  "https://crm.realtyxpo.in",
+  "http://localhost:3000",
 ];
 
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true); // allow server-to-server or curl
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  },
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true); // allow server-to-server or curl
+      if (!allowedOrigins.includes(origin)) {
+        const msg = `❌ CORS blocked: ${origin}`;
+        console.warn(msg);
+        return callback(new Error(msg), false);
+      }
+      return callback(null, true);
+    },
+    credentials: true,
+  })
+);
 
 app.use(express.json());
-app.use(morgan('dev'));
+app.use(morgan("dev"));
 
 // ----------------------------------------
 // ✅ Routes
 // ----------------------------------------
-app.use('/api/auth', require('./routes/authroute'));
-app.use('/api/submitform', require('./routes/contactroute'));
-app.use('/api/realtleads', require('./routes/leadroute'));
-app.use('/api/inventry', require('./routes/inventryroute'));
-app.use('/api/dailytask', require("./routes/dailyroute"));
-app.use('/api/projects', require('./routes/projectroute'));
-app.use('/api/broker', require('./routes/brokeroute'));
-app.use('/api/dailyreport', require('./routes/dailyreportroute'));
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/api/auth", require("./routes/authroute"));
+app.use("/api/submitform", require("./routes/contactroute"));
+app.use("/api/realtleads", require("./routes/leadroute"));
+app.use("/api/inventry", require("./routes/inventryroute"));
+app.use("/api/dailytask", require("./routes/dailyroute"));
+app.use("/api/projects", require("./routes/projectroute"));
+app.use("/api/broker", require("./routes/brokeroute"));
+app.use("/api/dailyreport", require("./routes/dailyreportroute"));
 app.use("/api/groups", require("./routes/grouproute"));
 app.use("/api/broadcasts", require("./routes/broadcastroute"));
 app.use("/api/notifications", require("./routes/notificationRoutes"));
 app.use("/api/card", require("./routes/card"));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ----------------------------------------
 // ✅ Root Route
 // ----------------------------------------
-app.get('/', (req, res) => {
-  res.send('CRM backend server is running 🚀');
+app.get("/", (req, res) => {
+  res.send("CRM backend server is running 🚀");
 });
 
 // ----------------------------------------
@@ -69,41 +207,68 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "*", // for now allow all; tighten later
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
+    credentials: true,
   },
+  transports: ["websocket", "polling"],
+  pingInterval: 25000,
+  pingTimeout: 60000,
 });
 
 app.set("io", io);
-global.io = io; // ✅ allows emits from other files (like cron or controllers)
+global.io = io;
 
+// ----------------------------------------
+// ✅ SOCKET.IO Events
+// ----------------------------------------
 io.on("connection", (socket) => {
-  console.log("✅ Socket connected:", socket.id);
+  console.log(`✅ Socket connected: ${socket.id}`);
 
-  socket.on("disconnect", () => {
-    console.log("❌ Socket disconnected:", socket.id);
+  // Optional: join a user room later if needed
+  socket.on("register_user", (userId) => {
+    socket.join(userId);
+    console.log(`👤 User ${userId} joined room`);
+  });
+
+  // Ping test
+  socket.on("ping_test", (msg) => {
+    console.log("Ping from client:", msg);
+    socket.emit("pong_test", "Pong working fine 👌");
+  });
+
+  socket.on("disconnect", (reason) => {
+    console.log(`❌ Socket disconnected (${socket.id}): ${reason}`);
   });
 });
 
 // ----------------------------------------
-// ✅ FOLLOW-UP CRON SERVICE (import AFTER io is ready)
+// ✅ FOLLOW-UP CRON SERVICE
 // ----------------------------------------
 require("./services/followupCronService");
 
 // ----------------------------------------
-// ✅ TEST SOCKET ENDPOINT (for manual verification)
+// ✅ TEST SOCKET ENDPOINT (manual trigger)
 // ----------------------------------------
-app.get("/test-socket", (req, res) => {
+app.get("/api/test-socket", (req, res) => {
+  res.set("Cache-Control", "no-store"); // prevents 304 caching
+
   if (global.io) {
     console.log("📢 Manual test emit triggered");
     global.io.emit("followup_notification", {
       type: "Test",
-      message: "Manual test notification from /test-socket endpoint",
+      message: "Manual test notification from /api/test-socket endpoint",
+      createdAt: new Date().toISOString(),
     });
-    res.json({ success: true, message: "Test notification emitted" });
-  } else {
-    res.status(500).json({ success: false, message: "Socket.IO not initialized" });
+    return res.json({
+      success: true,
+      message: "Test notification emitted ✅",
+    });
   }
+
+  res
+    .status(500)
+    .json({ success: false, message: "Socket.IO not initialized ❌" });
 });
 
 // ----------------------------------------
@@ -114,16 +279,14 @@ server
   .listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
   })
-  .on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      console.log(`⚠️ Port ${PORT} is in use, trying ${PORT + 1}...`);
+  .on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      console.log(`⚠️ Port ${PORT} in use, trying ${PORT + 1}...`);
       server.listen(PORT + 1);
     } else {
-      console.error('❌ Server error:', err);
+      console.error("❌ Server error:", err);
     }
   });
-
-
 
 
 
