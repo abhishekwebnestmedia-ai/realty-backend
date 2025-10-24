@@ -60,6 +60,8 @@
 // module.exports = mongoose.model('User', userSchema);
 
 
+
+
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema(
@@ -107,13 +109,13 @@ const userSchema = new mongoose.Schema(
       learnGrow: { type: Boolean, default: false },
       dataBase: { type: Boolean, default: false },
 
-      // Leads Section (Sub Permissions)
+      // Leads Section
       rentalLeads: { type: Boolean, default: false },
       buyerLeads: { type: Boolean, default: false },
       deadLeads: { type: Boolean, default: false },
       completedLeads: { type: Boolean, default: false },
 
-      // Inventory Section (Sub Permissions)
+      // Inventory Section
       rentalInventory: { type: Boolean, default: false },
       saleInventory: { type: Boolean, default: false },
       completedInventory: { type: Boolean, default: false },
@@ -122,68 +124,69 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// ✅ Helper: Convert to Title Case
+//
+// ✅ Helper: Converts strings to Proper Title Case
+//
 function toTitleCase(str) {
+  if (!str || typeof str !== 'string') return str;
   return str
+    .trim()
     .toLowerCase()
-    .split(' ')
-    .filter(Boolean)
+    .split(/\s+/) // handle multiple spaces
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 }
 
-// ✅ Helper: Format string fields recursively
-// ✅ Safe recursive formatter (Title Case + lowercase email)
+//
+// ✅ Recursive Formatter
+// Converts all string fields to Title Case except email (lowercase)
+//
 function formatStringFields(obj, seen = new WeakSet()) {
   if (!obj || typeof obj !== 'object') return;
 
-  // Prevent infinite recursion on circular references
+  // Avoid infinite recursion on circular objects
   if (seen.has(obj)) return;
   seen.add(obj);
 
   for (const key in obj) {
-    if (!obj.hasOwnProperty(key)) continue;
-    if (key.startsWith('_')) continue; // skip mongoose internals
+    if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
+    if (key.startsWith('_')) continue; // skip Mongoose internals
 
     const value = obj[key];
 
-    // Handle arrays
-    if (Array.isArray(value)) {
-      obj[key] = value.map(v => {
-        if (typeof v === 'string') return toTitleCase(v);
-        if (typeof v === 'object') {
-          formatStringFields(v, seen);
-        }
-        return v;
-      });
-      continue;
-    }
-
-    // Handle strings
+    // 🔹 Handle string fields
     if (typeof value === 'string' && value.trim()) {
       if (key === 'email') {
-        obj[key] = value.toLowerCase();
+        obj[key] = value.toLowerCase().trim();
       } else {
         obj[key] = toTitleCase(value);
       }
       continue;
     }
 
-    // Recurse only for plain objects (not mongoose docs)
-    if (value && typeof value === 'object' && value.constructor === Object) {
+    // 🔹 Handle arrays
+    if (Array.isArray(value)) {
+      obj[key] = value.map(v =>
+        typeof v === 'string' ? toTitleCase(v) : v
+      );
+      continue;
+    }
+
+    // 🔹 Handle nested objects recursively
+    if (value && typeof value === 'object') {
       formatStringFields(value, seen);
     }
   }
 }
 
-
-// 🟢 Before saving a new user
+//
+// 🟢 Hooks: Auto-format before saving/updating/inserting
+//
 userSchema.pre('save', function (next) {
   formatStringFields(this);
   next();
 });
 
-// 🟢 Before updating an existing user
 userSchema.pre('findOneAndUpdate', function (next) {
   const update = this.getUpdate();
   if (update) {
@@ -192,6 +195,13 @@ userSchema.pre('findOneAndUpdate', function (next) {
     } else {
       formatStringFields(update);
     }
+  }
+  next();
+});
+
+userSchema.pre('insertMany', function (next, docs) {
+  if (Array.isArray(docs)) {
+    docs.forEach(doc => formatStringFields(doc));
   }
   next();
 });
