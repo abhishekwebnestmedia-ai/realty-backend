@@ -308,20 +308,43 @@ exports.getAllInventry = async (req, res) => {
   }
 };
 
-exports.getInventryByAssignTo = async (req, res) => {
+// exports.getInventryByAssignTo = async (req, res) => {
+//   try {
+//     const { assignTo } = req.query; // pass ?assignTo=Abhishek
+
+//     let filter = {};
+//     if (assignTo) {
+//       filter.assignTo = { $regex: new RegExp("^" + assignTo + "$", "i") }; // case-insensitive
+//     }
+
+//     const records = await Inventory.find(filter).sort({ createdAt: -1 });
+
+//     res.status(200).json(records);
+//   } catch (err) {
+//     console.error("Error fetching inventory:", err);
+//     res.status(500).json({ error: "Server error" });
+//   }
+// };
+
+exports.getInventoryByTransferTo = async (req, res) => {
   try {
-    const { assignTo } = req.query; // pass ?assignTo=Abhishek
+    const { transferTo } = req.query; // pass ?transferTo=Abhishek
 
     let filter = {};
-    if (assignTo) {
-      filter.assignTo = { $regex: new RegExp("^" + assignTo + "$", "i") }; // case-insensitive
+    if (transferTo) {
+      // 🔍 Case-insensitive match for transferTo
+      filter.transferTo = { $regex: new RegExp("^" + transferTo + "$", "i") };
     }
 
     const records = await Inventory.find(filter).sort({ createdAt: -1 });
 
+    if (!records.length) {
+      return res.status(404).json({ message: "No inventory found for this user" });
+    }
+
     res.status(200).json(records);
   } catch (err) {
-    console.error("Error fetching inventory:", err);
+    console.error("Error fetching inventory by transferTo:", err);
     res.status(500).json({ error: "Server error" });
   }
 };

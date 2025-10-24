@@ -488,28 +488,55 @@ exports.bulkUploadLeads = async (req, res) => {
   }
 };
 
+
+// exports.getLeadsByUserName = async (req, res) => {
+//   try {
+//     const { name } = req.query; // pass ?name=Abhishek Singh
+
+//     if (!name) {
+//       return res.status(400).json({ error: "User name is required" });
+//     }
+
+//     const leads = await Lead.find()
+//       .populate({
+//         path: "assignTo",
+//         match: { name: { $regex: new RegExp("^" + name + "$", "i") } },
+//         select: "name email"
+//       })
+//       .sort({ createdAt: -1 });
+
+//     // Filter out leads where assignTo was not matched
+//     const filteredLeads = leads.filter(lead => lead.assignTo);
+
+//     res.status(200).json(filteredLeads);
+//   } catch (err) {
+//     console.error("Error fetching leads:", err);
+//     res.status(500).json({ error: "Server error" });
+//   }
+// };
+
 exports.getLeadsByUserName = async (req, res) => {
   try {
-    const { name } = req.query; // pass ?name=Abhishek Singh
+    const { name } = req.query; // Example: ?name=Abhishek Singh
 
     if (!name) {
       return res.status(400).json({ error: "User name is required" });
     }
 
-    const leads = await Lead.find()
-      .populate({
-        path: "assignTo",
-        match: { name: { $regex: new RegExp("^" + name + "$", "i") } },
-        select: "name email"
-      })
+    // 🔍 Find leads where transferTo matches the provided name (case-insensitive)
+    const leads = await Lead.find({
+      transferTo: { $regex: new RegExp("^" + name + "$", "i") }
+    })
+      .populate("assignTo", "name email") // Optional: populate assigned user details
       .sort({ createdAt: -1 });
 
-    // Filter out leads where assignTo was not matched
-    const filteredLeads = leads.filter(lead => lead.assignTo);
+    if (!leads.length) {
+      return res.status(404).json({ message: "No leads found for this user" });
+    }
 
-    res.status(200).json(filteredLeads);
+    res.status(200).json(leads);
   } catch (err) {
-    console.error("Error fetching leads:", err);
+    console.error("Error fetching leads by transferTo:", err);
     res.status(500).json({ error: "Server error" });
   }
 };
