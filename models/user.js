@@ -60,8 +60,6 @@
 // module.exports = mongoose.model('User', userSchema);
 
 
-
-
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema(
@@ -94,10 +92,7 @@ const userSchema = new mongoose.Schema(
     passwordResetExpires: { type: Date },
 
     permissions: {
-      // Core / Access Control
       superAdmin: { type: Boolean, default: false },
-
-      // Main Menu Access
       dashboard: { type: Boolean, default: false },
       dailyPlans: { type: Boolean, default: false },
       allLeads: { type: Boolean, default: false },
@@ -108,14 +103,10 @@ const userSchema = new mongoose.Schema(
       findOpportunity: { type: Boolean, default: false },
       learnGrow: { type: Boolean, default: false },
       dataBase: { type: Boolean, default: false },
-
-      // Leads Section
       rentalLeads: { type: Boolean, default: false },
       buyerLeads: { type: Boolean, default: false },
       deadLeads: { type: Boolean, default: false },
       completedLeads: { type: Boolean, default: false },
-
-      // Inventory Section
       rentalInventory: { type: Boolean, default: false },
       saleInventory: { type: Boolean, default: false },
       completedInventory: { type: Boolean, default: false },
@@ -125,83 +116,57 @@ const userSchema = new mongoose.Schema(
 );
 
 //
-// ✅ Helper: Converts strings to Proper Title Case
+// ✅ Helper: Convert a string to Title Case
 //
 function toTitleCase(str) {
   if (!str || typeof str !== 'string') return str;
   return str
     .trim()
     .toLowerCase()
-    .split(/\s+/) // handle multiple spaces
+    .split(/\s+/)
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 }
 
 //
-// ✅ Recursive Formatter
-// Converts all string fields to Title Case except email (lowercase)
+// ✅ Helper: Format all relevant string fields
 //
-function formatStringFields(obj, seen = new WeakSet()) {
-  if (!obj || typeof obj !== 'object') return;
+function formatUserFields(userObj) {
+  if (!userObj) return;
 
-  // Avoid infinite recursion on circular objects
-  if (seen.has(obj)) return;
-  seen.add(obj);
-
-  for (const key in obj) {
-    if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
-    if (key.startsWith('_')) continue; // skip Mongoose internals
-
-    const value = obj[key];
-
-    // 🔹 Handle string fields
-    if (typeof value === 'string' && value.trim()) {
-      if (key === 'email') {
-        obj[key] = value.toLowerCase().trim();
-      } else {
-        obj[key] = toTitleCase(value);
-      }
-      continue;
-    }
-
-    // 🔹 Handle arrays
-    if (Array.isArray(value)) {
-      obj[key] = value.map(v =>
-        typeof v === 'string' ? toTitleCase(v) : v
-      );
-      continue;
-    }
-
-    // 🔹 Handle nested objects recursively
-    if (value && typeof value === 'object') {
-      formatStringFields(value, seen);
-    }
-  }
+  if (userObj.name) userObj.name = toTitleCase(userObj.name);
+  if (userObj.email) userObj.email = userObj.email.toLowerCase().trim();
+  if (userObj.designation) userObj.designation = toTitleCase(userObj.designation);
+  if (userObj.address) userObj.address = toTitleCase(userObj.address);
+  if (userObj.empid) userObj.empid = toTitleCase(userObj.empid);
 }
 
 //
-// 🟢 Hooks: Auto-format before saving/updating/inserting
+// 🟢 Apply formatting before saving
 //
 userSchema.pre('save', function (next) {
-  formatStringFields(this);
+  formatUserFields(this);
   next();
 });
 
+//
+// 🟢 Apply formatting before updating
+//
 userSchema.pre('findOneAndUpdate', function (next) {
   const update = this.getUpdate();
   if (update) {
-    if (update.$set) {
-      formatStringFields(update.$set);
-    } else {
-      formatStringFields(update);
-    }
+    const target = update.$set ? update.$set : update;
+    formatUserFields(target);
   }
   next();
 });
 
+//
+// 🟢 Apply formatting before inserting many
+//
 userSchema.pre('insertMany', function (next, docs) {
   if (Array.isArray(docs)) {
-    docs.forEach(doc => formatStringFields(doc));
+    docs.forEach(doc => formatUserFields(doc));
   }
   next();
 });
