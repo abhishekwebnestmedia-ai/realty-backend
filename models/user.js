@@ -132,31 +132,49 @@ function toTitleCase(str) {
 }
 
 // ✅ Helper: Format string fields recursively
-function formatStringFields(obj) {
+// ✅ Safe recursive formatter (Title Case + lowercase email)
+function formatStringFields(obj, seen = new WeakSet()) {
+  if (!obj || typeof obj !== 'object') return;
+
+  // Prevent infinite recursion on circular references
+  if (seen.has(obj)) return;
+  seen.add(obj);
+
   for (const key in obj) {
-    if (!obj[key]) continue;
+    if (!obj.hasOwnProperty(key)) continue;
+    if (key.startsWith('_')) continue; // skip mongoose internals
 
     const value = obj[key];
 
-    // Handle arrays of strings (future-safe)
+    // Handle arrays
     if (Array.isArray(value)) {
-      obj[key] = value.map(v =>
-        typeof v === 'string' ? toTitleCase(v) : v
-      );
+      obj[key] = value.map(v => {
+        if (typeof v === 'string') return toTitleCase(v);
+        if (typeof v === 'object') {
+          formatStringFields(v, seen);
+        }
+        return v;
+      });
       continue;
     }
 
-    if (typeof value === 'string') {
+    // Handle strings
+    if (typeof value === 'string' && value.trim()) {
       if (key === 'email') {
-        obj[key] = value.toLowerCase(); // emails always lowercase
+        obj[key] = value.toLowerCase();
       } else {
-        obj[key] = toTitleCase(value); // all others → Title Case
+        obj[key] = toTitleCase(value);
       }
-    } else if (typeof value === 'object' && !Array.isArray(value)) {
-      formatStringFields(value); // handle nested objects recursively
+      continue;
+    }
+
+    // Recurse only for plain objects (not mongoose docs)
+    if (value && typeof value === 'object' && value.constructor === Object) {
+      formatStringFields(value, seen);
     }
   }
 }
+
 
 // 🟢 Before saving a new user
 userSchema.pre('save', function (next) {
