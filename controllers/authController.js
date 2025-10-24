@@ -234,6 +234,45 @@ exports.changeUserRole = async (req, res) => {
   }
 };
 
+// ✅ DELETE USER (Admin Only)
+exports.deleteUser = async (req, res) => {
+  try {
+    const adminUser = req.user; // from JWT middleware (decoded token)
+
+    // 🛑 Only admin can delete users
+    if (adminUser.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied. Only admins can delete users.' });
+    }
+
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    // 🧹 Prevent deleting self
+    if (adminUser.userId === userId) {
+      return res.status(400).json({ message: 'You cannot delete your own account.' });
+    }
+
+    const deletedUser = await User.findByIdAndDelete(userId);
+
+    if (!deletedUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'User deleted successfully',
+      deletedUser,
+    });
+  } catch (error) {
+    console.error('❌ deleteUser error:', error);
+    res.status(500).json({ message: 'Server error deleting user' });
+  }
+};
+
+
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {

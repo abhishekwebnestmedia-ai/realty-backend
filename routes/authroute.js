@@ -15,7 +15,7 @@ router.post('/logout', authMiddleware, authController.logout);
 router.post('/forgot-password', authController.forgotPassword);
 router.get('/profile', authMiddleware, authController.getProfile);
 
-
+router.delete('/delete/:userId', authMiddleware, authController.deleteUser);
 
 router.post('/reset-password', authController.resetPassword);
 router.get('/alluser', authMiddleware,authController.getAllUsers);
