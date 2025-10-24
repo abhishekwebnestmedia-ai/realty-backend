@@ -86,72 +86,87 @@ const brokerRequirementSchema = new mongoose.Schema(
           });
         };
 
-        // Format createdAt, updatedAt, followUpDate to IST
+        // ✅ Format timestamps to IST
         ret.createdAt = formatDate(ret.createdAt);
         ret.updatedAt = formatDate(ret.updatedAt);
         ret.followUpDate = formatDate(ret.followUpDate);
-
         return ret;
       },
     },
   }
 );
 
-// ✅ Helper: Convert to Title Case (e.g., "noida sector" → "Noida Sector")
+//
+// ✅ Helper: Convert to Title Case
+// e.g. "new delhi south" → "New Delhi South"
+//
 function toTitleCase(str) {
+  if (!str || typeof str !== "string") return str;
   return str
+    .trim()
     .toLowerCase()
-    .split(" ")
-    .filter(Boolean)
+    .split(/\s+/) // handles multiple spaces
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 }
 
-// ✅ Helper: Format all string fields (Title Case except email)
-function formatStringFields(obj) {
+//
+// ✅ Recursive string formatter with recursion safety
+// Converts all string fields to Title Case except email (lowercase)
+//
+function formatStringFields(obj, seen = new WeakSet()) {
+  if (!obj || typeof obj !== "object") return;
+  if (seen.has(obj)) return; // prevent circular reference loops
+  seen.add(obj);
+
   for (const key in obj) {
-    if (!obj[key]) continue;
-
+    if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
     const value = obj[key];
+    if (value == null) continue;
 
-    // Handle string arrays (future-safe)
-    if (Array.isArray(value)) {
-      obj[key] = value.map(v =>
-        typeof v === "string" ? toTitleCase(v) : v
-      );
+    // 🔹 Handle strings
+    if (typeof value === "string") {
+      if (key === "email") {
+        obj[key] = value.toLowerCase().trim();
+      } else {
+        obj[key] = toTitleCase(value);
+      }
       continue;
     }
 
-    // Handle normal string fields
-    if (typeof value === "string") {
-      if (key === "email") {
-        obj[key] = value.toLowerCase(); // email → lowercase
-      } else {
-        obj[key] = toTitleCase(value); // all others → Title Case
-      }
+    // 🔹 Handle arrays (future-safe)
+    if (Array.isArray(value)) {
+      obj[key] = value.map(v => {
+        if (typeof v === "string") return toTitleCase(v);
+        if (typeof v === "object") formatStringFields(v, seen);
+        return v;
+      });
+      continue;
     }
-    // Handle nested objects recursively
-    else if (typeof value === "object") {
-      formatStringFields(value);
+
+    // 🔹 Handle nested objects
+    if (typeof value === "object") {
+      formatStringFields(value, seen);
     }
   }
 }
 
-// 🟢 Before saving a new broker requirement
+//
+// 🟢 Before saving
+//
 brokerRequirementSchema.pre("save", function (next) {
   formatStringFields(this);
   next();
 });
 
-// 🟢 Before updating an existing broker requirement
+//
+// 🟢 Before updating
+//
 brokerRequirementSchema.pre("findOneAndUpdate", function (next) {
   const update = this.getUpdate();
   if (update) {
-    if (update.$set) {
-      formatStringFields(update.$set);
-    } else {
-      formatStringFields(update);
-    }
+    const target = update.$set ? update.$set : update;
+    formatStringFields(target);
   }
   next();
 });

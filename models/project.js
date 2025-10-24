@@ -65,6 +65,8 @@
 
 // module.exports = mongoose.model("ProjectType", projectTypeSchema);
 
+
+
 const mongoose = require("mongoose");
 
 // --- UNIT ---
@@ -76,7 +78,7 @@ const unitSchema = new mongoose.Schema({
   followUpDate: Date,
   status: {
     type: String,
-    enum: ["Vacant", "Rental", "Self Occupied", "Interested in calling"],
+    enum: ["Vacant", "Rental", "Self Occupied", "Interested In Calling"],
     default: "Vacant",
   },
   remarks: String,
@@ -127,58 +129,78 @@ const projectTypeSchema = new mongoose.Schema({
   cities: [citySchema],
 });
 
-
-// ✅ Helper: Convert to Title Case
+//
+// ✅ Helper: Convert a string to Title Case
+//
 function toTitleCase(str) {
+  if (!str || typeof str !== "string") return str;
   return str
+    .trim()
     .toLowerCase()
-    .split(" ")
-    .filter(Boolean)
+    .split(/\s+/)
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 }
 
-// ✅ Helper: Format string fields recursively
-function formatStringFields(obj) {
-  for (const key in obj) {
-    if (!obj[key]) continue;
-    const value = obj[key];
+//
+// ✅ Recursive Helper: Format all string fields (Title Case except emails)
+//
+function formatStringFields(obj, seen = new WeakSet()) {
+  if (!obj || typeof obj !== "object") return;
+  if (seen.has(obj)) return; // Prevent circular reference
+  seen.add(obj);
 
-    // Handle arrays (like mobileNumbers, etc.)
-    if (Array.isArray(value)) {
-      obj[key] = value.map(v =>
-        typeof v === "string" ? toTitleCase(v) : v
-      );
+  for (const key in obj) {
+    if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
+
+    const value = obj[key];
+    if (value == null) continue;
+
+    // 🔹 Strings
+    if (typeof value === "string") {
+      if (key === "email") {
+        obj[key] = value.toLowerCase().trim();
+      } else {
+        obj[key] = toTitleCase(value);
+      }
       continue;
     }
 
-    if (typeof value === "string") {
-      if (key === "email") {
-        obj[key] = value.toLowerCase(); // email → lowercase
-      } else {
-        obj[key] = toTitleCase(value); // all others → Title Case
-      }
-    } else if (typeof value === "object") {
-      formatStringFields(value); // recurse for nested
+    // 🔹 Arrays
+    if (Array.isArray(value)) {
+      obj[key] = value.map(v => {
+        if (typeof v === "string") return toTitleCase(v);
+        if (typeof v === "object") {
+          formatStringFields(v, seen);
+        }
+        return v;
+      });
+      continue;
+    }
+
+    // 🔹 Nested Objects
+    if (typeof value === "object") {
+      formatStringFields(value, seen);
     }
   }
 }
 
-// 🟢 Before saving
+//
+// 🟢 Apply auto-formatting before saving
+//
 projectTypeSchema.pre("save", function (next) {
   formatStringFields(this);
   next();
 });
 
-// 🟢 Before updating
+//
+// 🟢 Apply auto-formatting before updating
+//
 projectTypeSchema.pre("findOneAndUpdate", function (next) {
   const update = this.getUpdate();
   if (update) {
-    if (update.$set) {
-      formatStringFields(update.$set);
-    } else {
-      formatStringFields(update);
-    }
+    const target = update.$set ? update.$set : update;
+    formatStringFields(target);
   }
   next();
 });

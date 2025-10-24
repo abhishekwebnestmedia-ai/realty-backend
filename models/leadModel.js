@@ -100,7 +100,6 @@
 // };
 
 // module.exports = mongoose.model("Lead", leadSchema);
-
 const mongoose = require('mongoose');
 
 const validStatuses = [
@@ -115,7 +114,7 @@ const validStatuses = [
 
 const validLeadTypes = ["Buyer", "Rental"];
 
-// ✅ Helper to generate IST date-time string in "YYYY-MM-DD HH:mm:ss" format
+// ✅ Helper: Generate IST date-time string (YYYY-MM-DD HH:mm:ss)
 function getISTDateTime() {
   const now = new Date();
   const istOffset = 5.5 * 60 * 60 * 1000; // +5:30 hrs in ms
@@ -143,7 +142,7 @@ const leadSchema = new mongoose.Schema(
 
     followUp: {
       type: String,
-      default: getISTDateTime, // Auto-set IST time if not provided
+      default: getISTDateTime,
     },
 
     requirement: { type: String },
@@ -151,7 +150,7 @@ const leadSchema = new mongoose.Schema(
 
     date: {
       type: String,
-      default: getISTDateTime, // Auto-set IST date when created
+      default: getISTDateTime,
     },
 
     capturedBy: { type: String },
@@ -163,90 +162,102 @@ const leadSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+//
 // ✅ Ensure both dates are set before saving
+//
 leadSchema.pre('save', function (next) {
   if (!this.date) this.date = getISTDateTime();
   if (!this.followUp) this.followUp = getISTDateTime();
   next();
 });
 
-// ✅ Helper: Convert to Title Case (e.g., "abhishek singh" → "Abhishek Singh")
+//
+// ✅ Helper: Convert a string to Title Case
+//
 function toTitleCase(str) {
+  if (!str || typeof str !== 'string') return str;
   return str
+    .trim()
     .toLowerCase()
-    .split(' ')
-    .filter(Boolean)
+    .split(/\s+/)
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 }
 
-// ✅ Helper: Format all string fields (Title Case, except email)
-function formatStringFields(obj) {
+//
+// ✅ Helper: Format string fields (Title Case except email)
+//
+function formatStringFields(obj, seen = new WeakSet()) {
+  if (!obj || typeof obj !== 'object') return;
+  if (seen.has(obj)) return;
+  seen.add(obj);
+
   for (const key in obj) {
-    if (!obj[key]) continue;
+    if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
 
     const value = obj[key];
+    if (!value) continue;
 
-    // Handle string arrays (if ever added in future)
-    if (Array.isArray(value)) {
-      obj[key] = value.map(v =>
-        typeof v === 'string' ? toTitleCase(v) : v
-      );
+    // 🔹 Handle normal strings
+    if (typeof value === 'string') {
+      if (key === 'email') {
+        obj[key] = value.toLowerCase().trim();
+      } else {
+        obj[key] = toTitleCase(value);
+      }
       continue;
     }
 
-    // Handle normal string fields
-    if (typeof value === 'string') {
-      if (key === 'email') {
-        obj[key] = value.toLowerCase(); // email → lowercase
-      } else {
-        obj[key] = toTitleCase(value); // all others → Title Case
-      }
-    } 
-    // Handle nested objects recursively
-    else if (typeof value === 'object' && !Array.isArray(value)) {
-      formatStringFields(value);
+    // 🔹 Handle string arrays
+    if (Array.isArray(value)) {
+      obj[key] = value.map(v => (typeof v === 'string' ? toTitleCase(v) : v));
+      continue;
+    }
+
+    // 🔹 Handle nested objects
+    if (value && typeof value === 'object') {
+      formatStringFields(value, seen);
     }
   }
 }
 
+//
 // 🟢 Before saving a new lead
+//
 leadSchema.pre('save', function (next) {
   formatStringFields(this);
   next();
 });
 
+//
 // 🟢 Before updating an existing lead
+//
 leadSchema.pre('findOneAndUpdate', function (next) {
   const update = this.getUpdate();
   if (update) {
-    if (update.$set) {
-      formatStringFields(update.$set);
-    } else {
-      formatStringFields(update);
-    }
+    const target = update.$set ? update.$set : update;
+    formatStringFields(target);
   }
   next();
 });
 
-// ✅ Convert timestamps to IST when sending response
+//
+// ✅ Convert timestamps to IST in JSON responses
+//
 leadSchema.methods.toJSON = function () {
   const obj = this.toObject();
   const istOffset = 5.5 * 60 * 60 * 1000;
 
-  if (obj.createdAt) {
-    obj.createdAt = new Date(new Date(obj.createdAt).getTime() + istOffset)
+  const formatIST = (date) => {
+    if (!date) return null;
+    return new Date(new Date(date).getTime() + istOffset)
       .toISOString()
       .replace('T', ' ')
       .substring(0, 19);
-  }
+  };
 
-  if (obj.updatedAt) {
-    obj.updatedAt = new Date(new Date(obj.updatedAt).getTime() + istOffset)
-      .toISOString()
-      .replace('T', ' ')
-      .substring(0, 19);
-  }
+  obj.createdAt = formatIST(obj.createdAt);
+  obj.updatedAt = formatIST(obj.updatedAt);
 
   return obj;
 };
