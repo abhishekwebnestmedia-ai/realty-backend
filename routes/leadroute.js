@@ -33,6 +33,9 @@ router.get('/captured', authMiddleware, leadController.getLeadsByCapturedBy);
 router.get('/:leadId/history', authMiddleware, leadController.getLeadChangeHistory);
 
 
+// ✅ Route to receive 99acres leads directly
+router.post('/webhook/99acres', leadController.createFrom99acres);
+
 
 module.exports = router;
 
