@@ -8,6 +8,10 @@ const authMiddleware = require("../middleware/authmiddleware");
 
 // Create new lead
 router.post('/create', authMiddleware, leadController.createLead);
+// ✅ Route to receive 99acres leads directly
+router.post('/webhook/99acres', leadController.createFrom99acres);
+
+
 
 // Bulk upload leads
 router.post('/bulk-upload', authMiddleware, leadController.bulkUploadLeads);
@@ -32,9 +36,6 @@ router.get('/userbasedlead',authMiddleware, leadController.getLeadsByUserName);
 router.get('/captured', authMiddleware, leadController.getLeadsByCapturedBy);
 router.get('/:leadId/history', authMiddleware, leadController.getLeadChangeHistory);
 
-
-// ✅ Route to receive 99acres leads directly
-router.post('/webhook/99acres', leadController.createFrom99acres);
 
 
 module.exports = router;
