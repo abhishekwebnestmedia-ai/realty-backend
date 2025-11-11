@@ -229,25 +229,94 @@ global.io = io;
 // ----------------------------------------
 // ✅ SOCKET.IO Events
 // ----------------------------------------
+// io.on("connection", (socket) => {
+//   console.log(`✅ Socket connected: ${socket.id}`);
+
+//   // Optional: join a user room later if needed
+//   socket.on("register_user", (userId) => {
+//     socket.join(userId);
+//     console.log(`👤 User ${userId} joined room`);
+//   });
+
+//   // Ping test
+//   socket.on("ping_test", (msg) => {
+//     console.log("Ping from client:", msg);
+//     socket.emit("pong_test", "Pong working fine 👌");
+//   });
+
+//   socket.on("disconnect", (reason) => {
+//     console.log(`❌ Socket disconnected (${socket.id}): ${reason}`);
+//   });
+// });
+
+// ----------------------------------------
+// ✅ SOCKET.IO Events
+// ----------------------------------------
 io.on("connection", (socket) => {
   console.log(`✅ Socket connected: ${socket.id}`);
 
-  // Optional: join a user room later if needed
-  socket.on("register_user", (userId) => {
-    socket.join(userId);
-    console.log(`👤 User ${userId} joined room`);
+  //
+  // 🧠 register_user — accepts string OR object
+  //
+  socket.on("register_user", (data) => {
+    let userId = null;
+
+    // Accept string or object
+    if (typeof data === "string") {
+      userId = data;
+    } else if (data && typeof data === "object") {
+      userId = data.userId || data._id || data.id;
+    }
+
+    if (!userId) {
+      console.warn("⚠️ register_user called without valid userId:", data);
+      return;
+    }
+
+    socket.join(userId); // optional personal room
+    socket.join(`notif_${userId}`); // notification room
+    console.log(`👤 User ${userId} joined rooms: ${userId}, notif_${userId}`);
+
+    // confirm registration
+    socket.emit("registered_success", { message: `Joined notif_${userId}` });
   });
 
-  // Ping test
+  //
+  // 🔔 subscribe_notifications — optional explicit subscription
+  //
+  socket.on("subscribe_notifications", (data) => {
+    let userId = null;
+    if (typeof data === "string") {
+      userId = data;
+    } else if (data && typeof data === "object") {
+      userId = data.userId || data._id || data.id;
+    }
+
+    if (!userId) {
+      console.warn("⚠️ subscribe_notifications called without valid userId:", data);
+      return;
+    }
+
+    socket.join(`notif_${userId}`);
+    console.log(`🔔 User ${userId} subscribed to notif_${userId}`);
+  });
+
+  //
+  // 🔄 Ping test
+  //
   socket.on("ping_test", (msg) => {
     console.log("Ping from client:", msg);
     socket.emit("pong_test", "Pong working fine 👌");
   });
 
+  //
+  // ❌ Disconnect handler
+  //
   socket.on("disconnect", (reason) => {
     console.log(`❌ Socket disconnected (${socket.id}): ${reason}`);
   });
 });
+
 
 // ----------------------------------------
 // ✅ FOLLOW-UP CRON SERVICE
