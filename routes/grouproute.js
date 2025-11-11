@@ -1,9 +1,15 @@
 const express = require("express");
 const router = express.Router();
 const authMiddleware = require("../middleware/authmiddleware");
-const { createGroup, getAllGroups } = require("../controllers/groupController");
+const { createGroup, getAllGroups, updateGroup, deleteGroup } = require("../controllers/groupController");
 
 router.post("/", authMiddleware, createGroup);
 router.get("/", authMiddleware, getAllGroups);
+
+router.put("/:groupId", authMiddleware, updateGroup);
+
+// 🔴 Delete group
+router.delete("/:groupId", authMiddleware, deleteGroup);
+
 
 module.exports = router;
