@@ -768,12 +768,14 @@ exports.createFrom99acres = async (req, res) => {
 
 exports.getUnassignedLeads = async (req, res) => {
   try {
+    // ✅ Handle only valid leads where assignTo is missing or null
     const unassignedLeads = await Lead.find({
       $or: [
         { assignTo: { $exists: false } },
         { assignTo: null },
-        { assignTo: "" }
-      ]
+        // don't directly check for empty string — instead check with $type
+        { assignTo: { $type: 10 } }, // BSON Null
+      ],
     }).populate("assignTo", "name email");
 
     res.status(200).json({
@@ -782,6 +784,11 @@ exports.getUnassignedLeads = async (req, res) => {
       data: unassignedLeads,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error("❌ getUnassignedLeads error:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching unassigned leads",
+      error: error.message,
+    });
   }
 };
