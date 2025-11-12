@@ -768,20 +768,18 @@ exports.createFrom99acres = async (req, res) => {
 
 exports.getUnassignedLeads = async (req, res) => {
   try {
-    // ✅ Use $expr to safely check assignTo field without casting
+    // ✅ Handle only valid leads where assignTo is missing or null
     const unassignedLeads = await Lead.find({
       $or: [
         { assignTo: { $exists: false } },
         { assignTo: null },
-        { $expr: { $eq: ["$assignTo", ""] } } // safely compare string value
+        // don't directly check for empty string — instead check with $type
+        { assignTo: { $type: 10 } }, // BSON Null
       ],
-    })
-      .populate("assignTo", "name email role")
-      .sort({ createdAt: -1 });
+    }).populate("assignTo", "name email");
 
     res.status(200).json({
       success: true,
-      role: req.user?.role || "user",
       count: unassignedLeads.length,
       data: unassignedLeads,
     });
@@ -794,3 +792,5 @@ exports.getUnassignedLeads = async (req, res) => {
     });
   }
 };
+
+
