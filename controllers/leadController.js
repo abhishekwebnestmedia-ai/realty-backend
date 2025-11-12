@@ -765,3 +765,23 @@ exports.createFrom99acres = async (req, res) => {
 };
 
 
+
+exports.getUnassignedLeads = async (req, res) => {
+  try {
+    const unassignedLeads = await Lead.find({
+      $or: [
+        { assignTo: { $exists: false } },
+        { assignTo: null },
+        { assignTo: "" }
+      ]
+    }).populate("assignTo", "name email");
+
+    res.status(200).json({
+      success: true,
+      count: unassignedLeads.length,
+      data: unassignedLeads,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

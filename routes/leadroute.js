@@ -11,7 +11,7 @@ router.post('/create', authMiddleware, leadController.createLead);
 // ✅ Route to receive 99acres leads directly
 router.post('/webhook/99acres', leadController.createFrom99acres);
 
-
+router.get('/unassigned', authMiddleware, leadController.getUnassignedLeads);
 
 // Bulk upload leads
 router.post('/bulk-upload', authMiddleware, leadController.bulkUploadLeads);
