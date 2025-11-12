@@ -152,28 +152,36 @@
 
 // console.log(" Follow-up cron job initialized (every minute).");
 
-
-
 const cron = require("node-cron");
 const Lead = require("../models/leadModel");
 const Inventory = require("../models/inventryModel");
 const Notification = require("../models/notification");
 const { emitNotification } = require("../utils/socketEmitter");
 
-// 🕒 Unified follow-up checker (runs every minute)
+// 🔹 Convert JS Date → "YYYY-MM-DDTHH:mm:ss+05:30" (IST)
+function toISTISOString(date) {
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const ist = new Date(date.getTime() + istOffset);
+  return ist.toISOString().split(".")[0] + "+05:30";
+}
+
+// 🕒 Runs every minute
 cron.schedule("* * * * *", async () => {
   try {
     const now = new Date();
 
-    // --- 🔹 Trigger exactly at follow-up time (±30 seconds window) ---
+    // --- 🔹 Trigger exactly at follow-up time (±30 seconds) ---
     const targetStart = new Date(now.getTime() - 30 * 1000);
     const targetEnd = new Date(now.getTime() + 30 * 1000);
 
-    console.log(`🔍 Checking follow-ups between ${targetStart.toISOString()} and ${targetEnd.toISOString()}`);
+    const startStr = toISTISOString(targetStart);
+    const endStr = toISTISOString(targetEnd);
+
+    console.log(`🔍 Checking follow-ups between ${startStr} and ${endStr}`);
 
     // ----------------- LEADS -----------------
     const leads = await Lead.find({
-      followUp: { $gte: targetStart, $lte: targetEnd },
+      followUp: { $gte: startStr, $lte: endStr },
     });
 
     for (const lead of leads) {
@@ -182,7 +190,6 @@ cron.schedule("* * * * *", async () => {
         minute: "2-digit",
       })}. Requirement: ${lead.requirement || "N/A"}.`;
 
-      // 🧩 Prevent duplicates within last 2 minutes
       const exists = await Notification.findOne({
         type: "Lead",
         itemId: lead._id,
@@ -211,7 +218,6 @@ cron.schedule("* * * * *", async () => {
           createdAt: notif.createdAt,
         };
 
-        // 🔹 Emit notification
         if (lead.assignedTo) {
           emitNotification(lead.assignedTo.toString(), payload);
         } else {
@@ -225,7 +231,7 @@ cron.schedule("* * * * *", async () => {
 
     // ----------------- INVENTORIES -----------------
     const inventories = await Inventory.find({
-      followUpDate: { $gte: targetStart, $lte: targetEnd },
+      followUpDate: { $gte: startStr, $lte: endStr },
     });
 
     for (const inv of inventories) {
@@ -234,7 +240,6 @@ cron.schedule("* * * * *", async () => {
         minute: "2-digit",
       })}. Property in sector ${inv.sector || "N/A"} — Demand: ${inv.demand || "N/A"}.`;
 
-      // 🧩 Prevent duplicates within last 2 minutes
       const exists = await Notification.findOne({
         type: "Inventory",
         itemId: inv._id,

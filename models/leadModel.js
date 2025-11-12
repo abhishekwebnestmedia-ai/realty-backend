@@ -41,19 +41,12 @@ const leadSchema = new mongoose.Schema(
       enum: validLeadTypes,
     },
 
-    // followUp: {
-    //   type: String,
-    //   default: getISTDateTime,
-    // },
-
     followUp: {
-  type: Date,
-  default: () => {
-    const now = new Date();
-    const istOffset = 5.5 * 60 * 60 * 1000; // +5:30 hrs
-    return new Date(now.getTime() + istOffset);
-  },
-},
+      type: String,
+      default: getISTDateTime,
+    },
+
+  
 
     requirement: { type: String },
     remark: { type: String },
