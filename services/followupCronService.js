@@ -152,6 +152,11 @@
 
 // console.log(" Follow-up cron job initialized (every minute).");
 
+
+
+
+
+
 const cron = require("node-cron");
 const Lead = require("../models/leadModel");
 const Inventory = require("../models/inventryModel");
@@ -185,7 +190,7 @@ cron.schedule("* * * * *", async () => {
     });
 
     for (const lead of leads) {
-      const msg = `🔔 Reminder: Follow up with ${lead.customerName} (${lead.contactNumber}) at ${new Date(lead.followUp).toLocaleTimeString("en-IN", {
+      const msg = `🔔 Reminder: Follow up with ${lead.customerName} (${lead.contactNumber}) , {
         hour: "2-digit",
         minute: "2-digit",
       })}. Requirement: ${lead.requirement || "N/A"}.`;
