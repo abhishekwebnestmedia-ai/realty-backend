@@ -7,10 +7,12 @@ const {
   getDatabaseById,
   updateDatabase,
   deleteDatabase,
+   bulkUploadDatabase,
 } = require("../controllers/databaseController");
 
 // ➕ Create new database record
 router.post("/", authMiddleware, createDatabase);
+router.post("/bulk", authMiddleware, bulkUploadDatabase);
 
 // 📄 Get all records
 router.get("/", authMiddleware, getAllDatabases);

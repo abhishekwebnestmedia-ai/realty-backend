@@ -151,3 +151,37 @@ exports.deleteDatabase = async (req, res) => {
 };
 
 
+exports.bulkUploadDatabase = async (req, res) => {
+  try {
+    const { records } = req.body;
+
+    if (!records || !Array.isArray(records) || records.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide an array of records to upload ❌",
+      });
+    }
+
+    // ✅ Attach createdBy to each record
+    const dataToInsert = records.map((item) => ({
+      ...item,
+      createdBy: req.user._id,
+    }));
+
+    // ✅ Insert all at once
+    const insertedRecords = await Database.insertMany(dataToInsert);
+
+    res.status(201).json({
+      success: true,
+      message: `${insertedRecords.length} records uploaded successfully ✅`,
+      count: insertedRecords.length,
+    });
+  } catch (error) {
+    console.error("❌ Error during bulk upload:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error during bulk upload",
+      error: error.message,
+    });
+  }
+};

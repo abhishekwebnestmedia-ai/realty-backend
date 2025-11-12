@@ -9,13 +9,18 @@ const {
   deleteItem,
   updateItem,
   getAllFolders, // ✅ Added update function
+  deleteFile,
 } = require("../controllers/learnController");
 
 // 📁 Create new folder
 router.post("/folder", authMiddleware, createFolder);
 
+
 // 📤 Upload a file
 router.post("/file", authMiddleware, learnupload.single("file"), uploadFile);
+router.delete("/file/:id", authMiddleware, deleteFile); // 👈 New route
+
+
 
 // 📁 Get all folders
 router.get("/all/folders", authMiddleware, getAllFolders);
