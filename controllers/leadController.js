@@ -149,44 +149,49 @@ exports.getLeads = async (req, res) => {
     const userName = req.user.name;
 
     // ✅ Step 2 - Pagination setup
-    const page = parseInt(req.query.page) || 1; // Default page = 1
-    const limit = parseInt(req.query.limit) || 10; // Default limit = 10 per page
+    const page = parseInt(req.query.page, 10) || 1; // Default page = 1
+    const limit = parseInt(req.query.limit, 10) || 10; // Default limit = 10 per page
     const skip = (page - 1) * limit;
 
+    // ✅ Step 3 - Filter setup
     let filter = {};
 
-    // ✅ Step 3 - Apply filter for non-admin users
+    // Non-admins only see leads transferred to them
     if (userRole !== "admin") {
       filter = { transferTo: userName };
     }
 
-    // ✅ Step 4 - Count total leads (for pagination info)
+    // ✅ Step 4 - Count total leads before pagination
     const totalLeads = await Lead.countDocuments(filter);
 
-    // ✅ Step 5 - Fetch leads with pagination
+    // ✅ Step 5 - Fetch paginated leads
     const leads = await Lead.find(filter)
       .populate("assignTo", "name email role")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .lean(); // ⚡ Faster & ensures skip/limit applied properly
 
     // ✅ Step 6 - Respond with paginated data
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       role: userRole,
-      count: leads.length,
+      message: "Leads fetched successfully",
       totalLeads,
       totalPages: Math.ceil(totalLeads / limit),
       currentPage: page,
+      perPage: limit,
+      count: leads.length,
       data: leads,
     });
   } catch (err) {
     console.error("❌ getLeads error:", err.message);
-    res
+    return res
       .status(500)
       .json({ success: false, message: "Server error fetching leads" });
   }
 };
+
 
 
 // exports.getLeads = async (req, res) => {
