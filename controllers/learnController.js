@@ -88,3 +88,22 @@ exports.deleteItem = async (req, res) => {
   }
 };
 
+
+// ✅ Update Folder or File (Rename or Move)
+exports.updateItem = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, parent } = req.body;
+
+    const item = await Learn.findById(id);
+    if (!item) return res.status(404).json({ message: "Item not found" });
+
+    if (name) item.name = name;              // Rename
+    if (parent !== undefined) item.parent = parent || null; // Move to another folder (or root)
+
+    await item.save();
+    res.json({ success: true, message: "Item updated successfully", data: item });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

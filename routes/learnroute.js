@@ -7,6 +7,7 @@ const {
   uploadFile,
   getFolderContents,
   deleteItem,
+  updateItem, // ✅ Added update function
 } = require("../controllers/learnController");
 
 // 📁 Create new folder
@@ -20,6 +21,9 @@ router.get("/", authMiddleware, getFolderContents);
 
 // 📂 Get specific folder contents
 router.get("/:folderId", authMiddleware, getFolderContents);
+
+// ✏️ Update folder or file (rename or move)
+router.put("/:id", authMiddleware, updateItem); // ✅ Added this route
 
 // 🗑️ Delete file/folder
 router.delete("/:id", authMiddleware, deleteItem);
