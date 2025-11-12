@@ -134,121 +134,6 @@ exports.assignLead = async (req, res) => {
 
 
 
-// exports.getLeads = async (req, res) => {
-//   try {
-//     const leads = await Lead.find()
-//       .populate("assignTo", "name email")
-//       .sort({ createdAt: -1 }); // newest first
-//     res.json({ success: true, data: leads });
-//   } catch (err) {
-//     console.error(" getLeads error:", err);
-//     res.status(500).json({ success: false, message: "Error fetching leads" });
-//   }
-// };
-
-
-// 🔹 Update Lead
-// exports.updateLead = async (req, res) => {
-//   try {
-//     const errorMsg = validateLeadData(req.body, true);
-//     if (errorMsg) {
-//       return res.status(400).json({ success: false, message: errorMsg });
-//     }
-
-//     const updateData = { ...req.body };
-
-//     if (updateData.assignTo !== undefined) {
-//       const user = await resolveAssignTo(updateData.assignTo);
-//       if (!user) {
-//         return res.status(400).json({ success: false, message: "Invalid assignTo user" });
-//       }
-//       updateData.assignTo = user._id;
-//     }
-
-//     const lead = await Lead.findByIdAndUpdate(req.params.id, updateData, { new: true })
-//       .populate("assignTo", "name email");
-
-//     if (!lead) {
-//       return res.status(404).json({ success: false, message: "Lead not found" });
-//     }
-
-//     res.json({ success: true, data: lead });
-//   } catch (err) {
-//     console.error(" updateLead error:", err);
-//     res.status(500).json({ success: false, message: "Error updating lead" });
-//   }
-// };
-
-
-
-
-// exports.updateLead = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const updateData = { ...req.body };
-
-//     const oldLead = await Lead.findById(id).populate("assignTo", "name email");
-//     if (!oldLead) {
-//       return res.status(404).json({ success: false, message: "Lead not found" });
-//     }
-
-//     // If assignTo provided, resolve to user ID
-//     if (updateData.assignTo !== undefined) {
-//       const user = await resolveAssignTo(updateData.assignTo);
-//       if (!user) {
-//         return res.status(400).json({ success: false, message: "Invalid assignTo user" });
-//       }
-//       updateData.assignTo = user._id;
-//     }
-
-//     // Update the lead
-//     const updatedLead = await Lead.findByIdAndUpdate(id, updateData, { new: true })
-//       .populate("assignTo", "name email");
-
-//     // TRACKED FIELDS
-//     const trackedFields = ["status", "assignTo", "capturedBy", "transferTo", "remark" ,"followUp"];
-
-//     // Determine who made the change (from req.user)
-//     let changedBy = null;
-//     if (req.user) {
-//       const user = await User.findById(req.user._id).select("name email");
-//       if (user) {
-//         changedBy = {
-//           _id: user._id,
-//           name: user.name,
-//           email: user.email,
-//         };
-//       }
-//     }
-
-//     // Loop over tracked fields and create history entries for changed ones
-//     for (const field of trackedFields) {
-//       let oldValue = oldLead[field];
-//       let newValue = updatedLead[field];
-
-//       // Handle assignTo separately since it's an ObjectId
-//       if (field === "assignTo") {
-//         oldValue = oldLead.assignTo?.name || "";
-//         newValue = updatedLead.assignTo?.name || "";
-//       }
-
-//       if (String(oldValue || "") !== String(newValue || "")) {
-//         await LeadHistory.create({
-//           leadId: id,
-//           changedBy,
-//           field,
-//           oldValue,
-//           newValue,
-//         });
-//       }
-//     }
-
-//     res.json({ success: true, message: "Lead updated successfully", data: updatedLead });
-//   } catch (err) {
-//     console.error("updateLead error:", err);
-//     res.status(500).json({ success: false, message: "Error updating lead" });
-//   }
-// };
 
 
 exports.getLeads = async (req, res) => {
@@ -261,24 +146,38 @@ exports.getLeads = async (req, res) => {
     }
 
     const userRole = req.user.role || "user";
-    const userName = req.user.name; // 🟢 match by name
+    const userName = req.user.name;
+
+    // ✅ Step 2 - Pagination setup
+    const page = parseInt(req.query.page) || 1; // Default page = 1
+    const limit = parseInt(req.query.limit) || 10; // Default limit = 10 per page
+    const skip = (page - 1) * limit;
+
     let filter = {};
 
-    // ✅ Step 2 - Only filter by `transferTo` for non-admin users
+    // ✅ Step 3 - Apply filter for non-admin users
     if (userRole !== "admin") {
       filter = { transferTo: userName };
     }
 
-    // ✅ Step 3 - Fetch filtered leads
+    // ✅ Step 4 - Count total leads (for pagination info)
+    const totalLeads = await Lead.countDocuments(filter);
+
+    // ✅ Step 5 - Fetch leads with pagination
     const leads = await Lead.find(filter)
       .populate("assignTo", "name email role")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
-    // ✅ Step 4 - Respond with results
+    // ✅ Step 6 - Respond with paginated data
     res.status(200).json({
       success: true,
       role: userRole,
       count: leads.length,
+      totalLeads,
+      totalPages: Math.ceil(totalLeads / limit),
+      currentPage: page,
       data: leads,
     });
   } catch (err) {
@@ -288,6 +187,45 @@ exports.getLeads = async (req, res) => {
       .json({ success: false, message: "Server error fetching leads" });
   }
 };
+
+
+// exports.getLeads = async (req, res) => {
+//   try {
+//     // ✅ Step 1 - Ensure the user is authenticated
+//     if (!req.user || !req.user.name) {
+//       return res
+//         .status(401)
+//         .json({ success: false, message: "Unauthorized access" });
+//     }
+
+//     const userRole = req.user.role || "user";
+//     const userName = req.user.name; // 🟢 match by name
+//     let filter = {};
+
+//     // ✅ Step 2 - Only filter by `transferTo` for non-admin users
+//     if (userRole !== "admin") {
+//       filter = { transferTo: userName };
+//     }
+
+//     // ✅ Step 3 - Fetch filtered leads
+//     const leads = await Lead.find(filter)
+//       .populate("assignTo", "name email role")
+//       .sort({ createdAt: -1 });
+
+//     // ✅ Step 4 - Respond with results
+//     res.status(200).json({
+//       success: true,
+//       role: userRole,
+//       count: leads.length,
+//       data: leads,
+//     });
+//   } catch (err) {
+//     console.error("❌ getLeads error:", err.message);
+//     res
+//       .status(500)
+//       .json({ success: false, message: "Server error fetching leads" });
+//   }
+// };
 
 
 exports.updateLead = async (req, res) => {
