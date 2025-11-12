@@ -7,7 +7,8 @@ const {
   uploadFile,
   getFolderContents,
   deleteItem,
-  updateItem, // ✅ Added update function
+  updateItem,
+  getAllFolders, // ✅ Added update function
 } = require("../controllers/learnController");
 
 // 📁 Create new folder
@@ -15,6 +16,9 @@ router.post("/folder", authMiddleware, createFolder);
 
 // 📤 Upload a file
 router.post("/file", authMiddleware, learnupload.single("file"), uploadFile);
+
+// 📁 Get all folders
+router.get("/all/folders", authMiddleware, getAllFolders);
 
 // 📂 Get root folder contents (when no folderId)
 router.get("/", authMiddleware, getFolderContents);

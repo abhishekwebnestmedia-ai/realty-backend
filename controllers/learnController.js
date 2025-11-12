@@ -228,3 +228,17 @@ exports.updateItem = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+
+
+// ✅ Get all folders (no matter where they are)
+exports.getAllFolders = async (req, res) => {
+  try {
+    const folders = await Learn.find({ type: "folder" })
+      .sort({ createdAt: -1 })
+      .populate("createdBy", "name email");
+    res.json({ success: true, data: folders });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
