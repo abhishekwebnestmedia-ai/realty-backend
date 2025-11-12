@@ -132,69 +132,6 @@ exports.assignLead = async (req, res) => {
 
 
 
-exports.getLeads = async (req, res) => {
-  try {
-    // ✅ Step 1 - Ensure the user is authenticated
-    if (!req.user || !req.user.name) {
-      return res
-        .status(401)
-        .json({ success: false, message: "Unauthorized access" });
-    }
-
-    const userRole = req.user.role || "user";
-    const userName = req.user.name; // 🟢 match by name
-    let filter = {};
-
-    // ✅ Step 2 - Only filter by `transferTo` for non-admin users
-    if (userRole !== "admin") {
-      filter = { transferTo: userName };
-    }
-
-    // ✅ Step 3 - Pagination setup
-    const page = parseInt(req.query.page) || 1; // default page = 1
-    const limit = parseInt(req.query.limit) || 10; // default 10 leads per page
-    const skip = (page - 1) * limit;
-
-    // ✅ Step 4 - Fetch filtered leads with pagination
-    const [leads, total] = await Promise.all([
-      Lead.find(filter)
-        .populate("assignTo", "name email role")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
-      Lead.countDocuments(filter),
-    ]);
-
-    // ✅ Step 5 - Respond with paginated results
-    res.status(200).json({
-      success: true,
-      role: userRole,
-      currentPage: page,
-      totalPages: Math.ceil(total / limit),
-      totalLeads: total,
-      perPage: limit,
-      count: leads.length,
-      data: leads,
-    });
-  } catch (err) {
-    console.error("❌ getLeads error:", err.message);
-    res.status(500).json({
-      success: false,
-      message: "Server error fetching leads",
-    });
-  }
-};
-
-
-
-
-
-
-
-
-
-
-
 // exports.getLeads = async (req, res) => {
 //   try {
 //     // ✅ Step 1 - Ensure the user is authenticated
@@ -213,25 +150,88 @@ exports.getLeads = async (req, res) => {
 //       filter = { transferTo: userName };
 //     }
 
-//     // ✅ Step 3 - Fetch filtered leads
-//     const leads = await Lead.find(filter)
-//       .populate("assignTo", "name email role")
-//       .sort({ createdAt: -1 });
+//     // ✅ Step 3 - Pagination setup
+//     const page = parseInt(req.query.page) || 1; // default page = 1
+//     const limit = parseInt(req.query.limit) || 10; // default 10 leads per page
+//     const skip = (page - 1) * limit;
 
-//     // ✅ Step 4 - Respond with results
+//     // ✅ Step 4 - Fetch filtered leads with pagination
+//     const [leads, total] = await Promise.all([
+//       Lead.find(filter)
+//         .populate("assignTo", "name email role")
+//         .sort({ createdAt: -1 })
+//         .skip(skip)
+//         .limit(limit),
+//       Lead.countDocuments(filter),
+//     ]);
+
+//     // ✅ Step 5 - Respond with paginated results
 //     res.status(200).json({
 //       success: true,
 //       role: userRole,
+//       currentPage: page,
+//       totalPages: Math.ceil(total / limit),
+//       totalLeads: total,
+//       perPage: limit,
 //       count: leads.length,
 //       data: leads,
 //     });
 //   } catch (err) {
 //     console.error("❌ getLeads error:", err.message);
-//     res
-//       .status(500)
-//       .json({ success: false, message: "Server error fetching leads" });
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error fetching leads",
+//     });
 //   }
 // };
+
+
+
+
+
+
+
+
+
+
+
+exports.getLeads = async (req, res) => {
+  try {
+    // ✅ Step 1 - Ensure the user is authenticated
+    if (!req.user || !req.user.name) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Unauthorized access" });
+    }
+
+    const userRole = req.user.role || "user";
+    const userName = req.user.name; // 🟢 match by name
+    let filter = {};
+
+    // ✅ Step 2 - Only filter by `transferTo` for non-admin users
+    if (userRole !== "admin") {
+      filter = { transferTo: userName };
+    }
+
+    // ✅ Step 3 - Fetch filtered leads
+    const leads = await Lead.find(filter)
+      .populate("assignTo", "name email role")
+      .sort({ createdAt: -1 });
+
+    // ✅ Step 4 - Respond with results
+    res.status(200).json({
+      success: true,
+      role: userRole,
+      count: leads.length,
+      data: leads,
+    });
+  } catch (err) {
+    console.error("❌ getLeads error:", err.message);
+    res
+      .status(500)
+      .json({ success: false, message: "Server error fetching leads" });
+  }
+};
 
 
 
