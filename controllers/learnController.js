@@ -1,4 +1,4 @@
-const Learn = require("../models/learn");
+const Learn = require("../models/learnModel");
 const path = require("path");
 const fs = require("fs");
 
@@ -56,6 +56,7 @@ exports.getFolderContents = async (req, res) => {
   }
 };
 
+
 // ✅ Delete Folder or File (Recursive)
 exports.deleteItem = async (req, res) => {
   try {
@@ -76,7 +77,7 @@ exports.deleteItem = async (req, res) => {
 
     // Delete file from disk if exists
     if (item.type === "file" && item.fileUrl) {
-      const filePath = path.join(__dirname, "../", item.fileUrl);
+      const filePath = path.join(__dirname, "..", item.fileUrl.replace(/^\//, ""));
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
 
@@ -86,3 +87,4 @@ exports.deleteItem = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
