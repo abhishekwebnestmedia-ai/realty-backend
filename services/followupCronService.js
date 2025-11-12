@@ -189,52 +189,106 @@ cron.schedule("* * * * *", async () => {
       followUp: { $gte: startStr, $lte: endStr },
     });
 
-    for (const lead of leads) {
-      const msg = `🔔 Reminder: Follow up with ${lead.customerName} (${lead.contactNumber}) , {
-        hour: "2-digit",
-        minute: "2-digit",
-      })}. Requirement: ${lead.requirement || "N/A"}.`;
+    // for (const lead of leads) {
+    //   const msg = `🔔 Reminder: Follow up with ${lead.customerName} (${lead.contactNumber}) ,  Requirement: ${lead.requirement || "N/A"}.`;
 
-      const exists = await Notification.findOne({
-        type: "Lead",
-        itemId: lead._id,
-        message: msg,
-        createdAt: { $gte: new Date(Date.now() - 2 * 60 * 1000) },
-      });
+    //   const exists = await Notification.findOne({
+    //     type: "Lead",
+    //     itemId: lead._id,
+    //     message: msg,
+    //     createdAt: { $gte: new Date(Date.now() - 2 * 60 * 1000) },
+    //   });
 
-      if (exists) {
-        console.log(`⏩ Skipped duplicate lead notification for ${lead.customerName}`);
-        continue;
-      }
+    //   if (exists) {
+    //     console.log(`⏩ Skipped duplicate lead notification for ${lead.customerName}`);
+    //     continue;
+    //   }
 
-      try {
-        const notif = await Notification.create({
-          type: "Lead",
-          itemId: lead._id,
-          message: msg,
-        });
+    //   try {
+    //     const notif = await Notification.create({
+    //       type: "Lead",
+    //       itemId: lead._id,
+    //       message: msg,
+    //     });
 
-        console.log(`✅ Lead notification created for ${lead.customerName}`);
+    //     console.log(`✅ Lead notification created for ${lead.customerName}`);
 
-        const payload = {
-          type: "Lead",
-          itemId: lead._id,
-          message: msg,
-          createdAt: notif.createdAt,
-        };
+    //     const payload = {
+    //       type: "Lead",
+    //       itemId: lead._id,
+    //       message: msg,
+    //       createdAt: notif.createdAt,
+    //     };
 
-        if (lead.assignedTo) {
-          emitNotification(lead.assignedTo.toString(), payload);
-        } else {
-          global.io.emit("notification_received", payload);
-        }
+    //     if (lead.assignedTo) {
+    //       emitNotification(lead.assignedTo.toString(), payload);
+    //     } else {
+    //       global.io.emit("notification_received", payload);
+    //     }
 
-      } catch (err) {
-        console.error("❌ Lead notification error:", err);
-      }
-    }
+    //   } catch (err) {
+    //     console.error("❌ Lead notification error:", err);
+    //   }
+    // }
 
     // ----------------- INVENTORIES -----------------
+    for (const lead of leads) {
+  // ✅ Use correct fields from Lead model
+  const msg = `🔔 Reminder: Follow up with ${lead.clientName} (${lead.contactNumber}). Requirement: ${lead.projects || lead.remark || "N/A"}.`;
+
+  // 🧠 Prevent duplicate notifications within 2 minutes
+  const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+
+  const exists = await Notification.findOne({
+    type: "Lead",
+    itemId: lead._id,
+    message: msg,
+    createdAt: { $gte: twoMinutesAgo },
+  });
+
+  if (exists) {
+    console.log(`⏩ Skipped duplicate lead notification for ${lead.clientName}`);
+    continue;
+  }
+
+  try {
+    // ✅ Create notification
+    const notif = await Notification.create({
+      type: "Lead",
+      itemId: lead._id,
+      message: msg,
+    });
+
+    console.log(`✅ Lead notification created for ${lead.clientName}`);
+
+    // 🕒 Convert timestamp to IST for payload
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const createdAtIST = new Date(notif.createdAt.getTime() + istOffset)
+      .toISOString()
+      .replace("T", " ")
+      .substring(0, 19);
+
+    const payload = {
+      type: "Lead",
+      itemId: lead._id,
+      message: msg,
+      createdAt: createdAtIST,
+    };
+
+    // 🔔 Emit notification (specific user or global)
+    if (lead.assignedTo) {
+      await emitNotification(lead.assignedTo.toString(), payload);
+    } else {
+      global.io.emit("notification_received", payload);
+    }
+
+  } catch (err) {
+    console.error(`❌ Lead notification error for ${lead.clientName}:`, err);
+  }
+}
+
+    
+    
     const inventories = await Inventory.find({
       followUpDate: { $gte: startStr, $lte: endStr },
     });
@@ -293,3 +347,6 @@ cron.schedule("* * * * *", async () => {
 });
 
 console.log("✅ Follow-up cron job initialized (runs every minute).");
+
+
+
