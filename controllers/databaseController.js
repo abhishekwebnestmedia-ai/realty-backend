@@ -16,6 +16,7 @@ exports.createDatabase = async (req, res) => {
       constructionType,
     } = req.body;
 
+    // Create new record
     const record = new Database({
       projectName,
       divisionName,
@@ -30,54 +31,123 @@ exports.createDatabase = async (req, res) => {
     });
 
     await record.save();
-    res.status(201).json({ success: true, message: "Database entry created", record });
+
+    // ✅ Populate createdBy with name and email
+    await record.populate("createdBy", "name email");
+
+    res.status(201).json({
+      success: true,
+      message: "Database entry created successfully ✅",
+      record,
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: "Error creating entry", error });
+    console.error("❌ Error creating database record:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error creating database entry",
+      error: error.message,
+    });
   }
 };
 
 // ✅ Get all database records
 exports.getAllDatabases = async (req, res) => {
   try {
-    const data = await Database.find().populate("createdBy", "name email");
-    res.status(200).json({ success: true, data });
+    const data = await Database.find()
+      .populate("createdBy", "name email")
+      .sort({ createdAt: -1 }); // latest first
+
+    res.status(200).json({
+      success: true,
+      count: data.length,
+      data,
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Error fetching data", error });
+    console.error("❌ Error fetching database records:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching database records",
+      error: error.message,
+    });
   }
 };
 
-// ✅ Get single record
+// ✅ Get single record by ID
 exports.getDatabaseById = async (req, res) => {
   try {
-    const record = await Database.findById(req.params.id);
-    if (!record)
-      return res.status(404).json({ success: false, message: "Record not found" });
+    const record = await Database.findById(req.params.id).populate(
+      "createdBy",
+      "name email"
+    );
+
+    if (!record) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Record not found ❌" });
+    }
 
     res.status(200).json({ success: true, record });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Error fetching record", error });
+    console.error("❌ Error fetching database record:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching database record",
+      error: error.message,
+    });
   }
 };
 
-// ✅ Update record
+// ✅ Update record by ID
 exports.updateDatabase = async (req, res) => {
   try {
     const updated = await Database.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
+    }).populate("createdBy", "name email");
+
+    if (!updated) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Record not found ❌" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Database entry updated successfully ✅",
+      updated,
     });
-    res.status(200).json({ success: true, message: "Database updated", updated });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Error updating record", error });
+    console.error("❌ Error updating database record:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error updating database record",
+      error: error.message,
+    });
   }
 };
 
-// ✅ Delete record
+// ✅ Delete record by ID
 exports.deleteDatabase = async (req, res) => {
   try {
-    await Database.findByIdAndDelete(req.params.id);
-    res.status(200).json({ success: true, message: "Record deleted successfully" });
+    const deleted = await Database.findByIdAndDelete(req.params.id);
+
+    if (!deleted) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Record not found ❌" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Database record deleted successfully ✅",
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Error deleting record", error });
+    console.error("❌ Error deleting database record:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error deleting database record",
+      error: error.message,
+    });
   }
 };
+
+
