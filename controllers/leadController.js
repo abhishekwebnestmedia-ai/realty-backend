@@ -768,29 +768,20 @@ exports.createFrom99acres = async (req, res) => {
 
 exports.getUnassignedLeads = async (req, res) => {
   try {
-    // ✅ Step 1 - Ensure user is authenticated
-    if (!req.user || !req.user.name) {
-      return res.status(401).json({ success: false, message: "Unauthorized access" });
-    }
-
-    // ✅ Step 2 - Filter leads where assignTo is not set
-    const unassignedFilter = {
+    // ✅ Use $expr to safely check assignTo field without casting
+    const unassignedLeads = await Lead.find({
       $or: [
         { assignTo: { $exists: false } },
         { assignTo: null },
-        { assignTo: { $in: [null, ""] } }
+        { $expr: { $eq: ["$assignTo", ""] } } // safely compare string value
       ],
-    };
-
-    // ✅ Step 3 - Fetch leads, populate assignTo for clarity (though null)
-    const unassignedLeads = await Lead.find(unassignedFilter)
+    })
       .populate("assignTo", "name email role")
       .sort({ createdAt: -1 });
 
-    // ✅ Step 4 - Response
     res.status(200).json({
       success: true,
-      role: req.user.role || "user",
+      role: req.user?.role || "user",
       count: unassignedLeads.length,
       data: unassignedLeads,
     });
