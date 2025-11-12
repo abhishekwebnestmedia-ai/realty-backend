@@ -132,10 +132,6 @@ exports.assignLead = async (req, res) => {
 
 
 
-
-
-
-
 exports.getLeads = async (req, res) => {
   try {
     // ✅ Step 1 - Ensure the user is authenticated
@@ -146,51 +142,53 @@ exports.getLeads = async (req, res) => {
     }
 
     const userRole = req.user.role || "user";
-    const userName = req.user.name;
-
-    // ✅ Step 2 - Pagination setup
-    const page = parseInt(req.query.page, 10) || 1; // Default page = 1
-    const limit = parseInt(req.query.limit, 10) || 10; // Default limit = 10 per page
-    const skip = (page - 1) * limit;
-
-    // ✅ Step 3 - Filter setup
+    const userName = req.user.name; // 🟢 match by name
     let filter = {};
 
-    // Non-admins only see leads transferred to them
+    // ✅ Step 2 - Only filter by `transferTo` for non-admin users
     if (userRole !== "admin") {
       filter = { transferTo: userName };
     }
 
-    // ✅ Step 4 - Count total leads before pagination
-    const totalLeads = await Lead.countDocuments(filter);
+    // ✅ Step 3 - Pagination setup
+    const page = parseInt(req.query.page) || 1; // default page = 1
+    const limit = parseInt(req.query.limit) || 10; // default 10 leads per page
+    const skip = (page - 1) * limit;
 
-    // ✅ Step 5 - Fetch paginated leads
-    const leads = await Lead.find(filter)
-      .populate("assignTo", "name email role")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean(); // ⚡ Faster & ensures skip/limit applied properly
+    // ✅ Step 4 - Fetch filtered leads with pagination
+    const [leads, total] = await Promise.all([
+      Lead.find(filter)
+        .populate("assignTo", "name email role")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Lead.countDocuments(filter),
+    ]);
 
-    // ✅ Step 6 - Respond with paginated data
-    return res.status(200).json({
+    // ✅ Step 5 - Respond with paginated results
+    res.status(200).json({
       success: true,
       role: userRole,
-      message: "Leads fetched successfully",
-      totalLeads,
-      totalPages: Math.ceil(totalLeads / limit),
       currentPage: page,
+      totalPages: Math.ceil(total / limit),
+      totalLeads: total,
       perPage: limit,
       count: leads.length,
       data: leads,
     });
   } catch (err) {
     console.error("❌ getLeads error:", err.message);
-    return res
-      .status(500)
-      .json({ success: false, message: "Server error fetching leads" });
+    res.status(500).json({
+      success: false,
+      message: "Server error fetching leads",
+    });
   }
 };
+
+
+
+
+
 
 
 
@@ -231,6 +229,8 @@ exports.getLeads = async (req, res) => {
 //       .json({ success: false, message: "Server error fetching leads" });
 //   }
 // };
+
+
 
 
 exports.updateLead = async (req, res) => {
