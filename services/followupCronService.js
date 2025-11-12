@@ -231,10 +231,12 @@ cron.schedule("* * * * *", async () => {
     //   }
     // }
 
+
+
     // ----------------- INVENTORIES -----------------
     for (const lead of leads) {
   // ✅ Use correct fields from Lead model
-  const msg = `🔔 Reminder: Follow up with ${lead.clientName} (${lead.contactNumber}). Requirement: ${lead.projects || lead.remark || "N/A"}.`;
+  const msg = `🔔 Reminder: Follow up with ${lead.customerName} (${lead.contactNumber}). Requirement: ${lead.projects || lead.remark || "N/A"}.`;
 
   // 🧠 Prevent duplicate notifications within 2 minutes
   const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
@@ -347,6 +349,8 @@ cron.schedule("* * * * *", async () => {
 });
 
 console.log("✅ Follow-up cron job initialized (runs every minute).");
+
+
 
 
 
