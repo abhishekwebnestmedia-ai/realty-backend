@@ -6,7 +6,7 @@ const ProjectType = require("../models/project"); // projectTypeSchema
 
 const Inventory = require('../models/inventryModel');
 const Notification = require('../models/notification');
-const { emitNotification } = require('../utils/socketEmitter');
+const { emitToAdmins } = require('../utils/socketEmitter');
 
 
 
@@ -284,7 +284,7 @@ exports.addUnit = async (req, res) => {
           changedBy: "admin"
         });
 
-        emitNotification("admin", notif.toJSON());
+        emitToAdmins(notif.toJSON());
       }
     }
 
@@ -375,14 +375,14 @@ exports.approveUnit = async (req, res) => {
 
     // Send success notification
     const msg = `Unit ${foundUnit.unitNumber} approved and copied to Inventory.`;
-    await Notification.create({
+    const notif = await Notification.create({
       type: "Inventory",
       itemId: newInv._id,
       message: msg,
       changedBy: req.user?.name || "admin"
     });
 
-    emitNotification("admin", { message: msg });
+    emitToAdmins(notif.toJSON());
 
     return res.json({
       success: true,
