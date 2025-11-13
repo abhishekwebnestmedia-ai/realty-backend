@@ -4,6 +4,11 @@ const ProjectType = require("../models/project"); // projectTypeSchema
 
 
 
+const Inventory = require('../models/inventryModel');
+const Notification = require('../models/notification');
+const { emitNotification } = require('../utils/socketEmitter');
+
+
 
 // ✅ Step 1 - Create ProjectType (root)
 exports.createProjectType = async (req, res) => {
@@ -777,4 +782,101 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
 
 
 
+
+
+
+
+
+exports.approveUnit = async (req, res) => {
+  try {
+    const {
+      category, projectcategory,
+      cityId, divisionId, sectorId, projectId, towerId, unitId
+    } = req.params;
+
+    const proj = await ProjectType.findOne({ category, projectcategory });
+    if (!proj) return res.status(404).json({ error: 'ProjectType not found' });
+
+    // find unit and context
+    let foundUnit = null, sectorName = '', projectName = '', towerName = '';
+
+    proj.cities.forEach(city => {
+      if (city._id.toString() !== cityId) return;
+      city.divisions.forEach(div => {
+        if (div._id.toString() !== divisionId) return;
+        div.sectors.forEach(sec => {
+          if (sec._id.toString() !== sectorId) return;
+          sectorName = sec.sectorName;
+          sec.projects.forEach(p => {
+            if (p._id.toString() !== projectId) return;
+            projectName = p.projectName;
+            p.towers.forEach(t => {
+              if (t._id.toString() !== towerId) return;
+              towerName = t.towerName;
+              t.units.forEach(u => {
+                if (u._id.toString() === unitId) foundUnit = u;
+              });
+            });
+          });
+        });
+      });
+    });
+
+    if (!foundUnit) return res.status(404).json({ error: 'Unit not found' });
+    if (foundUnit.status !== 'Interested in calling')
+      return res.status(400).json({ error: 'Unit not marked Interested in calling' });
+    if (foundUnit.isApproved)
+      return res.status(400).json({ error: 'Unit already approved' });
+
+    // mark approved (so UI shows it)
+    foundUnit.isApproved = true;
+    await proj.save(); // persists isApproved flag only
+
+    // COPY to Inventory (do NOT remove from Project)
+    const invPayload = {
+      sellerName: foundUnit.ownerName || '',
+      inventoryType: 'Sales',
+      sector: sectorName,
+      unitNo: foundUnit.unitNumber,
+      towerNo: towerName,
+      Project: [projectName],
+      contactNumbers: foundUnit.mobileNumbers || [],
+      email: foundUnit.email || '',
+      remarks: foundUnit.remarks || '',
+      capturedBy: req.user?.name || 'Admin'
+    };
+
+    // Optionally check duplicates: same unitNo + towerNo + Project
+    const existing = await Inventory.findOne({
+      unitNo: invPayload.unitNo,
+      towerNo: invPayload.towerNo,
+      Project: invPayload.Project
+    });
+
+    if (existing) {
+      // still notify admin and return existing inventory
+      const notifMsg = `Unit ${foundUnit.unitNumber} approved; inventory already exists.`;
+      const notif = await Notification.create({
+        type: 'Inventory', itemId: existing._id, message: notifMsg, changedBy: req.user?.name || 'admin'
+      });
+      emitNotification('admin', notif.toJSON());
+      return res.json({ message: 'Unit approved; inventory already existed', inventory: existing });
+    }
+
+    const newInv = await Inventory.create(invPayload);
+
+    // notify admin
+    const notifMsg = `Unit ${foundUnit.unitNumber} approved and copied to inventory.`;
+    const notif = await Notification.create({
+      type: 'Inventory', itemId: newInv._id, message: notifMsg, changedBy: req.user?.name || 'admin'
+    });
+
+    emitNotification('admin', notif.toJSON());
+    return res.json({ message: 'Unit approved and copied to inventory', inventory: newInv, notification: notif });
+
+  } catch (err) {
+    console.error('approveUnit err', err);
+    return res.status(500).json({ error: err.message });
+  }
+};
 

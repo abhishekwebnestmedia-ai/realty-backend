@@ -4,6 +4,7 @@ const express = require("express");
 const router = express.Router();
 const projectController = require("../controllers/projectController");
 const authMiddleware = require("../middleware/authmiddleware");
+const { approveUnit } = require("../controllers/projectController");
 
 
 // Step 1 - Create ProjectType (root)
@@ -297,6 +298,21 @@ router.post(
   authMiddleware,
   projectController.mergeOrCreateHierarchy
 );
+
+const requireAdmin = (req, res, next) => {
+  if (!req.user || req.user.role !== "admin") {
+    return res.status(403).json({ message: "Access denied. Admin only." });
+  }
+  next();
+};
+
+router.post(
+  '/approve-unit/:category/:projectcategory/:cityId/:divisionId/:sectorId/:projectId/:towerId/:unitId',
+  authMiddleware,   // must be logged in
+  requireAdmin,     // must be admin
+  approveUnit       // controller function
+);
+
 
 
 module.exports = router;
