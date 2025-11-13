@@ -231,7 +231,7 @@ exports.addUnit = async (req, res) => {
 
     const unitData = req.body;
 
-    // STEP 1 — Add unit in DB
+    // Insert Unit
     const result = await ProjectType.updateOne(
       { category, projectcategory },
       {
@@ -254,21 +254,18 @@ exports.addUnit = async (req, res) => {
     if (result.modifiedCount === 0)
       return res.status(404).json({ error: "Tower not found" });
 
-    // STEP 2 — Re-fetch project to locate inserted unit
+    // Fetch inserted unit
     const updated = await ProjectType.findOne({ category, projectcategory });
     const city = updated.cities.id(cityId);
     const division = city.divisions.id(divisionId);
     const sector = division.sectors.id(sectorId);
     const project = sector.projects.id(projectId);
     const tower = project.towers.id(towerId);
-
     const addedUnit = tower.units[tower.units.length - 1];
 
-    // STEP 3 — ONLY ADMIN will receive notification
+    // Notify Admin if Interested in calling
     if (addedUnit.status === "Interested in calling") {
-
-      const message = `New unit ${addedUnit.unitNumber} added in project "${project.projectName}", tower "${tower.towerName}". Status = Interested in calling. Approval required.`;
-
+      const message = `New unit ${addedUnit.unitNumber} created with status "Interested in calling". Approve to copy into Inventory?`;
       const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
 
       const exists = await Notification.findOne({
@@ -286,15 +283,11 @@ exports.addUnit = async (req, res) => {
           changedBy: "admin"
         });
 
-        // SEND ONLY TO ADMIN
         emitNotification("admin", notif.toJSON());
-
-        console.log("📢 Admin notified: Approval required for new unit");
       }
     }
 
     res.json({ message: "Unit added successfully", unit: addedUnit });
-
   } catch (err) {
     console.error("addUnit error:", err);
     res.status(500).json({ error: err.message });
@@ -303,19 +296,30 @@ exports.addUnit = async (req, res) => {
 
 
 
+// =====================================================
+// 2️⃣ approveUnit — YES/NO confirmation
+// =====================================================
 exports.approveUnit = async (req, res) => {
   try {
+    const confirm = req.body.confirm;
+
+    if (!confirm)
+      return res.status(400).json({ message: "Please confirm: yes or no" });
+
+    if (confirm === "no")
+      return res.json({ message: "Approval cancelled. Unit stays in Projects." });
+
     const {
       category, projectcategory,
       cityId, divisionId, sectorId, projectId, towerId, unitId
     } = req.params;
 
     const proj = await ProjectType.findOne({ category, projectcategory });
-    if (!proj) return res.status(404).json({ error: 'ProjectType not found' });
+    if (!proj) return res.status(404).json({ error: "ProjectType not found" });
 
-    let foundUnit = null, sectorName = '', projectName = '', towerName = '';
+    let foundUnit = null, projectName = "", sectorName = "", towerName = "";
 
-    // Locate the unit deeply nested
+    // Deep search
     proj.cities.forEach(city => {
       if (city._id.toString() !== cityId) return;
       city.divisions.forEach(div => {
@@ -338,70 +342,57 @@ exports.approveUnit = async (req, res) => {
       });
     });
 
-    if (!foundUnit) return res.status(404).json({ error: 'Unit not found' });
-    if (foundUnit.status !== 'Interested in calling')
-      return res.status(400).json({ error: 'Unit not marked Interested in calling' });
-    if (foundUnit.isApproved)
-      return res.status(400).json({ error: 'Unit already approved' });
+    if (!foundUnit)
+      return res.status(404).json({ error: "Unit not found" });
 
-    // Mark approved
+    if (foundUnit.isApproved)
+      return res.status(400).json({ error: "Unit already approved" });
+
+    if (foundUnit.status !== "Interested in calling")
+      return res.status(400).json({ error: "Unit is not Interested in calling" });
+
+    // Approve
     foundUnit.isApproved = true;
     await proj.save();
 
     // Copy to Inventory
-    const invPayload = {
-      sellerName: foundUnit.ownerName || '',
-      inventoryType: 'Sales',
+    const payload = {
+      sellerName: foundUnit.ownerName || "",
+      inventoryType: "Sales",
       sector: sectorName,
       unitNo: foundUnit.unitNumber,
       towerNo: towerName,
       Project: [projectName],
       contactNumbers: foundUnit.mobileNumbers || [],
-      email: foundUnit.email || '',
-      remarks: foundUnit.remarks || '',
-      capturedBy: req.user?.name || 'Admin'
+      email: foundUnit.email || "",
+      remarks: foundUnit.remarks || "",
+      capturedBy: req.user?.name || "Admin"
     };
 
-    // Check duplicate
-    const existing = await Inventory.findOne({
-      unitNo: invPayload.unitNo,
-      towerNo: invPayload.towerNo,
-      Project: invPayload.Project
+    const newInv = await Inventory.create(payload);
+
+    // Send success notification
+    const msg = `Unit ${foundUnit.unitNumber} approved and copied to Inventory.`;
+    await Notification.create({
+      type: "Inventory",
+      itemId: newInv._id,
+      message: msg,
+      changedBy: req.user?.name || "admin"
     });
 
-    if (existing) {
-      const msg = `Unit ${foundUnit.unitNumber} approved; inventory already exists.`;
-      const notif = await Notification.create({
-        type: 'Inventory', itemId: existing._id, message: msg, changedBy: req.user?.name || 'admin'
-      });
+    emitNotification("admin", { message: msg });
 
-      emitNotification("admin", notif.toJSON());
-      return res.json({ message: 'Inventory already existed', inventory: existing });
-    }
-
-    // Create new inventory
-    const newInv = await Inventory.create(invPayload);
-
-    // Notify admin
-    const msg = `Unit ${foundUnit.unitNumber} approved and copied to inventory.`;
-    const notif = await Notification.create({
-      type: 'Inventory', itemId: newInv._id, message: msg, changedBy: req.user?.name || 'admin'
-    });
-
-    emitNotification("admin", notif.toJSON());
-
-    res.json({
-      message: "Unit approved & copied to inventory",
-      inventory: newInv,
-      notification: notif
+    return res.json({
+      success: true,
+      message: "Unit approved & copied to Inventory",
+      inventory: newInv
     });
 
   } catch (err) {
-    console.error('approveUnit error:', err);
+    console.error("approveUnit error:", err);
     res.status(500).json({ error: err.message });
   }
 };
-
 
 
 // ✅ Step 8 - Update Unit (uses $set)
