@@ -3,6 +3,7 @@ const Inventory = require('../models/inventryModel');
 const InventoryHistory = require("../models/inventryHistory");
 const User = require('../models/user');
 const Notification = require("../models/notification");
+const { emitToAdmins } = require('../utils/socketEmitter');
 
 
 const mongoose = require("mongoose");
@@ -211,21 +212,18 @@ exports.updateInventry = async (req, res) => {
         if (field === "assignTo") {
           try {
             const msg = `👤 Inventory "${oldRecord.sellerName}" was reassigned to ${newValue || "N/A"} by ${changedBy?.name || "System"}`;
-            await Notification.create({
+            const notif = await Notification.create({
               type: "Inventory",
               itemId: id,
               message: msg,
               changedBy: changedBy?.name || "System",
             });
 
-            if (global.io) {
-              global.io.emit("inventory_update_notification", {
-                type: "Inventory",
-                inventoryId: id,
-                message: msg,
-                changedBy: changedBy?.name || "System",
-              });
-            }
+            // Emit to admin room
+            emitToAdmins({
+              ...notif.toJSON(),
+              inventoryId: id,
+            });
           } catch (notifErr) {
             console.warn("⚠️ Notification creation failed (inventory):", notifErr.message);
           }

@@ -6,6 +6,7 @@ const User = require('../models/user');
 const mongoose = require("mongoose");
 const LeadHistory = require("../models/leadHistory");
 const Notification = require("../models/notification");
+const { emitToAdmins } = require('../utils/socketEmitter');
 
 
 
@@ -302,40 +303,34 @@ exports.updateLead = async (req, res) => {
         try {
           if (field === "assignTo") {
             const msg = `👤 Lead "${oldLead.customerName}" was reassigned to ${newValue || "N/A"} by ${changedBy?.name || "System"}`;
-            await Notification.create({
+            const notif = await Notification.create({
               type: "Lead",
               itemId: id,
               message: msg,
               changedBy: changedBy?.name || "System",
             });
 
-            if (global.io) {
-              global.io.emit("lead_update_notification", {
-                type: "Lead",
-                leadId: id,
-                message: msg,
-                changedBy: changedBy?.name || "System",
-              });
-            }
+            // Emit to admin room
+            emitToAdmins({
+              ...notif.toJSON(),
+              leadId: id,
+            });
           }
 
           if (field === "status") {
             const msg = `🔄 Lead "${oldLead.customerName}" status changed from ${oldValue || "N/A"} → ${newValue} by ${changedBy?.name || "System"}`;
-            await Notification.create({
+            const notif = await Notification.create({
               type: "Lead",
               itemId: id,
               message: msg,
               changedBy: changedBy?.name || "System",
             });
 
-            if (global.io) {
-              global.io.emit("lead_update_notification", {
-                type: "Lead",
-                leadId: id,
-                message: msg,
-                changedBy: changedBy?.name || "System",
-              });
-            }
+            // Emit to admin room
+            emitToAdmins({
+              ...notif.toJSON(),
+              leadId: id,
+            });
           }
         } catch (notifErr) {
           console.warn("⚠️ Notification creation failed (lead):", notifErr.message);
@@ -626,20 +621,18 @@ exports.createFrom99acres = async (req, res) => {
 
     // ✅ Optional: Create notification for your CRM
     try {
-      await Notification.create({
+      const notif = await Notification.create({
         type: "Lead",
         itemId: lead._id,
         message: `📥 New lead from 99acres: ${lead.customerName}`,
         changedBy: "99acres",
       });
 
-      if (global.io) {
-        global.io.emit("lead_update_notification", {
-          type: "Lead",
-          leadId: lead._id,
-          message: `📥 New 99acres lead: ${lead.customerName}`,
-        });
-      }
+      // Emit to admin room
+      emitToAdmins({
+        ...notif.toJSON(),
+        leadId: lead._id,
+      });
     } catch (notifErr) {
       console.warn("⚠️ Notification failed:", notifErr.message);
     }
