@@ -96,16 +96,18 @@ io.on("connection", (socket) => {
   console.log(`✅ Socket connected: ${socket.id}`);
 
   //
-  // 🧠 register_user — accepts string OR object
+  // 🧠 register_user — accepts string OR object with userId + role
   //
   socket.on("register_user", (data) => {
     let userId = null;
+    let role = null;
 
     // Accept string or object
     if (typeof data === "string") {
       userId = data;
     } else if (data && typeof data === "object") {
       userId = data.userId || data._id || data.id;
+      role = data.role;
     }
 
     if (!userId) {
@@ -115,21 +117,31 @@ io.on("connection", (socket) => {
 
     socket.join(userId); // optional personal room
     socket.join(`notif_${userId}`); // notification room
-    console.log(`👤 User ${userId} joined rooms: ${userId}, notif_${userId}`);
+    
+    // ✅ Join admin room if user is admin
+    if (role === 'admin') {
+      socket.join('notif_admin');
+      console.log(`👑 Admin ${userId} joined rooms: ${userId}, notif_${userId}, notif_admin`);
+    } else {
+      console.log(`👤 User ${userId} joined rooms: ${userId}, notif_${userId}`);
+    }
 
     // confirm registration
     socket.emit("registered_success", { message: `Joined notif_${userId}` });
   });
 
   //
-  // 🔔 subscribe_notifications — optional explicit subscription
+  // 🔔 subscribe_notifications — optional explicit subscription with role support
   //
   socket.on("subscribe_notifications", (data) => {
     let userId = null;
+    let role = null;
+    
     if (typeof data === "string") {
       userId = data;
     } else if (data && typeof data === "object") {
       userId = data.userId || data._id || data.id;
+      role = data.role;
     }
 
     if (!userId) {
@@ -138,7 +150,14 @@ io.on("connection", (socket) => {
     }
 
     socket.join(`notif_${userId}`);
-    console.log(`🔔 User ${userId} subscribed to notif_${userId}`);
+    
+    // ✅ Join admin room if user is admin
+    if (role === 'admin') {
+      socket.join('notif_admin');
+      console.log(`🔔👑 Admin ${userId} subscribed to notif_${userId} and notif_admin`);
+    } else {
+      console.log(`🔔 User ${userId} subscribed to notif_${userId}`);
+    }
   });
 
   //
@@ -189,7 +208,7 @@ io.on("connection", (socket) => {
 require("./services/followupCronService");
 
 // ----------------------------------------
-// ✅ TEST SOCKET ENDPOINT (manual trigger)
+// ✅ TEST SOCKET ENDPOINTS (manual trigger)
 // ----------------------------------------
 app.get("/api/test-socket", (req, res) => {
   res.set("Cache-Control", "no-store"); // prevents 304 caching
@@ -210,6 +229,33 @@ app.get("/api/test-socket", (req, res) => {
   res
     .status(500)
     .json({ success: false, message: "Socket.IO not initialized ❌" });
+});
+
+// ✅ Test admin notifications specifically
+app.get("/api/test-admin-notification", (req, res) => {
+  res.set("Cache-Control", "no-store");
+
+  if (global.io) {
+    console.log("📢👑 Admin notification test triggered");
+    const payload = {
+      type: "Admin Test",
+      message: "Test notification for admins only - from /api/test-admin-notification",
+      createdAt: new Date().toISOString(),
+    };
+    
+    global.io.to("notif_admin").emit("notification_received", payload);
+    
+    return res.json({
+      success: true,
+      message: "Admin notification emitted to notif_admin room ✅",
+      payload,
+    });
+  }
+
+  res.status(500).json({ 
+    success: false, 
+    message: "Socket.IO not initialized ❌" 
+  });
 });
 
 // ----------------------------------------

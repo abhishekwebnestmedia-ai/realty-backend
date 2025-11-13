@@ -2,7 +2,7 @@ const cron = require("node-cron");
 const Lead = require("../models/leadModel");
 const Inventory = require("../models/inventryModel");
 const Notification = require("../models/notification");
-const { emitNotification } = require("../utils/socketEmitter");
+const { emitNotification, emitToAdmins } = require("../utils/socketEmitter");
 
 // 🔹 Convert JS Date → "YYYY-MM-DDTHH:mm:ss+05:30" (IST)
 function toISTISOString(date) {
@@ -78,11 +78,13 @@ cron.schedule("* * * * *", async () => {
       createdAt: createdAtIST,
     };
 
-    // 🔔 Emit notification (specific user or global)
+    // 🔔 Emit notification (specific user or to admins if unassigned)
     if (lead.assignedTo) {
-      await emitNotification(lead.assignedTo.toString(), payload);
+      await emitNotification(lead.assignedTo.toString(), payload, { emitToAdmin: true });
     } else {
-      global.io.emit("notification_received", payload);
+      // ✅ Unassigned leads go to admins
+      emitToAdmins(payload);
+      console.log(`📩 Unassigned lead notification sent to admins`);
     }
 
   } catch (err) {
@@ -131,9 +133,11 @@ cron.schedule("* * * * *", async () => {
         };
 
         if (inv.assignedTo) {
-          emitNotification(inv.assignedTo.toString(), payload);
+          emitNotification(inv.assignedTo.toString(), payload, { emitToAdmin: true });
         } else {
-          global.io.emit("notification_received", payload);
+          // ✅ Unassigned inventory notifications go to admins
+          emitToAdmins(payload);
+          console.log(`📩 Unassigned inventory notification sent to admins`);
         }
 
       } catch (err) {
