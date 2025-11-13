@@ -264,6 +264,7 @@ exports.addUnit = async (req, res) => {
     const addedUnit = tower.units[tower.units.length - 1];
 
     // Notify Admin if Interested in calling
+   
     if (addedUnit.status === "Interested in calling") {
       const message = `New unit ${addedUnit.unitNumber} created with status "Interested in calling". Approve to copy into Inventory?`;
       const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
@@ -299,6 +300,7 @@ exports.addUnit = async (req, res) => {
 // =====================================================
 // 2️⃣ approveUnit — YES/NO confirmation
 // =====================================================
+
 exports.approveUnit = async (req, res) => {
   try {
     const confirm = req.body.confirm;

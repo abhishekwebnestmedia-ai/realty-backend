@@ -30,47 +30,6 @@ cron.schedule("* * * * *", async () => {
       followUp: { $gte: startStr, $lte: endStr },
     });
 
-    // for (const lead of leads) {
-    //   const msg = `🔔 Reminder: Follow up with ${lead.customerName} (${lead.contactNumber}) ,  Requirement: ${lead.requirement || "N/A"}.`;
-
-    //   const exists = await Notification.findOne({
-    //     type: "Lead",
-    //     itemId: lead._id,
-    //     message: msg,
-    //     createdAt: { $gte: new Date(Date.now() - 2 * 60 * 1000) },
-    //   });
-
-    //   if (exists) {
-    //     console.log(`⏩ Skipped duplicate lead notification for ${lead.customerName}`);
-    //     continue;
-    //   }
-
-    //   try {
-    //     const notif = await Notification.create({
-    //       type: "Lead",
-    //       itemId: lead._id,
-    //       message: msg,
-    //     });
-
-    //     console.log(`✅ Lead notification created for ${lead.customerName}`);
-
-    //     const payload = {
-    //       type: "Lead",
-    //       itemId: lead._id,
-    //       message: msg,
-    //       createdAt: notif.createdAt,
-    //     };
-
-    //     if (lead.assignedTo) {
-    //       emitNotification(lead.assignedTo.toString(), payload);
-    //     } else {
-    //       global.io.emit("notification_received", payload);
-    //     }
-
-    //   } catch (err) {
-    //     console.error("❌ Lead notification error:", err);
-    //   }
-    // }
 
 
 

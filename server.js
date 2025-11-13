@@ -44,6 +44,7 @@ app.use(morgan("dev"));
 // ----------------------------------------
 // ✅ Routes
 // ----------------------------------------
+
 app.use("/api/auth", require("./routes/authroute"));
 app.use("/api/submitform", require("./routes/contactroute"));
 app.use("/api/realtleads", require("./routes/leadroute"));
@@ -59,6 +60,7 @@ app.use("/api/card", require("./routes/card"));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/api/learn", require("./routes/learnroute"));
 app.use("/api/database", require("./routes/databaseRoutes"));
+
 
 
 // ----------------------------------------
@@ -231,4 +233,3 @@ server
 
   
 
-  
