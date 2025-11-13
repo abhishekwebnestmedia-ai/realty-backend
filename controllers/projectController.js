@@ -263,8 +263,7 @@ exports.addUnit = async (req, res) => {
     const tower = project.towers.id(towerId);
     const addedUnit = tower.units[tower.units.length - 1];
 
-    // Notify Admin if Interested in calling
-   
+    // 🔔 Auto Notification (Schema will emit real-time)
     if (addedUnit.status === "Interested in calling") {
       const message = `New unit ${addedUnit.unitNumber} created with status "Interested in calling". Approve to copy into Inventory?`;
       const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
@@ -277,18 +276,18 @@ exports.addUnit = async (req, res) => {
       });
 
       if (!exists) {
-        const notif = await Notification.create({
+        await Notification.create({
           type: "Inventory",
           itemId: addedUnit._id,
           message,
           changedBy: "admin"
         });
-
-        emitNotification("admin", notif.toJSON());
+        // ❌ Removed manual emitNotification call
       }
     }
 
     res.json({ message: "Unit added successfully", unit: addedUnit });
+
   } catch (err) {
     console.error("addUnit error:", err);
     res.status(500).json({ error: err.message });
@@ -297,9 +296,6 @@ exports.addUnit = async (req, res) => {
 
 
 
-// =====================================================
-// 2️⃣ approveUnit — YES/NO confirmation
-// =====================================================
 
 exports.approveUnit = async (req, res) => {
   try {
@@ -373,7 +369,7 @@ exports.approveUnit = async (req, res) => {
 
     const newInv = await Inventory.create(payload);
 
-    // Send success notification
+    // 👍 Auto-emitted by schema
     const msg = `Unit ${foundUnit.unitNumber} approved and copied to Inventory.`;
     await Notification.create({
       type: "Inventory",
@@ -382,7 +378,7 @@ exports.approveUnit = async (req, res) => {
       changedBy: req.user?.name || "admin"
     });
 
-    emitNotification("admin", { message: msg });
+    // ❌ Removed manual emitNotification
 
     return res.json({
       success: true,
@@ -395,6 +391,9 @@ exports.approveUnit = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+
+
 
 
 // ✅ Step 8 - Update Unit (uses $set)
