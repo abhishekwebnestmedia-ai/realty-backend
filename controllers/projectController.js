@@ -319,6 +319,8 @@ exports.addTower = async (req, res) => {
 
 exports.addUnit = async (req, res) => {
   try {
+    console.log("\x1b[33m%s\x1b[0m", "➡️ addUnit() triggered");
+
     const {
       category,
       projectcategory,
@@ -331,7 +333,9 @@ exports.addUnit = async (req, res) => {
 
     const unitData = req.body;
 
-    // --- Normalize status ----
+    console.log("\x1b[36m%s\x1b[0m", "🛠 Received unit payload:", unitData);
+
+    // Normalize status
     const allowedStatuses = [
       "Vacant",
       "Rental",
@@ -346,7 +350,9 @@ exports.addUnit = async (req, res) => {
         ) || "Vacant";
     }
 
-    // --- Insert Unit ---
+    console.log("\x1b[36m%s\x1b[0m", "🎯 Normalized Status:", unitData.status);
+
+    // Insert Unit
     await ProjectType.updateOne(
       { category, projectcategory },
       {
@@ -366,7 +372,9 @@ exports.addUnit = async (req, res) => {
       }
     );
 
-    // ---- Fetch newly created unit ----
+    console.log("\x1b[32m%s\x1b[0m", "✔️ Unit successfully inserted.");
+
+    // Fetch newly added unit
     const updatedDoc = await ProjectType.findOne({ category, projectcategory });
 
     const addedUnit =
@@ -377,10 +385,11 @@ exports.addUnit = async (req, res) => {
         .towers.id(towerId)
         .units.slice(-1)[0];
 
-    console.log("🔥 STORED STATUS:", addedUnit.status);
+    console.log("\x1b[35m%s\x1b[0m", "📌 Stored Unit Status:", addedUnit.status);
 
-    // ---- Create Notification ONLY if status is "Interested in calling" ----
+    // Notification condition check
     if (addedUnit.status.trim().toLowerCase() === "interested in calling") {
+      console.log("\x1b[32m%s\x1b[0m", "🟢 Status matched → Creating notification");
 
       const message = `New unit ${addedUnit.unitNumber} created and marked "Interested in calling".`;
 
@@ -392,40 +401,29 @@ exports.addUnit = async (req, res) => {
           changedBy: req.user?.name || "admin"
         });
 
-        console.log("📢 Notification stored in DB.");
+        console.log("\x1b[32m%s\x1b[0m", "📦 Notification saved in DB:", notif._id);
 
-        // ---- Convert createdAt to IST time format ----
-        const istOffset = 5.5 * 60 * 60 * 1000;
-        const createdAtIST = new Date(notif.createdAt.getTime() + istOffset)
-          .toISOString()
-          .replace("T", " ")
-          .substring(0, 19);
+        // Emit same format as approveUnit
+        emitToAdmins(notif.toJSON());
 
-        // ---- Emit notification LIVE to admin users ----
-        emitToAdmins({
-          _id: notif._id,
-          type: notif.type,
-          itemId: notif.itemId,
-          message: notif.message,
-          changedBy: notif.changedBy,
-          createdAt: createdAtIST
-        });
-
-        console.log("📩 Notification emitted to admin panel.");
+        console.log("\x1b[32m%s\x1b[0m", "📡 Notification EMITTED to admins");
 
       } catch (err) {
         if (err.code === 11000) {
-          console.log("⚠ Duplicate notification prevented.");
+          console.log("\x1b[33m%s\x1b[0m", "⚠ Duplicate notification skipped");
         } else {
-          console.error("❌ Error creating notification:", err);
+          console.error("\x1b[31m❌ Notification error:", err);
         }
       }
+
+    } else {
+      console.log("\x1b[31m%s\x1b[0m", "🔴 Notification condition FAILED → Status did NOT match");
     }
 
     res.json({ message: "Unit added successfully", unit: addedUnit });
 
   } catch (err) {
-    console.error("❌ addUnit error:", err);
+    console.error("\x1b[41m❌ addUnit error:\x1b[0m", err);
     res.status(500).json({ error: err.message });
   }
 };
