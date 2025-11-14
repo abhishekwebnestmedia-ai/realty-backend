@@ -10,6 +10,9 @@ const { emitToAdmins } = require('../utils/socketEmitter');
 
 
 
+
+const mongoose = require("mongoose");
+
 // ✅ Step 1 - Create ProjectType (root)
 exports.createProjectType = async (req, res) => {
   try {
@@ -312,6 +315,8 @@ exports.addTower = async (req, res) => {
 
 
 
+
+
 exports.addUnit = async (req, res) => {
   try {
     const {
@@ -326,7 +331,7 @@ exports.addUnit = async (req, res) => {
 
     const unitData = req.body;
 
-    // Normalize status
+    // --- Normalize status ----
     const allowedStatuses = [
       "Vacant",
       "Rental",
@@ -335,12 +340,13 @@ exports.addUnit = async (req, res) => {
     ];
 
     if (unitData.status) {
-      unitData.status = allowedStatuses.find(
-        s => s.toLowerCase() === unitData.status.toLowerCase().trim()
-      ) || "Vacant";
+      unitData.status =
+        allowedStatuses.find(
+          s => s.toLowerCase() === unitData.status.toLowerCase().trim()
+        ) || "Vacant";
     }
 
-    // Insert unit
+    // --- Insert Unit ---
     await ProjectType.updateOne(
       { category, projectcategory },
       {
@@ -360,10 +366,11 @@ exports.addUnit = async (req, res) => {
       }
     );
 
-    // Fetch added unit
-    const updated = await ProjectType.findOne({ category, projectcategory });
+    // ---- Fetch newly created unit ----
+    const updatedDoc = await ProjectType.findOne({ category, projectcategory });
+
     const addedUnit =
-      updated.cities.id(cityId)
+      updatedDoc.cities.id(cityId)
         .divisions.id(divisionId)
         .sectors.id(sectorId)
         .projects.id(projectId)
@@ -372,7 +379,7 @@ exports.addUnit = async (req, res) => {
 
     console.log("🔥 STORED STATUS:", addedUnit.status);
 
-    // Create & send notification
+    // ---- Create Notification ONLY if status is "Interested in calling" ----
     if (addedUnit.status.trim().toLowerCase() === "interested in calling") {
 
       const message = `New unit ${addedUnit.unitNumber} created and marked "Interested in calling".`;
@@ -385,21 +392,40 @@ exports.addUnit = async (req, res) => {
           changedBy: req.user?.name || "admin"
         });
 
-        console.log("📢 Notification created for new interested unit");
+        console.log("📢 Notification stored in DB.");
 
-        // 🚀 Emit to sockets (admins)
-        emitToAdmins(notif.toJSON());
+        // ---- Convert createdAt to IST time format ----
+        const istOffset = 5.5 * 60 * 60 * 1000;
+        const createdAtIST = new Date(notif.createdAt.getTime() + istOffset)
+          .toISOString()
+          .replace("T", " ")
+          .substring(0, 19);
+
+        // ---- Emit notification LIVE to admin users ----
+        emitToAdmins({
+          _id: notif._id,
+          type: notif.type,
+          itemId: notif.itemId,
+          message: notif.message,
+          changedBy: notif.changedBy,
+          createdAt: createdAtIST
+        });
+
+        console.log("📩 Notification emitted to admin panel.");
 
       } catch (err) {
-        if (err.code === 11000) console.log("⚠ Duplicate notification ignored");
-        else console.error("❌ Notification create error:", err);
+        if (err.code === 11000) {
+          console.log("⚠ Duplicate notification prevented.");
+        } else {
+          console.error("❌ Error creating notification:", err);
+        }
       }
     }
 
     res.json({ message: "Unit added successfully", unit: addedUnit });
 
   } catch (err) {
-    console.error("addUnit error:", err);
+    console.error("❌ addUnit error:", err);
     res.status(500).json({ error: err.message });
   }
 };
