@@ -1135,6 +1135,313 @@ exports.bulkUploadProjectTypes = async (req, res) => {
 // };
 
 
+
+//========================================================
+
+
+
+
+// exports.mergeOrCreateHierarchy = async (req, res) => {
+//   try {
+//     const { category, projectcategory, cities = [] } = req.body;
+
+//     if (!category || !projectcategory)
+//       return res.status(400).json({ error: "Missing category or projectcategory" });
+
+//     const allowedCategory = ["Residential", "Commercial"];
+//     const allowedProjectCategory = ["UnderConstruction", "ReadyToMove"];
+
+//     if (!allowedCategory.includes(category))
+//       return res.status(400).json({ error: "Invalid category" });
+
+//     if (!allowedProjectCategory.includes(projectcategory))
+//       return res.status(400).json({ error: "Invalid projectcategory" });
+
+//     let typeDoc = await ProjectType.findOne({ category, projectcategory });
+//     if (!typeDoc) {
+//       typeDoc = new ProjectType({ category, projectcategory, cities: [] });
+//     }
+
+//     const interestedUnits = []; // 🔍 Track units requiring notification
+
+//     const allowedStatuses = [
+//       "Vacant",
+//       "Rental",
+//       "Self Occupied",
+//       "Interested in calling"
+//     ];
+
+//     // --- MERGE ---
+//     for (const city of cities) {
+//       let existingCity = typeDoc.cities.find(c => c.cityName === city.cityName);
+//       if (!existingCity) {
+//         typeDoc.cities.push(city);
+//         continue;
+//       }
+
+//       for (const div of city.divisions || []) {
+//         let existingDiv = existingCity.divisions.find(d => d.divisionName === div.divisionName);
+//         if (!existingDiv) {
+//           existingCity.divisions.push(div);
+//           continue;
+//         }
+
+//         for (const sec of div.sectors || []) {
+//           let existingSec = existingDiv.sectors.find(s => s.sectorName === sec.sectorName);
+//           if (!existingSec) {
+//             existingDiv.sectors.push(sec);
+//             continue;
+//           }
+
+//           for (const proj of sec.projects || []) {
+//             let existingProj = existingSec.projects.find(p => p.projectName === proj.projectName);
+//             if (!existingProj) {
+//               existingSec.projects.push(proj);
+//               continue;
+//             }
+
+//             for (const tower of proj.towers || []) {
+//               let existingTower = existingProj.towers.find(t => t.towerName === tower.towerName);
+//               if (!existingTower) {
+//                 existingProj.towers.push(tower);
+//                 continue;
+//               }
+
+//               for (const unit of tower.units || []) {
+//                 let exists = existingTower.units.some(u => u.unitNumber === unit.unitNumber);
+
+//                 // Normalize status
+//                 unit.status = allowedStatuses.find(
+//                   s => s.toLowerCase() === (unit.status || "").toLowerCase().trim()
+//                 ) || "Vacant";
+
+//                 if (!exists) {
+//                   // 🚨 Ensure unit gets MongoDB _id
+//                   const newUnit = {
+//                     ...unit,
+//                     _id: new mongoose.Types.ObjectId()
+//                   };
+
+//                   existingTower.units.push(newUnit);
+
+//                   if (newUnit.status === "Interested in calling") {
+//                     interestedUnits.push({
+//                       unitRef: newUnit,
+//                       unitNumber: newUnit.unitNumber,
+//                       projectName: proj.projectName
+//                     });
+//                   }
+//                 }
+//               }
+//             }
+//           }
+//         }
+//       }
+//     }
+
+//     await typeDoc.save();
+
+//     // --- SEND NOTIFICATIONS ---
+//     const changedBy = req.user?.name || "System";
+
+//     for (const entry of interestedUnits) {
+//       const existingNotif = await Notification.findOne({
+//         type: "Inventory",
+//         itemId: entry.unitRef._id
+//       });
+
+//       if (!existingNotif) {
+//         const notif = await Notification.create({
+//           type: "Inventory",
+//           itemId: entry.unitRef._id,
+//           message: `🏢 Unit "${entry.unitNumber}" marked as "Interested in calling" during merge by ${changedBy}`,
+//           changedBy
+//         });
+
+//         // Real-time emit
+//         if (global.io && typeof emitToAdmins === "function") {
+//           emitToAdmins(notif.toJSON());
+//           console.log("📩 Notification sent:", notif._id);
+//         } else {
+//           console.log("⚠ Socket not initialized.");
+//         }
+//       }
+//     }
+
+//     return res.json({
+//       success: true,
+//       message: "Hierarchy merged successfully",
+//       notifications: interestedUnits.length,
+//       data: typeDoc
+//     });
+
+//   } catch (err) {
+//     console.error("❌ mergeOrCreateHierarchy error:", err);
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+ 
+
+
+
+// exports.mergeOrCreateHierarchy = async (req, res) => {
+//   try {
+//     const { category, projectcategory, cities = [] } = req.body;
+
+//     if (!category || !projectcategory)
+//       return res.status(400).json({ error: "Missing category or projectcategory" });
+
+//     const allowedCategory = ["Residential", "Commercial"];
+//     const allowedProjectCategory = ["UnderConstruction", "ReadyToMove"];
+
+//     if (!allowedCategory.includes(category))
+//       return res.status(400).json({ error: "Invalid category" });
+
+//     if (!allowedProjectCategory.includes(projectcategory))
+//       return res.status(400).json({ error: "Invalid projectcategory" });
+
+//     let typeDoc = await ProjectType.findOne({ category, projectcategory });
+//     if (!typeDoc) {
+//       typeDoc = new ProjectType({ category, projectcategory, cities: [] });
+//     }
+
+//     const interestedUnits = [];
+//     const addedUnitsDetails = []; // 👈 RETURN THIS
+
+//     const allowedStatuses = [
+//       "Vacant",
+//       "Rental",
+//       "Self Occupied",
+//       "Interested in calling"
+//     ];
+
+//     // ---- MERGE ----
+//     for (const city of cities) {
+//       let existingCity = typeDoc.cities.find(c => c.cityName === city.cityName);
+//       if (!existingCity) {
+//         typeDoc.cities.push(city);
+//         continue;
+//       }
+
+//       for (const div of city.divisions || []) {
+//         let existingDiv = existingCity.divisions.find(d => d.divisionName === div.divisionName);
+//         if (!existingDiv) {
+//           existingCity.divisions.push(div);
+//           continue;
+//         }
+
+//         for (const sec of div.sectors || []) {
+//           let existingSec = existingDiv.sectors.find(s => s.sectorName === sec.sectorName);
+//           if (!existingSec) {
+//             existingDiv.sectors.push(sec);
+//             continue;
+//           }
+
+//           for (const proj of sec.projects || []) {
+//             let existingProj = existingSec.projects.find(p => p.projectName === proj.projectName);
+//             if (!existingProj) {
+//               existingSec.projects.push(proj);
+//               continue;
+//             }
+
+//             for (const tower of proj.towers || []) {
+//               let existingTower = existingProj.towers.find(t => t.towerName === tower.towerName);
+//               if (!existingTower) {
+//                 existingProj.towers.push(tower);
+//                 continue;
+//               }
+
+//               for (const unit of tower.units || []) {
+//                 const exists = existingTower.units.some(u => u.unitNumber === unit.unitNumber);
+
+//                 unit.status = allowedStatuses.find(
+//                   s => s.toLowerCase() === (unit.status || "").toLowerCase().trim()
+//                 ) || "Vacant";
+
+//                 if (!exists) {
+//                   const newUnit = { ...unit, _id: new mongoose.Types.ObjectId() };
+//                   existingTower.units.push(newUnit);
+
+//                   // 🧾 Store full readable + ID info
+//                   addedUnitsDetails.push({
+//                     ids: {
+//                       category,
+//                       projectcategory,
+//                       cityId: existingCity._id,
+//                       divisionId: existingDiv._id,
+//                       sectorId: existingSec._id,
+//                       projectId: existingProj._id,
+//                       towerId: existingTower._id,
+//                       unitId: newUnit._id
+//                     },
+//                     readable: {
+//                       cityName: existingCity.cityName,
+//                       divisionName: existingDiv.divisionName,
+//                       sectorName: existingSec.sectorName,
+//                       projectName: existingProj.projectName,
+//                       towerName: existingTower.towerName,
+//                       unitNumber: newUnit.unitNumber,
+//                       status: newUnit.status
+//                     },
+//                     notification: newUnit.status === "Interested in calling"
+//                   });
+
+//                   if (newUnit.status === "Interested in calling") {
+//                     interestedUnits.push({
+//                       unitRef: newUnit,
+//                       unitNumber: newUnit.unitNumber,
+//                       projectName: existingProj.projectName
+//                     });
+//                   }
+//                 }
+//               }
+//             }
+//           }
+//         }
+//       }
+//     }
+
+//     await typeDoc.save();
+
+//     // ---- SEND NOTIFICATIONS ----
+//     const changedBy = req.user?.name || "System";
+
+//     for (const entry of interestedUnits) {
+//       const existsNotif = await Notification.findOne({
+//         type: "Inventory",
+//         itemId: entry.unitRef._id
+//       });
+
+//       if (!existsNotif) {
+//         const notif = await Notification.create({
+//           type: "Inventory",
+//           itemId: entry.unitRef._id,
+//           message: `🏢 Unit "${entry.unitNumber}" marked as "Interested in calling" during merge by ${changedBy}`,
+//           changedBy
+//         });
+
+//         if (global.io && typeof emitToAdmins === "function") {
+//           emitToAdmins(notif.toJSON());
+//         }
+//       }
+//     }
+
+//     return res.json({
+//       success: true,
+//       message: "Hierarchy merged successfully",
+//       totalAdded: addedUnitsDetails.length,
+//       notificationsTriggered: interestedUnits.length,
+//       mergedDetails: addedUnitsDetails, // 👈 MAIN OUTPUT
+//       data: typeDoc
+//     });
+
+//   } catch (err) {
+//     console.error("❌ mergeOrCreateHierarchy error:", err);
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+
 exports.mergeOrCreateHierarchy = async (req, res) => {
   try {
     const { category, projectcategory, cities = [] } = req.body;
@@ -1156,7 +1463,8 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
       typeDoc = new ProjectType({ category, projectcategory, cities: [] });
     }
 
-    const interestedUnits = []; // 🔍 Track units requiring notification
+    const interestedUnits = [];
+    const addedUnitsDetails = [];
 
     const allowedStatuses = [
       "Vacant",
@@ -1165,7 +1473,7 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
       "Interested in calling"
     ];
 
-    // --- MERGE ---
+    // ---- MERGE ----
     for (const city of cities) {
       let existingCity = typeDoc.cities.find(c => c.cityName === city.cityName);
       if (!existingCity) {
@@ -1202,29 +1510,38 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
               }
 
               for (const unit of tower.units || []) {
-                let exists = existingTower.units.some(u => u.unitNumber === unit.unitNumber);
+                const exists = existingTower.units.some(u => u.unitNumber === unit.unitNumber);
 
-                // Normalize status
                 unit.status = allowedStatuses.find(
                   s => s.toLowerCase() === (unit.status || "").toLowerCase().trim()
                 ) || "Vacant";
 
                 if (!exists) {
-                  // 🚨 Ensure unit gets MongoDB _id
-                  const newUnit = {
-                    ...unit,
-                    _id: new mongoose.Types.ObjectId()
-                  };
-
+                  const newUnit = { ...unit, _id: new mongoose.Types.ObjectId() };
                   existingTower.units.push(newUnit);
 
-                  if (newUnit.status === "Interested in calling") {
-                    interestedUnits.push({
-                      unitRef: newUnit,
+                  addedUnitsDetails.push({
+                    ids: {
+                      category,
+                      projectcategory,
+                      cityId: existingCity._id,
+                      divisionId: existingDiv._id,
+                      sectorId: existingSec._id,
+                      projectId: existingProj._id,
+                      towerId: existingTower._id,
+                      unitId: newUnit._id
+                    },
+                    readable: {
+                      cityName: existingCity.cityName,
+                      divisionName: existingDiv.divisionName,
+                      sectorName: existingSec.sectorName,
+                      projectName: existingProj.projectName,
+                      towerName: existingTower.towerName,
                       unitNumber: newUnit.unitNumber,
-                      projectName: proj.projectName
-                    });
-                  }
+                      status: newUnit.status
+                    },
+                    notification: newUnit.status === "Interested in calling"
+                  });
                 }
               }
             }
@@ -1235,29 +1552,32 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
 
     await typeDoc.save();
 
-    // --- SEND NOTIFICATIONS ---
+    // ---- SEND NOTIFICATIONS (UPDATED) ----
     const changedBy = req.user?.name || "System";
 
-    for (const entry of interestedUnits) {
-      const existingNotif = await Notification.findOne({
+    for (const entry of addedUnitsDetails.filter(u => u.notification)) {
+
+      const existsNotif = await Notification.findOne({
         type: "Inventory",
-        itemId: entry.unitRef._id
+        itemId: entry.ids.unitId
       });
 
-      if (!existingNotif) {
+      if (!existsNotif) {
         const notif = await Notification.create({
           type: "Inventory",
-          itemId: entry.unitRef._id,
-          message: `🏢 Unit "${entry.unitNumber}" marked as "Interested in calling" during merge by ${changedBy}`,
-          changedBy
+          itemId: entry.ids.unitId,
+          message: `🏢 Unit "${entry.readable.unitNumber}" marked as "Interested in calling" during merge by ${changedBy}`,
+          changedBy,
+
+          // 👇 Meta inserted
+          meta: {
+            ...entry.ids,
+            ...entry.readable
+          }
         });
 
-        // Real-time emit
         if (global.io && typeof emitToAdmins === "function") {
           emitToAdmins(notif.toJSON());
-          console.log("📩 Notification sent:", notif._id);
-        } else {
-          console.log("⚠ Socket not initialized.");
         }
       }
     }
@@ -1265,7 +1585,9 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
     return res.json({
       success: true,
       message: "Hierarchy merged successfully",
-      notifications: interestedUnits.length,
+      totalAdded: addedUnitsDetails.length,
+      notificationsTriggered: addedUnitsDetails.filter(u => u.notification).length,
+      mergedDetails: addedUnitsDetails,
       data: typeDoc
     });
 
@@ -1277,7 +1599,7 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
 
 
 
-
+ 
 
 
 
