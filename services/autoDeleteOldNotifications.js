@@ -4,7 +4,7 @@ const Notification = require("../models/notification");
 // 🕒 Run daily at midnight
 cron.schedule("0 0 * * *", async () => {
   try {
-    const deleteBefore = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000);
+    const deleteBefore = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     const result = await Notification.deleteMany({
       createdAt: { $lte: deleteBefore }
