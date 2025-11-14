@@ -324,7 +324,21 @@ exports.addUnit = async (req, res) => {
 
     const unitData = req.body;
 
-    // Insert Unit
+    // ---- Normalize status based on allowed enum ----
+    const allowedStatuses = [
+      "Vacant",
+      "Rental",
+      "Self Occupied",
+      "Interested in calling"
+    ];
+
+    if (unitData.status) {
+      unitData.status = allowedStatuses.find(
+        s => s.toLowerCase() === unitData.status.toLowerCase().trim()
+      ) || "Vacant";
+    }
+
+    // ---- Insert Unit ----
     const result = await ProjectType.updateOne(
       { category, projectcategory },
       {
@@ -347,7 +361,7 @@ exports.addUnit = async (req, res) => {
     if (result.modifiedCount === 0)
       return res.status(404).json({ error: "Tower not found" });
 
-    // Fetch newly pushed unit
+    // ---- Fetch Newly Added Unit ----
     const updated = await ProjectType.findOne({ category, projectcategory });
     const city = updated.cities.id(cityId);
     const division = city.divisions.id(divisionId);
@@ -356,19 +370,23 @@ exports.addUnit = async (req, res) => {
     const tower = project.towers.id(towerId);
     const addedUnit = tower.units[tower.units.length - 1];
 
-    /** 🔔 Send Notification only if status = Interested in calling */
-    if (addedUnit.status?.toLowerCase() === "interested in calling") {
+    console.log("🔥 STORED STATUS:", addedUnit.status);
+
+    // ---- Trigger Notification Only If status is "Interested in calling" ----
+    if (addedUnit.status.trim().toLowerCase() === "interested in calling") {
+
       const message = `New unit ${addedUnit.unitNumber} created and marked "Interested in calling".`;
 
       try {
         await Notification.create({
           type: "Inventory",
-          itemId: new mongoose.Types.ObjectId(addedUnit._id),
+          itemId: addedUnit._id,
           message,
           changedBy: req.user?.name || "admin"
         });
 
         console.log("📢 Notification created for new interested unit");
+
       } catch (err) {
         if (err.code === 11000) {
           console.log("⚠ Duplicate notification ignored");
