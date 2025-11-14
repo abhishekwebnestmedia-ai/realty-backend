@@ -470,7 +470,7 @@ exports.addUnit = async (req, res) => {
 
 exports.approveUnit = async (req, res) => {
   try {
-    const confirm = req.body.confirm;
+    const confirm = req.body.confirm?.toLowerCase();
 
     if (!confirm)
       return res.status(400).json({ message: "Please confirm: yes or no" });
@@ -514,39 +514,52 @@ exports.approveUnit = async (req, res) => {
     if (!foundUnit)
       return res.status(404).json({ error: "Unit not found" });
 
-    if (foundUnit.isApproved)
-      return res.status(400).json({ error: "Unit already approved" });
+    // 🚀 Check inventory existence
+    const existsInInventory = await Inventory.findOne({ unitNo: foundUnit.unitNumber });
+
+    if (foundUnit.isApproved && existsInInventory) {
+      return res.json({
+        success: true,
+        alreadyApproved: true,
+        message: "Unit already approved & exists in Inventory.",
+        inventoryId: existsInInventory._id
+      });
+    }
+
+    // ⚠ If approved but missing in inventory -> auto fix
+    if (foundUnit.isApproved && !existsInInventory) {
+      console.log("⚠ Fixing missing inventory entry...");
+    }
 
     if (foundUnit.status !== "Interested in calling")
       return res.status(400).json({ error: "Unit is not Interested in calling" });
 
-    // Approve
+    // Approve unit
     foundUnit.isApproved = true;
     await proj.save();
 
-    // Copy to Inventory
-    const payload = {
+    // Create inventory entry
+    const newInv = await Inventory.create({
       sellerName: foundUnit.ownerName || "",
-      inventoryType: "Sales",
       sector: sectorName,
       unitNo: foundUnit.unitNumber,
       towerNo: towerName,
       Project: [projectName],
       contactNumbers: foundUnit.mobileNumbers || [],
-      email: foundUnit.email || "",
       remarks: foundUnit.remarks || "",
+      inventoryType: "Sales",
       capturedBy: req.user?.name || "Admin"
-    };
+    });
 
-    const newInv = await Inventory.create(payload);
-
-    // 👍 Auto-emitted by schema
-    const msg = `Unit ${foundUnit.unitNumber} approved and copied to Inventory.`;
+    // Notification
     const notif = await Notification.create({
       type: "Inventory",
       itemId: newInv._id,
-      message: msg,
-      changedBy: req.user?.name || "admin"
+      message: `Unit ${foundUnit.unitNumber} approved and copied to Inventory.`,
+      changedBy: req.user?.name || "admin",
+      meta: {
+        category, projectcategory, cityId, divisionId, sectorId, projectId, towerId, unitId
+      }
     });
 
     emitToAdmins(notif.toJSON());
@@ -554,7 +567,7 @@ exports.approveUnit = async (req, res) => {
     return res.json({
       success: true,
       message: "Unit approved & copied to Inventory",
-      inventory: newInv
+      inventoryId: newInv._id
     });
 
   } catch (err) {
@@ -562,6 +575,7 @@ exports.approveUnit = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
 
 
 
