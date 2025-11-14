@@ -1053,8 +1053,6 @@ exports.deleteUnitById = async (req, res) => {
 
 
 
-const Notification = require("../models/notification");
-const { emitToAdmins } = require("../utils/socketEmitter");
 
 exports.createFullHierarchy = async (req, res) => {
   try {
@@ -1228,8 +1226,7 @@ exports.createFullHierarchy = async (req, res) => {
 //   }
 // };
 
-const Notification = require("../models/notification");
-const { emitToAdmins } = require("../utils/socketEmitter");
+
 
 exports.updateFullHierarchy = async (req, res) => {
   try {
