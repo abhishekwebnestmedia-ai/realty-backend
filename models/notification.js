@@ -57,19 +57,7 @@ notificationSchema.methods.toJSON = function () {
   return obj;
 };
 
-// ✅ Auto-emit real-time notifications after saving
-// Note: Disabled auto-emit to prevent duplicate emissions.
-// Controllers should explicitly call emitToAdmins() or emitNotification() after creating notifications.
-// notificationSchema.post("save", function (doc) {
-//   try {
-//     const { emitToAdmins } = require("../utils/socketEmitter");
-//     // Send notification to admin room
-//     emitToAdmins(doc.toJSON());
-//     console.log(`📢 Auto-emitted notification to admins`);
-//   } catch (err) {
-//     console.error("❌ Error auto-emitting notification:", err);
-//   }
-// });
+
 
 module.exports = mongoose.model("Notification", notificationSchema);
 

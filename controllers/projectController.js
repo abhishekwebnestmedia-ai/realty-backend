@@ -265,27 +265,41 @@ exports.addUnit = async (req, res) => {
     const addedUnit = tower.units[tower.units.length - 1];
 
     // 🔔 Auto Notification (Schema will emit real-time)
-    if (addedUnit.status === "Interested in calling") {
-      const message = `New unit ${addedUnit.unitNumber} created with status "Interested in calling". Approve to copy into Inventory?`;
-      const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
+  if (addedUnit.status?.toLowerCase() === "interested in calling") {
+  const message = `New unit ${addedUnit.unitNumber} created with status "Interested in calling". Approve to copy into Inventory?`;
+  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
 
-      const exists = await Notification.findOne({
+  // Ensure correct objectId type
+  const itemId = new mongoose.Types.ObjectId(addedUnit._id);
+
+  const exists = await Notification.findOne({
+    type: "Inventory",
+    itemId,
+    createdAt: { $gte: tenMinAgo }
+  });
+
+  if (!exists) {
+    try {
+      const notif = await Notification.create({
         type: "Inventory",
-        itemId: addedUnit._id,
-        createdAt: { $gte: tenMinAgo }
+        itemId,
+        message,
+        changedBy: req.user?.name || "admin"
       });
 
-      if (!exists) {
-        const notif = await Notification.create({
-          type: "Inventory",
-          itemId: addedUnit._id,
-          message,
-          changedBy: req.user?.name || "admin"
-        });
+      emitToAdmins(notif.toJSON());
+      console.log("📢 Notification Sent:", notif);
 
-        emitToAdmins(notif.toJSON());
+    } catch (err) {
+      if (err.code === 11000) {
+        console.log("⚠ Duplicate notification ignored");
+      } else {
+        console.error("❌ Notification create error:", err);
       }
     }
+  }
+}
+
 
     res.json({ message: "Unit added successfully", unit: addedUnit });
 
