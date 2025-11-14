@@ -1135,7 +1135,6 @@ exports.bulkUploadProjectTypes = async (req, res) => {
 // };
 
 
-
 exports.mergeOrCreateHierarchy = async (req, res) => {
   try {
     const { category, projectcategory, cities = [] } = req.body;
@@ -1159,9 +1158,16 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
 
     const interestedUnits = []; // 🔍 Track units requiring notification
 
-    // Merge cities
+    const allowedStatuses = [
+      "Vacant",
+      "Rental",
+      "Self Occupied",
+      "Interested in calling"
+    ];
+
+    // --- MERGE ---
     for (const city of cities) {
-      let existingCity = typeDoc.cities.find((c) => c.cityName === city.cityName);
+      let existingCity = typeDoc.cities.find(c => c.cityName === city.cityName);
       if (!existingCity) {
         typeDoc.cities.push(city);
         continue;
@@ -1196,24 +1202,26 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
               }
 
               for (const unit of tower.units || []) {
-                const exists = existingTower.units.some(u => u.unitNumber === unit.unitNumber);
+                let exists = existingTower.units.some(u => u.unitNumber === unit.unitNumber);
 
-                // normalize status
-                const allowedStatuses = ["Vacant", "Rental", "Self Occupied", "Interested in calling"];
-                if (unit.status) {
-                  unit.status = allowedStatuses.find(
-                    s => s.toLowerCase() === unit.status.toLowerCase().trim()
-                  ) || "Vacant";
-                }
+                // Normalize status
+                unit.status = allowedStatuses.find(
+                  s => s.toLowerCase() === (unit.status || "").toLowerCase().trim()
+                ) || "Vacant";
 
                 if (!exists) {
-                  existingTower.units.push(unit);
+                  // 🚨 Ensure unit gets MongoDB _id
+                  const newUnit = {
+                    ...unit,
+                    _id: new mongoose.Types.ObjectId()
+                  };
 
-                  // check status for notification
-                  if (unit.status?.toLowerCase() === "interested in calling") {
+                  existingTower.units.push(newUnit);
+
+                  if (newUnit.status === "Interested in calling") {
                     interestedUnits.push({
-                      unitRef: unit,
-                      unitNumber: unit.unitNumber,
+                      unitRef: newUnit,
+                      unitNumber: newUnit.unitNumber,
                       projectName: proj.projectName
                     });
                   }
@@ -1231,24 +1239,21 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
     const changedBy = req.user?.name || "System";
 
     for (const entry of interestedUnits) {
-      const msg = `🏢 Unit "${entry.unitNumber}" marked as "Interested in calling" during merge by ${changedBy}`;
-
-      const exists = await Notification.findOne({
+      const existingNotif = await Notification.findOne({
         type: "Inventory",
-        itemId: entry.unitRef._id,
-        message: { $regex: entry.unitNumber },
-        createdAt: { $gte: new Date(Date.now() - 2 * 60 * 1000) }
+        itemId: entry.unitRef._id
       });
 
-      if (!exists) {
+      if (!existingNotif) {
         const notif = await Notification.create({
           type: "Inventory",
           itemId: entry.unitRef._id,
-          message: msg,
+          message: `🏢 Unit "${entry.unitNumber}" marked as "Interested in calling" during merge by ${changedBy}`,
           changedBy
         });
 
-        if (global.io) {
+        // Real-time emit
+        if (global.io && typeof emitToAdmins === "function") {
           emitToAdmins(notif.toJSON());
           console.log("📩 Notification sent:", notif._id);
         } else {
@@ -1269,7 +1274,6 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
 
 
 
