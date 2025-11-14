@@ -218,6 +218,98 @@ exports.addTower = async (req, res) => {
 // ✅ Step 7 - Add Unit WITH NOTIFICATION
 
 
+// exports.addUnit = async (req, res) => {
+//   try {
+//     const {
+//       category,
+//       projectcategory,
+//       cityId,
+//       divisionId,
+//       sectorId,
+//       projectId,
+//       towerId
+//     } = req.params;
+
+//     const unitData = req.body;
+
+//     // Insert Unit
+//     const result = await ProjectType.updateOne(
+//       { category, projectcategory },
+//       {
+//         $push: {
+//           "cities.$[city].divisions.$[div].sectors.$[sec].projects.$[proj].towers.$[tow].units":
+//             unitData,
+//         },
+//       },
+//       {
+//         arrayFilters: [
+//           { "city._id": cityId },
+//           { "div._id": divisionId },
+//           { "sec._id": sectorId },
+//           { "proj._id": projectId },
+//           { "tow._id": towerId },
+//         ],
+//       }
+//     );
+
+//     if (result.modifiedCount === 0)
+//       return res.status(404).json({ error: "Tower not found" });
+
+//     // Fetch inserted unit
+//     const updated = await ProjectType.findOne({ category, projectcategory });
+//     const city = updated.cities.id(cityId);
+//     const division = city.divisions.id(divisionId);
+//     const sector = division.sectors.id(sectorId);
+//     const project = sector.projects.id(projectId);
+//     const tower = project.towers.id(towerId);
+//     const addedUnit = tower.units[tower.units.length - 1];
+
+//     // 🔔 Auto Notification (Schema will emit real-time)
+//   if (addedUnit.status?.toLowerCase() === "interested in calling") {
+//   const message = `New unit ${addedUnit.unitNumber} created with status "Interested in calling". Approve to copy into Inventory?`;
+//   const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
+
+//   // Ensure correct objectId type
+//   const itemId = new mongoose.Types.ObjectId(addedUnit._id);
+
+//   const exists = await Notification.findOne({
+//     type: "Inventory",
+//     itemId,
+//     createdAt: { $gte: tenMinAgo }
+//   });
+
+//   if (!exists) {
+//     try {
+//       const notif = await Notification.create({
+//         type: "Inventory",
+//         itemId,
+//         message,
+//         changedBy: req.user?.name || "admin"
+//       });
+
+//       emitToAdmins(notif.toJSON());
+//       console.log("📢 Notification Sent:", notif);
+
+//     } catch (err) {
+//       if (err.code === 11000) {
+//         console.log("⚠ Duplicate notification ignored");
+//       } else {
+//         console.error("❌ Notification create error:", err);
+//       }
+//     }
+//   }
+// }
+
+
+//     res.json({ message: "Unit added successfully", unit: addedUnit });
+
+//   } catch (err) {
+//     console.error("addUnit error:", err);
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+
 exports.addUnit = async (req, res) => {
   try {
     const {
@@ -255,7 +347,7 @@ exports.addUnit = async (req, res) => {
     if (result.modifiedCount === 0)
       return res.status(404).json({ error: "Tower not found" });
 
-    // Fetch inserted unit
+    // Fetch newly pushed unit
     const updated = await ProjectType.findOne({ category, projectcategory });
     const city = updated.cities.id(cityId);
     const division = city.divisions.id(divisionId);
@@ -264,42 +356,27 @@ exports.addUnit = async (req, res) => {
     const tower = project.towers.id(towerId);
     const addedUnit = tower.units[tower.units.length - 1];
 
-    // 🔔 Auto Notification (Schema will emit real-time)
-  if (addedUnit.status?.toLowerCase() === "interested in calling") {
-  const message = `New unit ${addedUnit.unitNumber} created with status "Interested in calling". Approve to copy into Inventory?`;
-  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
+    /** 🔔 Send Notification only if status = Interested in calling */
+    if (addedUnit.status?.toLowerCase() === "interested in calling") {
+      const message = `New unit ${addedUnit.unitNumber} created and marked "Interested in calling".`;
 
-  // Ensure correct objectId type
-  const itemId = new mongoose.Types.ObjectId(addedUnit._id);
+      try {
+        await Notification.create({
+          type: "Inventory",
+          itemId: new mongoose.Types.ObjectId(addedUnit._id),
+          message,
+          changedBy: req.user?.name || "admin"
+        });
 
-  const exists = await Notification.findOne({
-    type: "Inventory",
-    itemId,
-    createdAt: { $gte: tenMinAgo }
-  });
-
-  if (!exists) {
-    try {
-      const notif = await Notification.create({
-        type: "Inventory",
-        itemId,
-        message,
-        changedBy: req.user?.name || "admin"
-      });
-
-      emitToAdmins(notif.toJSON());
-      console.log("📢 Notification Sent:", notif);
-
-    } catch (err) {
-      if (err.code === 11000) {
-        console.log("⚠ Duplicate notification ignored");
-      } else {
-        console.error("❌ Notification create error:", err);
+        console.log("📢 Notification created for new interested unit");
+      } catch (err) {
+        if (err.code === 11000) {
+          console.log("⚠ Duplicate notification ignored");
+        } else {
+          console.error("❌ Notification create error:", err);
+        }
       }
     }
-  }
-}
-
 
     res.json({ message: "Unit added successfully", unit: addedUnit });
 
@@ -308,6 +385,7 @@ exports.addUnit = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
 
 
 exports.approveUnit = async (req, res) => {
