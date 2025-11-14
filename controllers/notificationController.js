@@ -77,6 +77,7 @@ const mongoose = require("mongoose");
 //   }
 // };
 
+
 exports.getAllNotifications = async (req, res) => {
   try {
     const notifications = await Notification.find().sort({ createdAt: -1 });
@@ -91,7 +92,6 @@ exports.getAllNotifications = async (req, res) => {
     res.status(500).json({ success: false, message: "Error fetching notifications" });
   }
 };
-
 
 exports.markAsRead = async (req, res) => {
   try {
@@ -111,7 +111,6 @@ exports.markAsRead = async (req, res) => {
   }
 };
 
-// ---- MARK ALL AS READ ----
 exports.markAllAsRead = async (req, res) => {
   try {
     await Notification.updateMany({ read: false }, { read: true });
