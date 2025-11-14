@@ -217,6 +217,7 @@ exports.addTower = async (req, res) => {
 
 // ✅ Step 7 - Add Unit WITH NOTIFICATION
 
+
 exports.addUnit = async (req, res) => {
   try {
     const {
@@ -293,8 +294,6 @@ exports.addUnit = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
-
 
 
 exports.approveUnit = async (req, res) => {
@@ -391,6 +390,7 @@ exports.approveUnit = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
 
 
 
