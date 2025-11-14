@@ -77,7 +77,6 @@ const mongoose = require("mongoose");
 //   }
 // };
 
-
 exports.getAllNotifications = async (req, res) => {
   try {
     const notifications = await Notification.find().sort({ createdAt: -1 });
@@ -93,30 +92,53 @@ exports.getAllNotifications = async (req, res) => {
   }
 };
 
+// ---- MARK ONE NOTIFICATION READ/UNREAD ----
 exports.markAsRead = async (req, res) => {
   try {
     const { id } = req.params;
+    const { read = true } = req.body; // default to true if not sent
 
     const notif = await Notification.findByIdAndUpdate(
       id,
-      { read: true },
+      { read },
       { new: true }
     );
 
-    if (!notif) return res.status(404).json({ success: false, message: "Notification not found" });
+    if (!notif)
+      return res.status(404).json({
+        success: false,
+        message: "Notification not found",
+      });
 
-    res.json({ success: true, message: "Notification marked as read", data: notif });
+    res.json({
+      success: true,
+      message: `Notification updated (read = ${read})`,
+      data: notif,
+    });
+
   } catch (err) {
-    res.status(500).json({ success: false, message: "Error updating notification" });
+    res.status(500).json({
+      success: false,
+      message: "Error updating notification",
+      error: err.message,
+    });
   }
 };
 
+// ---- MARK ALL AS READ ----
 exports.markAllAsRead = async (req, res) => {
   try {
-    await Notification.updateMany({ read: false }, { read: true });
+    await Notification.updateMany({}, { read: true });
 
-    res.json({ success: true, message: "All notifications marked as read" });
+    res.json({
+      success: true,
+      message: "All notifications marked as read",
+    });
   } catch (err) {
-    res.status(500).json({ success: false, message: "Error updating notifications" });
+    res.status(500).json({
+      success: false,
+      message: "Error updating notifications",
+      error: err.message,
+    });
   }
 };
