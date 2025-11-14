@@ -91,3 +91,33 @@ exports.getAllNotifications = async (req, res) => {
     res.status(500).json({ success: false, message: "Error fetching notifications" });
   }
 };
+
+
+exports.markAsRead = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const notif = await Notification.findByIdAndUpdate(
+      id,
+      { read: true },
+      { new: true }
+    );
+
+    if (!notif) return res.status(404).json({ success: false, message: "Notification not found" });
+
+    res.json({ success: true, message: "Notification marked as read", data: notif });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Error updating notification" });
+  }
+};
+
+// ---- MARK ALL AS READ ----
+exports.markAllAsRead = async (req, res) => {
+  try {
+    await Notification.updateMany({ read: false }, { read: true });
+
+    res.json({ success: true, message: "All notifications marked as read" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Error updating notifications" });
+  }
+};

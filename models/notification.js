@@ -63,6 +63,7 @@
 
 
 
+
 const mongoose = require("mongoose");
 
 // ✅ Helper to get IST time
@@ -96,6 +97,10 @@ const notificationSchema = new mongoose.Schema(
       type: Object,
       default: null,
     },
+     read: {
+      type: Boolean,
+      default: false
+    },
 
     createdAt: {
       type: Date,
@@ -122,6 +127,9 @@ notificationSchema.methods.toJSON = function () {
 };
 
 module.exports = mongoose.model("Notification", notificationSchema);
+
+
+
 
 
 
