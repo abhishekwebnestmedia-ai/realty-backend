@@ -480,6 +480,30 @@ exports.getLeadById = async (req, res) => {
   }
 };
 
+exports.bulkDeleteLeads = async (req, res) => {
+  try {
+    const { ids } = req.body; // expecting array
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid request: Provide an array of lead IDs"
+      });
+    }
+
+    const result = await Lead.deleteMany({ _id: { $in: ids } });
+
+    res.json({
+      success: true,
+      message: `${result.deletedCount} leads deleted successfully`,
+      deletedCount: result.deletedCount
+    });
+
+  } catch (err) {
+    console.error("bulkDeleteLeads error:", err);
+    res.status(500).json({ success: false, message: "Error deleting leads" });
+  }
+};
 
 // 🔹 Delete Lead
 exports.deleteLead = async (req, res) => {
