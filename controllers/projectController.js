@@ -319,7 +319,7 @@ exports.addTower = async (req, res) => {
 
 exports.addUnit = async (req, res) => {
   try {
-    console.log("\x1b[33m%s\x1b[0m", "➡️ addUnit() triggered");
+    console.log("➡️ addUnit() triggered");
 
     const {
       category,
@@ -333,9 +333,7 @@ exports.addUnit = async (req, res) => {
 
     const unitData = req.body;
 
-    console.log("\x1b[36m%s\x1b[0m", "🛠 Received unit payload:", unitData);
-
-    // Normalize status
+    // ---- Normalize Status ----
     const allowedStatuses = [
       "Vacant",
       "Rental",
@@ -350,9 +348,7 @@ exports.addUnit = async (req, res) => {
         ) || "Vacant";
     }
 
-    console.log("\x1b[36m%s\x1b[0m", "🎯 Normalized Status:", unitData.status);
-
-    // Insert Unit
+    // ---- Insert Unit ----
     await ProjectType.updateOne(
       { category, projectcategory },
       {
@@ -372,11 +368,8 @@ exports.addUnit = async (req, res) => {
       }
     );
 
-    console.log("\x1b[32m%s\x1b[0m", "✔️ Unit successfully inserted.");
-
-    // Fetch newly added unit
+    // ---- Fetch newly inserted ----
     const updatedDoc = await ProjectType.findOne({ category, projectcategory });
-
     const addedUnit =
       updatedDoc.cities.id(cityId)
         .divisions.id(divisionId)
@@ -385,45 +378,44 @@ exports.addUnit = async (req, res) => {
         .towers.id(towerId)
         .units.slice(-1)[0];
 
-    console.log("\x1b[35m%s\x1b[0m", "📌 Stored Unit Status:", addedUnit.status);
-
-    // Notification condition check
+    // ---- Notification Logic ----
     if (addedUnit.status.trim().toLowerCase() === "interested in calling") {
-      console.log("\x1b[32m%s\x1b[0m", "🟢 Status matched → Creating notification");
+      const changedBy = req.user?.name || "System";
 
-      const message = `New unit ${addedUnit.unitNumber} created and marked "Interested in calling".`;
+      const msg = `🏢 New Unit "${addedUnit.unitNumber}" created with status → Interested in calling (${changedBy})`;
 
-      try {
-        const notif = await Notification.create({
-          type: "Inventory",
-          itemId: addedUnit._id,
-          message,
-          changedBy: req.user?.name || "admin"
-        });
+      const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
 
-        console.log("\x1b[32m%s\x1b[0m", "📦 Notification saved in DB:", notif._id);
+      const alreadyExists = await Notification.findOne({
+        type: "Inventory",
+        itemId: addedUnit._id,
+        message: msg,
+        createdAt: { $gte: twoMinAgo },
+      });
 
-        // Emit same format as approveUnit
-        emitToAdmins(notif.toJSON());
+      if (!alreadyExists) {
+        try {
+          const notif = await Notification.create({
+            type: "Inventory",
+            itemId: addedUnit._id,
+            message: msg,
+            changedBy
+          });
 
-        console.log("\x1b[32m%s\x1b[0m", "📡 Notification EMITTED to admins");
-
-      } catch (err) {
-        if (err.code === 11000) {
-          console.log("\x1b[33m%s\x1b[0m", "⚠ Duplicate notification skipped");
-        } else {
-          console.error("\x1b[31m❌ Notification error:", err);
+          // ---- Emit formatted notification to admins (like leads) ----
+          emitToAdmins(notif.toJSON());
+          console.log("📩 Notification emitted → Admins");
+        } catch (err) {
+          if (err.code === 11000) console.log("⚠ Duplicate notification ignored");
+          else console.error("❌ Notification Error:", err);
         }
       }
-
-    } else {
-      console.log("\x1b[31m%s\x1b[0m", "🔴 Notification condition FAILED → Status did NOT match");
     }
 
-    res.json({ message: "Unit added successfully", unit: addedUnit });
+    res.json({ success: true, message: "Unit added successfully", unit: addedUnit });
 
   } catch (err) {
-    console.error("\x1b[41m❌ addUnit error:\x1b[0m", err);
+    console.error("❌ addUnit error:", err);
     res.status(500).json({ error: err.message });
   }
 };
