@@ -319,7 +319,9 @@ exports.addTower = async (req, res) => {
 
 exports.addUnit = async (req, res) => {
   try {
-    console.log("➡️ addUnit() triggered");
+    console.log("\n==============================");
+    console.log("➡️ addUnit() TRIGGERED");
+    console.log("==============================");
 
     const {
       category,
@@ -331,9 +333,12 @@ exports.addUnit = async (req, res) => {
       towerId
     } = req.params;
 
+    console.log("📌 Route Params:", req.params);
+    console.log("📦 Received Payload:", req.body);
+
     const unitData = req.body;
 
-    // ---- Normalize Status ----
+    // Normalize status
     const allowedStatuses = [
       "Vacant",
       "Rental",
@@ -342,14 +347,17 @@ exports.addUnit = async (req, res) => {
     ];
 
     if (unitData.status) {
+      console.log(`🔍 Status BEFORE Normalize: ${unitData.status}`);
       unitData.status =
         allowedStatuses.find(
           s => s.toLowerCase() === unitData.status.toLowerCase().trim()
         ) || "Vacant";
+      console.log(`🎯 Status AFTER Normalize: ${unitData.status}`);
     }
 
-    // ---- Insert Unit ----
-    await ProjectType.updateOne(
+    // Insert
+    console.log("🛠 Inserting unit...");
+    const updateResult = await ProjectType.updateOne(
       { category, projectcategory },
       {
         $push: {
@@ -368,8 +376,16 @@ exports.addUnit = async (req, res) => {
       }
     );
 
-    // ---- Fetch newly inserted ----
+    console.log("🧾 Mongo Update Result:", updateResult);
+
+    // Fetch newly added unit
     const updatedDoc = await ProjectType.findOne({ category, projectcategory });
+
+    if (!updatedDoc) {
+      console.log("❌ ERROR: updatedDoc NOT FOUND!");
+      return res.status(500).json({ error: "Updated document not found" });
+    }
+
     const addedUnit =
       updatedDoc.cities.id(cityId)
         .divisions.id(divisionId)
@@ -378,13 +394,22 @@ exports.addUnit = async (req, res) => {
         .towers.id(towerId)
         .units.slice(-1)[0];
 
-    // ---- Notification Logic ----
-    if (addedUnit.status.trim().toLowerCase() === "interested in calling") {
-      const changedBy = req.user?.name || "System";
+    console.log("📌 Extracted Unit Data From DB:", addedUnit);
 
+    // Notification logic
+    if (!addedUnit || !addedUnit.status) {
+      console.log("⚠ No status found or unit not created. Skipping notification.");
+    } else if (addedUnit.status.trim().toLowerCase() === "interested in calling") {
+      console.log("🟢 Notification Condition MATCHED!");
+
+      const changedBy = req.user?.name || "System";
       const msg = `🏢 New Unit "${addedUnit.unitNumber}" created with status → Interested in calling (${changedBy})`;
 
+      console.log("📝 Notification message:", msg);
+
       const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+
+      console.log("🔍 Checking duplicate notification...");
 
       const alreadyExists = await Notification.findOne({
         type: "Inventory",
@@ -393,7 +418,10 @@ exports.addUnit = async (req, res) => {
         createdAt: { $gte: twoMinAgo },
       });
 
+      console.log("🧪 Duplicate Check Result:", alreadyExists);
+
       if (!alreadyExists) {
+        console.log("🚀 No duplicate found → Creating Notification Now...");
         try {
           const notif = await Notification.create({
             type: "Inventory",
@@ -402,20 +430,37 @@ exports.addUnit = async (req, res) => {
             changedBy
           });
 
-          // ---- Emit formatted notification to admins (like leads) ----
-          emitToAdmins(notif.toJSON());
-          console.log("📩 Notification emitted → Admins");
+          console.log("📦 Notification CREATED IN DB:", notif);
+
+          // Emit to admins
+          if (global.io) {
+            emitToAdmins(notif.toJSON());
+            console.log("📡 Real-time Notification Emitted to Admins!");
+          } else {
+            console.log("⚠ Socket.IO not initialized — cannot emit.");
+          }
+
         } catch (err) {
-          if (err.code === 11000) console.log("⚠ Duplicate notification ignored");
-          else console.error("❌ Notification Error:", err);
+          console.error("❌ Notification Create ERROR:", err);
         }
+      } else {
+        console.log("⚠ Duplicate notification detected → NOT inserted.");
       }
+
+    } else {
+      console.log(`🔴 Notification condition failed — Status is: "${addedUnit.status}"`);
     }
 
-    res.json({ success: true, message: "Unit added successfully", unit: addedUnit });
+    console.log("✅ UNIT ADD PROCESS COMPLETED");
+
+    return res.json({
+      success: true,
+      message: "Unit added successfully",
+      unit: addedUnit
+    });
 
   } catch (err) {
-    console.error("❌ addUnit error:", err);
+    console.error("\n❌ FATAL ERROR in addUnit():", err);
     res.status(500).json({ error: err.message });
   }
 };
