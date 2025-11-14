@@ -310,6 +310,8 @@ exports.addTower = async (req, res) => {
 // };
 
 
+
+
 exports.addUnit = async (req, res) => {
   try {
     const {
@@ -324,7 +326,7 @@ exports.addUnit = async (req, res) => {
 
     const unitData = req.body;
 
-    // ---- Normalize status based on allowed enum ----
+    // Normalize status
     const allowedStatuses = [
       "Vacant",
       "Rental",
@@ -338,8 +340,8 @@ exports.addUnit = async (req, res) => {
       ) || "Vacant";
     }
 
-    // ---- Insert Unit ----
-    const result = await ProjectType.updateOne(
+    // Insert unit
+    await ProjectType.updateOne(
       { category, projectcategory },
       {
         $push: {
@@ -358,27 +360,25 @@ exports.addUnit = async (req, res) => {
       }
     );
 
-    if (result.modifiedCount === 0)
-      return res.status(404).json({ error: "Tower not found" });
-
-    // ---- Fetch Newly Added Unit ----
+    // Fetch added unit
     const updated = await ProjectType.findOne({ category, projectcategory });
-    const city = updated.cities.id(cityId);
-    const division = city.divisions.id(divisionId);
-    const sector = division.sectors.id(sectorId);
-    const project = sector.projects.id(projectId);
-    const tower = project.towers.id(towerId);
-    const addedUnit = tower.units[tower.units.length - 1];
+    const addedUnit =
+      updated.cities.id(cityId)
+        .divisions.id(divisionId)
+        .sectors.id(sectorId)
+        .projects.id(projectId)
+        .towers.id(towerId)
+        .units.slice(-1)[0];
 
     console.log("🔥 STORED STATUS:", addedUnit.status);
 
-    // ---- Trigger Notification Only If status is "Interested in calling" ----
+    // Create & send notification
     if (addedUnit.status.trim().toLowerCase() === "interested in calling") {
 
       const message = `New unit ${addedUnit.unitNumber} created and marked "Interested in calling".`;
 
       try {
-        await Notification.create({
+        const notif = await Notification.create({
           type: "Inventory",
           itemId: addedUnit._id,
           message,
@@ -387,12 +387,12 @@ exports.addUnit = async (req, res) => {
 
         console.log("📢 Notification created for new interested unit");
 
+        // 🚀 Emit to sockets (admins)
+        emitToAdmins(notif.toJSON());
+
       } catch (err) {
-        if (err.code === 11000) {
-          console.log("⚠ Duplicate notification ignored");
-        } else {
-          console.error("❌ Notification create error:", err);
-        }
+        if (err.code === 11000) console.log("⚠ Duplicate notification ignored");
+        else console.error("❌ Notification create error:", err);
       }
     }
 
@@ -403,6 +403,7 @@ exports.addUnit = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
 
 
 
