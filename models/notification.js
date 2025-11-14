@@ -43,11 +43,11 @@ const notificationSchema = new mongoose.Schema(
       type: Date,
       default: getISTDate,
     },
-    receiver: {
-  type: mongoose.Schema.Types.ObjectId, 
-  ref: "User",
-  required: false
-},
+//     receiver: {
+//   type: mongoose.Schema.Types.ObjectId, 
+//   ref: "User",
+//   required: false
+// },
 
   },
   { versionKey: false }
