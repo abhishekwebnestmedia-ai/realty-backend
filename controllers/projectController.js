@@ -271,16 +271,15 @@ exports.addUnit = async (req, res) => {
       const exists = await Notification.findOne({
         type: "Inventory",
         itemId: addedUnit._id,
-        message,
         createdAt: { $gte: tenMinAgo }
       });
 
       if (!exists) {
-        await Notification.create({
+        const notif = await Notification.create({
           type: "Inventory",
           itemId: addedUnit._id,
           message,
-          changedBy: "admin"
+          changedBy: req.user?.name || "admin"
         });
 
         emitToAdmins(notif.toJSON());
