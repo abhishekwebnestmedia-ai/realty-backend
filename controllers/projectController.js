@@ -569,8 +569,54 @@ exports.approveUnit = async (req, res) => {
 
 
 // ✅ Step 8 - Update Unit (uses $set)
+// exports.updateUnit = async (req, res) => {
+//   try {
+//     const {
+//       category,
+//       projectcategory,
+//       cityId,
+//       divisionId,
+//       sectorId,
+//       projectId,
+//       towerId,
+//       unitId,
+//     } = req.params;
+//     const updateData = req.body;
+
+//     const result = await ProjectType.updateOne(
+//       { category, projectcategory },
+//       {
+//         $set: {
+//           "cities.$[city].divisions.$[div].sectors.$[sec].projects.$[proj].towers.$[tow].units.$[unit]":
+//             updateData,
+//         },
+//       },
+//       {
+//         arrayFilters: [
+//           { "city._id": cityId },
+//           { "div._id": divisionId },
+//           { "sec._id": sectorId },
+//           { "proj._id": projectId },
+//           { "tow._id": towerId },
+//           { "unit._id": unitId },
+//         ],
+//       }
+//     );
+
+//     if (result.modifiedCount === 0)
+//       return res.status(404).json({ error: "Unit not found" });
+
+//     res.json({ message: "Unit updated successfully" });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+
 exports.updateUnit = async (req, res) => {
   try {
+    console.log("🔄 updateUnit() triggered");
+
     const {
       category,
       projectcategory,
@@ -581,14 +627,43 @@ exports.updateUnit = async (req, res) => {
       towerId,
       unitId,
     } = req.params;
+
     const updateData = req.body;
 
+    // ---- Fetch Old Unit ----
+    const projectDoc = await ProjectType.findOne({ category, projectcategory });
+    if (!projectDoc) return res.status(404).json({ error: "Project Type not found" });
+
+    let oldUnit = null;
+
+    projectDoc.cities.forEach(c => {
+      if (c._id.toString() !== cityId) return;
+      c.divisions.forEach(d => {
+        if (d._id.toString() !== divisionId) return;
+        d.sectors.forEach(s => {
+          if (s._id.toString() !== sectorId) return;
+          s.projects.forEach(p => {
+            if (p._id.toString() !== projectId) return;
+            p.towers.forEach(t => {
+              if (t._id.toString() !== towerId) return;
+              const unit = t.units.id(unitId);
+              if (unit) oldUnit = unit;
+            });
+          });
+        });
+      });
+    });
+
+    if (!oldUnit) return res.status(404).json({ error: "Unit not found" });
+
+    console.log("📌 OLD STATUS:", oldUnit.status);
+
+    // ---- Apply Update ----
     const result = await ProjectType.updateOne(
       { category, projectcategory },
       {
         $set: {
-          "cities.$[city].divisions.$[div].sectors.$[sec].projects.$[proj].towers.$[tow].units.$[unit]":
-            updateData,
+          "cities.$[city].divisions.$[div].sectors.$[sec].projects.$[proj].towers.$[tow].units.$[unit]": updateData,
         },
       },
       {
@@ -604,14 +679,63 @@ exports.updateUnit = async (req, res) => {
     );
 
     if (result.modifiedCount === 0)
-      return res.status(404).json({ error: "Unit not found" });
+      return res.status(404).json({ error: "Nothing updated" });
 
-    res.json({ message: "Unit updated successfully" });
+    // ---- Fetch Updated Unit ----
+    const updatedDoc = await ProjectType.findOne({ category, projectcategory });
+    const updatedUnit = updatedDoc
+      .cities.id(cityId)
+      .divisions.id(divisionId)
+      .sectors.id(sectorId)
+      .projects.id(projectId)
+      .towers.id(towerId)
+      .units.id(unitId);
+
+    console.log("📌 UPDATED STATUS:", updatedUnit.status);
+
+    // ---- CONDITION: Trigger only if status changed to 'Interested in calling' ----
+    const oldStatus = (oldUnit.status || "").toLowerCase().trim();
+    const newStatus = (updatedUnit.status || "").toLowerCase().trim();
+
+    if (oldStatus !== newStatus && newStatus === "interested in calling") {
+      console.log("🟢 TRIGGER MATCH → Creating Notification");
+
+      const changedBy = req.user?.name || "System";
+      const msg = `📌 Unit ${updatedUnit.unitNumber} status changed to "Interested in calling" by ${changedBy}`;
+
+      const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+
+      const exists = await Notification.findOne({
+        type: "Inventory",
+        itemId: updatedUnit._id,
+        message: msg,
+        createdAt: { $gte: twoMinAgo },
+      });
+
+      if (!exists) {
+        const notif = await Notification.create({
+          type: "Inventory",
+          itemId: updatedUnit._id,
+          message: msg,
+          changedBy
+        });
+
+        emitToAdmins(notif.toJSON());
+        console.log("📩 Notification emitted to admins:", notif._id);
+      } else {
+        console.log("⚠ Duplicate notification skipped");
+      }
+    } else {
+      console.log("🔹 No notification — Status didn't change to 'Interested in calling'");
+    }
+
+    res.json({ success: true, message: "Unit updated successfully", updatedUnit });
+
   } catch (err) {
+    console.error("❌ updateUnit ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 };
-
 
 
 
@@ -887,6 +1011,51 @@ exports.deleteUnitById = async (req, res) => {
 
 
 
+// exports.createFullHierarchy = async (req, res) => {
+//   try {
+//     const { category, projectcategory, cities = [] } = req.body;
+
+//     const allowedCategory = ["Residential", "Commercial"];
+//     const allowedProjectCategory = ["UnderConstruction", "ReadyToMove"];
+
+//     if (!allowedCategory.includes(category)) {
+//       return res.status(400).json({ error: "Invalid category" });
+//     }
+//     if (!allowedProjectCategory.includes(projectcategory)) {
+//       return res.status(400).json({ error: "Invalid projectcategory" });
+//     }
+
+//     const normalizedCities = cities.map(city => ({
+//       cityName: city.cityName,
+//       divisions: (city.divisions || []).map(division => ({
+//         divisionName: division.divisionName,
+//         sectors: (division.sectors || []).map(sector => ({
+//           sectorName: sector.sectorName,
+//           projects: (sector.projects || []).map(project => ({
+//             projectName: project.projectName,
+//             towers: (project.towers || []).map(tower => ({
+//               towerName: tower.towerName,
+//               units: tower.units || []
+//             }))
+//           }))
+//         }))
+//       }))
+//     }));
+
+//     const typeDoc = new ProjectType({ category, projectcategory, cities: normalizedCities });
+//     await typeDoc.save();
+
+//     res.status(201).json(typeDoc);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+
+
+const Notification = require("../models/notification");
+const { emitToAdmins } = require("../utils/socketEmitter");
+
 exports.createFullHierarchy = async (req, res) => {
   try {
     const { category, projectcategory, cities = [] } = req.body;
@@ -901,6 +1070,9 @@ exports.createFullHierarchy = async (req, res) => {
       return res.status(400).json({ error: "Invalid projectcategory" });
     }
 
+    // Normalize data and detect "Interested in calling" units
+    const matchedUnits = []; // 🔥 Collect entries needing notification
+
     const normalizedCities = cities.map(city => ({
       cityName: city.cityName,
       divisions: (city.divisions || []).map(division => ({
@@ -911,23 +1083,154 @@ exports.createFullHierarchy = async (req, res) => {
             projectName: project.projectName,
             towers: (project.towers || []).map(tower => ({
               towerName: tower.towerName,
-              units: tower.units || []
+              units: (tower.units || []).map(unit => {
+                
+                // Normalize status
+                const allowedStatuses = [
+                  "Vacant", "Rental", "Self Occupied", "Interested in calling"
+                ];
+
+                if (unit.status) {
+                  unit.status =
+                    allowedStatuses.find(
+                      s => s.toLowerCase() === unit.status.toLowerCase().trim()
+                    ) || "Vacant";
+                }
+
+                // 🔍 Check if this unit requires notification
+                if (unit.status && unit.status.toLowerCase() === "interested in calling") {
+                  matchedUnits.push({
+                    unitNumber: unit.unitNumber || "N/A",
+                    status: unit.status,
+                    unitReference: unit,
+                    towerName: tower.towerName,
+                    sectorName: sector.sectorName,
+                    projectName: project.projectName
+                  });
+                }
+
+                return unit;
+              })
             }))
           }))
         }))
       }))
     }));
 
+    // ---- Save Project ----
     const typeDoc = new ProjectType({ category, projectcategory, cities: normalizedCities });
     await typeDoc.save();
 
-    res.status(201).json(typeDoc);
+    // ---- Send Notifications for matching units ----
+    if (matchedUnits.length > 0) {
+      console.log(`🔔 Found ${matchedUnits.length} unit(s) requiring notification`);
+
+      for (const entry of matchedUnits) {
+
+        const msg = `🏢 Unit "${entry.unitNumber}" added under Project "${entry.projectName}" and marked as "Interested in calling".`;
+
+        const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+
+        const exists = await Notification.findOne({
+          type: "Inventory",
+          itemId: entry.unitReference._id,
+          message: msg,
+          createdAt: { $gte: twoMinAgo },
+        });
+
+        if (!exists) {
+          const notif = await Notification.create({
+            type: "Inventory",
+            itemId: entry.unitReference._id,
+            message: msg,
+            changedBy: req.user?.name || "System"
+          });
+
+          emitToAdmins(notif.toJSON());
+          console.log(`📩 Notification sent for unit ${entry.unitNumber}`);
+        } else {
+          console.log(`⚠ Notification skipped (duplicate) for ${entry.unitNumber}`);
+        }
+      }
+    } else {
+      console.log("ℹ No units marked 'Interested in calling'");
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Full hierarchy created successfully",
+      data: typeDoc,
+    });
+
   } catch (err) {
+    console.error("❌ createFullHierarchy ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 };
 
+
+
 // ✅ Full hierarchy update (replace everything)
+// exports.updateFullHierarchy = async (req, res) => {
+//   try {
+//     const { projectId } = req.params;
+//     const { category, projectcategory, cities = [] } = req.body;
+
+//     const allowedCategory = ["Residential", "Commercial"];
+//     const allowedProjectCategory = ["UnderConstruction", "ReadyToMove"];
+
+//     if (!allowedCategory.includes(category)) {
+//       return res.status(400).json({ error: "Invalid category" });
+//     }
+//     if (!allowedProjectCategory.includes(projectcategory)) {
+//       return res.status(400).json({ error: "Invalid projectcategory" });
+//     }
+
+//     const normalizedCities = cities.map(city => ({
+//       cityName: city.cityName,
+//       divisions: (city.divisions || []).map(division => ({
+//         divisionName: division.divisionName,
+//         sectors: (division.sectors || []).map(sector => ({
+//           sectorName: sector.sectorName,
+//           projects: (sector.projects || []).map(project => ({
+//             projectName: project.projectName,
+//             towers: (project.towers || []).map(tower => ({
+//               towerName: tower.towerName,
+//               units: tower.units || []
+//             }))
+//           }))
+//         }))
+//       }))
+//     }));
+
+//     (async () => {
+//   try {
+//     await ProjectType.collection.dropIndex("projectType_1");
+//     console.log("Index dropped successfully");
+//   } catch (err) {
+//     console.error("Error dropping index:", err.message);
+//   }
+// })();
+
+//     const updated = await ProjectType.findByIdAndUpdate(
+//       projectId,
+//       { category, projectcategory, cities: normalizedCities },
+//       { new: true, runValidators: true }
+//     );
+
+//     if (!updated) {
+//       return res.status(404).json({ error: "ProjectType not found" });
+//     }
+
+//     res.json(updated);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+const Notification = require("../models/notification");
+const { emitToAdmins } = require("../utils/socketEmitter");
+
 exports.updateFullHierarchy = async (req, res) => {
   try {
     const { projectId } = req.params;
@@ -943,6 +1246,9 @@ exports.updateFullHierarchy = async (req, res) => {
       return res.status(400).json({ error: "Invalid projectcategory" });
     }
 
+    const interestedUnits = []; // 🔥 store units where status = interested
+
+    // Normalize & detect notification cases
     const normalizedCities = cities.map(city => ({
       cityName: city.cityName,
       divisions: (city.divisions || []).map(division => ({
@@ -953,37 +1259,94 @@ exports.updateFullHierarchy = async (req, res) => {
             projectName: project.projectName,
             towers: (project.towers || []).map(tower => ({
               towerName: tower.towerName,
-              units: tower.units || []
+              units: (tower.units || []).map(unit => {
+
+                // normalize status
+                const statuses = ["Vacant", "Rental", "Self Occupied", "Interested in calling"];
+                if (unit.status) {
+                  unit.status =
+                    statuses.find(s => s.toLowerCase() === unit.status.toLowerCase().trim()) || "Vacant";
+                }
+
+                // detect notification units
+                if (unit.status?.toLowerCase() === "interested in calling") {
+                  interestedUnits.push({
+                    unitNumber: unit.unitNumber || "N/A",
+                    projectName: project.projectName,
+                    sectorName: sector.sectorName,
+                    towerName: tower.towerName,
+                    unitRef: unit
+                  });
+                }
+
+                return unit;
+              })
             }))
           }))
         }))
       }))
     }));
 
-    (async () => {
-  try {
-    await ProjectType.collection.dropIndex("projectType_1");
-    console.log("Index dropped successfully");
-  } catch (err) {
-    console.error("Error dropping index:", err.message);
-  }
-})();
+    // drop index (your existing logic)
+    try {
+      await ProjectType.collection.dropIndex("projectType_1");
+      console.log("🗑 Index dropped");
+    } catch (err) {
+      console.warn("⚠ Index drop failed or not found:", err.message);
+    }
 
+    // ---- UPDATE DB ----
     const updated = await ProjectType.findByIdAndUpdate(
       projectId,
       { category, projectcategory, cities: normalizedCities },
       { new: true, runValidators: true }
     );
 
-    if (!updated) {
-      return res.status(404).json({ error: "ProjectType not found" });
+    if (!updated) return res.status(404).json({ error: "ProjectType not found" });
+
+    console.log(`🔍 Found ${interestedUnits.length} interested units to notify.`);
+
+    // ---- Handle Notifications ----
+    for (const entry of interestedUnits) {
+      const msg = `🏢 Unit "${entry.unitNumber}" under "${entry.projectName}" marked as "Interested in calling".`;
+
+      const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+
+      const exists = await Notification.findOne({
+        type: "Inventory",
+        itemId: entry.unitRef._id,
+        message: msg,
+        createdAt: { $gte: twoMinAgo },
+      });
+
+      if (!exists) {
+        const notif = await Notification.create({
+          type: "Inventory",
+          itemId: entry.unitRef._id,
+          message: msg,
+          changedBy: req.user?.name || "System"
+        });
+
+        emitToAdmins(notif.toJSON());
+        console.log("📩 Notification sent →", entry.unitNumber);
+      } else {
+        console.log("⚠ Duplicate skipped →", entry.unitNumber);
+      }
     }
 
-    res.json(updated);
+    return res.json({
+      success: true,
+      message: "Hierarchy updated successfully",
+      notificationsCreated: interestedUnits.length,
+      data: updated
+    });
+
   } catch (err) {
+    console.error("❌ updateFullHierarchy ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 };
+
 
 // ✅ Bulk Upload API (always inserts)
 exports.bulkUploadProjectTypes = async (req, res) => {
