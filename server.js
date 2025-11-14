@@ -206,6 +206,7 @@ io.on("connection", (socket) => {
 // ✅ FOLLOW-UP CRON SERVICE
 // ----------------------------------------
 require("./services/followupCronService");
+require("./services/autoDeleteOldNotifications");
 
 // ----------------------------------------
 // ✅ TEST SOCKET ENDPOINTS (manual trigger)
