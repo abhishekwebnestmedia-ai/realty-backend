@@ -159,47 +159,146 @@ exports.bulkUploadInventry = async (req, res) => {
 // };
 
 
+// exports.updateInventry = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const updateData = { ...req.body };
+
+//     // ✅ Find the existing record
+//     const oldRecord = await Inventory.findById(id);
+//     if (!oldRecord) {
+//       return res.status(404).json({ success: false, message: "Inventory record not found" });
+//     }
+
+//     // ✅ Update the record
+//     const updatedRecord = await Inventory.findByIdAndUpdate(id, updateData, { new: true });
+//     if (!updatedRecord) {
+//       return res.status(404).json({ success: false, message: "Inventory not found after update" });
+//     }
+
+//     // ✅ Tracked fields (unchanged)
+//     const trackedFields = ["capturedBy", "assignTo", "transferTo", "followUpDate", "remarks", "requirement"];
+
+//     // ✅ Identify who made the change
+//     let changedBy = null;
+//     if (req.user) {
+//       const userId = req.user.userId || req.user._id || req.user.id;
+//       const user = await User.findById(userId).select("name email");
+//       if (user) {
+//         changedBy = {
+//           _id: user._id,
+//           name: user.name,
+//           email: user.email,
+//         };
+//       }
+//     }
+
+//     // ✅ Compare old vs new values
+//     for (const field of trackedFields) {
+//       const oldValue = oldRecord[field];
+//       const newValue = updatedRecord[field];
+
+//       if (String(oldValue || "") !== String(newValue || "")) {
+//         // 🔹 Existing functionality — Create history
+//         await InventoryHistory.create({
+//           inventoryId: id,
+//           changedBy,
+//           field,
+//           oldValue,
+//           newValue,
+//         });
+
+//         // 🔹 NEW functionality — Notification only for assignTo
+//         if (field === "assignTo") {
+//           try {
+//             // Resolve receiver: prefer transferTo -> assignTo
+//             let receiverId = null;
+//             if (updatedRecord.transferTo) {
+//               const r = await User.findOne({ name: updatedRecord.transferTo });
+//               if (r) receiverId = r._id;
+//             }
+
+//             if (!receiverId && updatedRecord.assignTo) {
+//               // assignTo may be a name string
+//               if (mongoose.Types.ObjectId.isValid(String(updatedRecord.assignTo))) {
+//                 receiverId = updatedRecord.assignTo;
+//               } else {
+//                 const r2 = await User.findOne({ name: updatedRecord.assignTo });
+//                 if (r2) receiverId = r2._id;
+//               }
+//             }
+
+//             const msg = `👤 Inventory "${oldRecord.sellerName}" was reassigned to ${newValue || "N/A"} by ${changedBy?.name || "System"}`;
+//             const notif = await Notification.create({
+//               type: "Inventory",
+//               itemId: id,
+//               message: msg,
+//               changedBy: changedBy?.name || "System",
+//               receiver: receiverId || null,
+//             });
+
+//             const payload = { ...notif.toJSON(), inventoryId: id };
+//             if (receiverId) {
+//               await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
+//             } else {
+//               emitToAdmins(payload);
+//             }
+//           } catch (notifErr) {
+//             console.warn("⚠️ Notification creation failed (inventory):", notifErr.message);
+//           }
+//         }
+//       }
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Inventory updated successfully",
+//       data: updatedRecord,
+//     });
+//   } catch (err) {
+//     console.error("updateInventry error:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Error updating inventory",
+//       error: err.message,
+//     });
+//   }
+// };
+
+
 exports.updateInventry = async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body };
 
-    // ✅ Find the existing record
-    const oldRecord = await Inventory.findById(id);
+    // Get old record
+    const oldRecord = await Inventory.findById(id).populate("assignTo", "name email");
     if (!oldRecord) {
       return res.status(404).json({ success: false, message: "Inventory record not found" });
     }
 
-    // ✅ Update the record
-    const updatedRecord = await Inventory.findByIdAndUpdate(id, updateData, { new: true });
-    if (!updatedRecord) {
-      return res.status(404).json({ success: false, message: "Inventory not found after update" });
-    }
+    // Update record
+    const updatedRecord = await Inventory.findByIdAndUpdate(id, updateData, { new: true })
+      .populate("assignTo", "name email");
 
-    // ✅ Tracked fields (unchanged)
     const trackedFields = ["capturedBy", "assignTo", "transferTo", "followUpDate", "remarks", "requirement"];
 
-    // ✅ Identify who made the change
+    // Identify editor user
     let changedBy = null;
     if (req.user) {
       const userId = req.user.userId || req.user._id || req.user.id;
       const user = await User.findById(userId).select("name email");
       if (user) {
-        changedBy = {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-        };
+        changedBy = { _id: user._id, name: user.name, email: user.email };
       }
     }
 
-    // ✅ Compare old vs new values
     for (const field of trackedFields) {
       const oldValue = oldRecord[field];
       const newValue = updatedRecord[field];
 
       if (String(oldValue || "") !== String(newValue || "")) {
-        // 🔹 Existing functionality — Create history
+        // Create history entry
         await InventoryHistory.create({
           inventoryId: id,
           changedBy,
@@ -208,26 +307,27 @@ exports.updateInventry = async (req, res) => {
           newValue,
         });
 
-        // 🔹 NEW functionality — Notification only for assignTo
-        if (field === "assignTo") {
-          try {
-            // Resolve receiver: prefer transferTo -> assignTo
-            let receiverId = null;
-            if (updatedRecord.transferTo) {
-              const r = await User.findOne({ name: updatedRecord.transferTo });
-              if (r) receiverId = r._id;
-            }
+        // 🔹 Notification Handling (same structure as Lead)
+        try {
+          let receiverId = null;
 
-            if (!receiverId && updatedRecord.assignTo) {
-              // assignTo may be a name string
-              if (mongoose.Types.ObjectId.isValid(String(updatedRecord.assignTo))) {
-                receiverId = updatedRecord.assignTo;
-              } else {
-                const r2 = await User.findOne({ name: updatedRecord.assignTo });
-                if (r2) receiverId = r2._id;
-              }
-            }
+          // Priority: transferTo → assignTo
+          if (updatedRecord.transferTo) {
+            const r = await User.findOne({ name: updatedRecord.transferTo });
+            if (r) receiverId = r._id;
+          }
 
+          if (!receiverId && updatedRecord.assignTo) {
+            if (mongoose.Types.ObjectId.isValid(String(updatedRecord.assignTo))) {
+              receiverId = updatedRecord.assignTo;
+            } else {
+              const r2 = await User.findOne({ name: updatedRecord.assignTo });
+              if (r2) receiverId = r2._id;
+            }
+          }
+
+          // AssignTo Notification
+          if (field === "assignTo") {
             const msg = `👤 Inventory "${oldRecord.sellerName}" was reassigned to ${newValue || "N/A"} by ${changedBy?.name || "System"}`;
             const notif = await Notification.create({
               type: "Inventory",
@@ -238,23 +338,63 @@ exports.updateInventry = async (req, res) => {
             });
 
             const payload = { ...notif.toJSON(), inventoryId: id };
-            if (receiverId) {
-              await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
-            } else {
-              emitToAdmins(payload);
-            }
-          } catch (notifErr) {
-            console.warn("⚠️ Notification creation failed (inventory):", notifErr.message);
+            receiverId ? await emitNotification(receiverId.toString(), payload, { emitToAdmin: true }) : emitToAdmins(payload);
           }
+
+          // Follow-up Reminder Notification
+          if (field === "followUpDate") {
+            const msg = `📅 Follow-up scheduled for Inventory "${oldRecord.sellerName}" on ${new Date(newValue).toLocaleString()} by ${changedBy?.name || "System"}`;
+
+            const notif = await Notification.create({
+              type: "Inventory",
+              itemId: id,
+              message: msg,
+              changedBy: changedBy?.name || "System",
+              receiver: receiverId || null,
+            });
+
+            const payload = { ...notif.toJSON(), inventoryId: id };
+            receiverId ? await emitNotification(receiverId.toString(), payload, { emitToAdmin: true }) : emitToAdmins(payload);
+          }
+
+        } catch (e) {
+          console.warn("⚠ Notification failed:", e.message);
         }
       }
     }
 
-    return res.status(200).json({
-      success: true,
-      message: "Inventory updated successfully",
-      data: updatedRecord,
-    });
+    // 🔥 AUTO REMINDER WHEN FOLLOW-UP DATE == CURRENT TIME
+    if (updatedRecord.followUpDate) {
+      const now = new Date();
+      const followUp = new Date(updatedRecord.followUpDate);
+
+      // Compare only date + hour + minute
+      if (
+        followUp.getFullYear() === now.getFullYear() &&
+        followUp.getMonth() === now.getMonth() &&
+        followUp.getDate() === now.getDate() &&
+        followUp.getHours() === now.getHours() &&
+        followUp.getMinutes() === now.getMinutes()
+      ) {
+        const receiverId = updatedRecord.assignTo?._id;
+
+        const autoMsg = `⏰ Reminder: Follow-up call scheduled now for inventory "${updatedRecord.sellerName}".`;
+
+        const notif = await Notification.create({
+          type: "Inventory",
+          itemId: id,
+          message: autoMsg,
+          changedBy: "System",
+          receiver: receiverId || null,
+        });
+
+        const payload = { ...notif.toJSON(), inventoryId: id };
+        receiverId ? await emitNotification(receiverId.toString(), payload, { emitToAdmin: true }) : emitToAdmins(payload);
+      }
+    }
+
+    return res.json({ success: true, message: "Inventory updated successfully", data: updatedRecord });
+
   } catch (err) {
     console.error("updateInventry error:", err);
     return res.status(500).json({
@@ -264,6 +404,7 @@ exports.updateInventry = async (req, res) => {
     });
   }
 };
+
 
 exports.deleteInventry = async (req, res) => {
   try {
