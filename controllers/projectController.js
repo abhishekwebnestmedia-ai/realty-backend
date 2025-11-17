@@ -1544,6 +1544,11 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
 
                   // 👇 Create Inventory Entry Automatically
                   const createdInventory = await Inventory.create({
+                    // Minimal required fields to satisfy Inventory schema
+                    sellerName: newUnit.ownerName || "AutoImported",
+                    Project: [existingProj.projectName],
+                    contactNumbers: newUnit.mobileNumbers || [],
+
                     category,
                     projectcategory,
                     cityId: existingCity._id,
@@ -1569,6 +1574,7 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
 
                   addedUnitsDetails.push({
                     ...createdInventory.toJSON(),
+                    unitNumber: newUnit.unitNumber,
                     notification: newUnit.status === "Interested in calling"
                   });
                 }
@@ -1581,10 +1587,70 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
 
     await typeDoc.save();
 
-    // ---- SEND NOTIFICATIONS ----
+    // ---- SEND NOTIFICATIONS / AUTO-MOVE FOR ADMINS ----
     const changedBy = req.user?.name || "System";
 
+    let createdNotifCount = 0;
     for (const entry of addedUnitsDetails.filter(u => u.notification)) {
+      // If requester is an admin, do NOT send a notification.
+      // Instead mark the project unit as approved and update the Inventory entry
+      // so it behaves like an immediately approved inventory item.
+      const isRequesterAdmin = req.user?.role === 'admin';
+
+      if (isRequesterAdmin) {
+        try {
+          // Mark the corresponding unit in the ProjectType doc as approved
+          const unitId = entry.unitId || entry.unit || entry._id;
+          let found = false;
+          for (const city of typeDoc.cities) {
+            for (const div of city.divisions || []) {
+              for (const sec of div.sectors || []) {
+                for (const proj of sec.projects || []) {
+                  for (const tower of proj.towers || []) {
+                    for (const u of tower.units || []) {
+                      if (!u || !u._id) continue;
+                      if (u._id.toString() === (unitId && unitId.toString ? unitId.toString() : String(unitId))) {
+                        u.isApproved = true;
+                        found = true;
+                        break;
+                      }
+                    }
+                    if (found) break;
+                  }
+                  if (found) break;
+                }
+                if (found) break;
+              }
+              if (found) break;
+            }
+            if (found) break;
+          }
+
+          if (found) {
+            await typeDoc.save();
+          }
+
+          // Update the Inventory record that was created earlier during merge
+          // mark it as approved/captured by this admin so clients see it as moved
+          // into inventory without having to wait for an approval notification.
+          const invId = entry._id;
+          if (invId) {
+            await Inventory.findByIdAndUpdate(invId, {
+              capturedBy: req.user?.name || 'Admin',
+              inventoryType: 'Sales',
+              approvedAt: new Date(),
+              approvedBy: req.user?._id || null
+            });
+          }
+
+          // Skip sending any notification when admin performs merge
+          continue;
+        } catch (err) {
+          console.error('❌ Admin auto-move error:', err);
+        }
+      }
+
+      // Non-admin behavior: create notification and emit to admins (existing behavior)
       const existsNotif = await Notification.findOne({
         type: "Inventory",
         itemId: entry._id
@@ -1605,6 +1671,7 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
         if (global.io && typeof emitToAdmins === "function") {
           emitToAdmins(payload);
         }
+        createdNotifCount++;
       }
     }
 
@@ -1612,7 +1679,7 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
       success: true,
       message: "Hierarchy merged successfully",
       totalAdded: addedUnitsDetails.length,
-      notificationsTriggered: addedUnitsDetails.filter(u => u.notification).length,
+      notificationsTriggered: createdNotifCount,
       inventoryCreated: addedUnitsDetails,
       data: typeDoc
     });
