@@ -1543,7 +1543,10 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
                       sectorId: existingSec._id,
                       projectId: existingProj._id,
                       towerId: existingTower._id,
-                      unitId: newUnit._id
+                      unitId: newUnit._id,
+                      // carry over assignment info if present on the unit
+                      assignTo: newUnit.assignTo || null,
+                      transferTo: newUnit.transferTo || null
                     },
                     readable: {
                       cityName: existingCity.cityName,
@@ -1577,11 +1580,13 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
       });
 
       if (!existsNotif) {
+        // For merge-created inventory notifications: send to admins only
         const notif = await Notification.create({
           type: "Inventory",
           itemId: entry.ids.unitId,
           message: `🏢 Unit "${entry.readable.unitNumber}" marked as "Interested in calling" during merge by ${changedBy}`,
           changedBy,
+          receiver: null,
 
           // 👇 Meta inserted
           meta: {
@@ -1590,8 +1595,10 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
           }
         });
 
+        const payload = notif.toJSON();
+
         if (global.io && typeof emitToAdmins === "function") {
-          emitToAdmins(notif.toJSON());
+          emitToAdmins(payload);
         }
       }
     }
