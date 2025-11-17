@@ -3,7 +3,7 @@ const Inventory = require('../models/inventryModel');
 const InventoryHistory = require("../models/inventryHistory");
 const User = require('../models/user');
 const Notification = require("../models/notification");
-const { emitToAdmins } = require('../utils/socketEmitter');
+const { emitToAdmins, emitNotification } = require('../utils/socketEmitter');
 
 
 const mongoose = require("mongoose");
@@ -211,19 +211,38 @@ exports.updateInventry = async (req, res) => {
         // 🔹 NEW functionality — Notification only for assignTo
         if (field === "assignTo") {
           try {
+            // Resolve receiver: prefer transferTo -> assignTo
+            let receiverId = null;
+            if (updatedRecord.transferTo) {
+              const r = await User.findOne({ name: updatedRecord.transferTo });
+              if (r) receiverId = r._id;
+            }
+
+            if (!receiverId && updatedRecord.assignTo) {
+              // assignTo may be a name string
+              if (mongoose.Types.ObjectId.isValid(String(updatedRecord.assignTo))) {
+                receiverId = updatedRecord.assignTo;
+              } else {
+                const r2 = await User.findOne({ name: updatedRecord.assignTo });
+                if (r2) receiverId = r2._id;
+              }
+            }
+
             const msg = `👤 Inventory "${oldRecord.sellerName}" was reassigned to ${newValue || "N/A"} by ${changedBy?.name || "System"}`;
             const notif = await Notification.create({
               type: "Inventory",
               itemId: id,
               message: msg,
               changedBy: changedBy?.name || "System",
+              receiver: receiverId || null,
             });
 
-            // Emit to admin room
-            emitToAdmins({
-              ...notif.toJSON(),
-              inventoryId: id,
-            });
+            const payload = { ...notif.toJSON(), inventoryId: id };
+            if (receiverId) {
+              await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
+            } else {
+              emitToAdmins(payload);
+            }
           } catch (notifErr) {
             console.warn("⚠️ Notification creation failed (inventory):", notifErr.message);
           }

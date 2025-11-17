@@ -2,6 +2,7 @@ const cron = require("node-cron");
 const Lead = require("../models/leadModel");
 const Inventory = require("../models/inventryModel");
 const Notification = require("../models/notification");
+const User = require("../models/user");
 const { emitNotification, emitToAdmins } = require("../utils/socketEmitter");
 
 // 🔹 Convert JS Date → "YYYY-MM-DDTHH:mm:ss+05:30" (IST)
@@ -35,7 +36,7 @@ cron.schedule("* * * * *", async () => {
 
     // ----------------- INVENTORIES -----------------
 
-    for (const lead of leads) {
+  for (const lead of leads) {
   // ✅ Use correct fields from Lead model
   const msg = `🔔 Reminder: Follow up with ${lead.customerName} (${lead.contactNumber}). Requirement: ${lead.projects || lead.remark || "N/A"}.`;
 
@@ -78,13 +79,32 @@ cron.schedule("* * * * *", async () => {
       createdAt: createdAtIST,
     };
 
-    // 🔔 Emit notification (specific user or to admins if unassigned)
-    if (lead.assignedTo) {
-      await emitNotification(lead.assignedTo.toString(), payload, { emitToAdmin: true });
-    } else {
-      // ✅ Unassigned leads go to admins
+    // 🔔 Determine recipient: transferTo (name) -> assignTo (id or name) -> admins
+    try {
+      let receiverId = null;
+      if (lead.transferTo) {
+        const r = await User.findOne({ name: lead.transferTo });
+        if (r) receiverId = r._id;
+      }
+
+      if (!receiverId && lead.assignedTo) {
+        if (mongoose.Types.ObjectId.isValid(String(lead.assignedTo))) {
+          receiverId = lead.assignedTo;
+        } else {
+          const r2 = await User.findOne({ name: lead.assignedTo });
+          if (r2) receiverId = r2._id;
+        }
+      }
+
+      if (receiverId) {
+        await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
+      } else {
+        emitToAdmins(payload);
+        console.log(`📩 Unassigned lead notification sent to admins`);
+      }
+    } catch (e) {
+      console.error("❌ Error resolving lead recipient:", e);
       emitToAdmins(payload);
-      console.log(`📩 Unassigned lead notification sent to admins`);
     }
 
   } catch (err) {
@@ -132,12 +152,32 @@ cron.schedule("* * * * *", async () => {
           createdAt: notif.createdAt,
         };
 
-        if (inv.assignedTo) {
-          emitNotification(inv.assignedTo.toString(), payload, { emitToAdmin: true });
-        } else {
-          // ✅ Unassigned inventory notifications go to admins
+        // Determine receiver for inventory: transferTo -> assignTo -> admins
+        try {
+          let receiverId = null;
+          if (inv.transferTo) {
+            const r = await User.findOne({ name: inv.transferTo });
+            if (r) receiverId = r._id;
+          }
+
+          if (!receiverId && inv.assignedTo) {
+            if (mongoose.Types.ObjectId.isValid(String(inv.assignedTo))) {
+              receiverId = inv.assignedTo;
+            } else {
+              const r2 = await User.findOne({ name: inv.assignedTo });
+              if (r2) receiverId = r2._id;
+            }
+          }
+
+          if (receiverId) {
+            await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
+          } else {
+            emitToAdmins(payload);
+            console.log(`📩 Unassigned inventory notification sent to admins`);
+          }
+        } catch (e) {
+          console.error("❌ Error resolving inventory recipient:", e);
           emitToAdmins(payload);
-          console.log(`📩 Unassigned inventory notification sent to admins`);
         }
 
       } catch (err) {

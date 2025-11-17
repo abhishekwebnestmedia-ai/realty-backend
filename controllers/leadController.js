@@ -6,7 +6,7 @@ const User = require('../models/user');
 const mongoose = require("mongoose");
 const LeadHistory = require("../models/leadHistory");
 const Notification = require("../models/notification");
-const { emitToAdmins } = require('../utils/socketEmitter');
+const { emitToAdmins, emitNotification } = require('../utils/socketEmitter');
 
 
 
@@ -290,6 +290,23 @@ exports.updateLead = async (req, res) => {
 
         // 🔹 NEW functionality — Create notifications (safely)
         try {
+          // Resolve receiver: prefer transferTo (name) -> assignTo (id or name)
+          let receiverId = null;
+          if (updatedLead.transferTo) {
+            const r = await User.findOne({ name: updatedLead.transferTo });
+            if (r) receiverId = r._id;
+          }
+
+          if (!receiverId && updatedLead.assignTo) {
+            // assignTo may be an ObjectId or a string name
+            if (mongoose.Types.ObjectId.isValid(String(updatedLead.assignTo))) {
+              receiverId = updatedLead.assignTo;
+            } else {
+              const r2 = await User.findOne({ name: updatedLead.assignTo });
+              if (r2) receiverId = r2._id;
+            }
+          }
+
           if (field === "assignTo") {
             const msg = `👤 Lead "${oldLead.customerName}" was reassigned to ${newValue || "N/A"} by ${changedBy?.name || "System"}`;
             const notif = await Notification.create({
@@ -297,13 +314,16 @@ exports.updateLead = async (req, res) => {
               itemId: id,
               message: msg,
               changedBy: changedBy?.name || "System",
+              receiver: receiverId || null,
             });
 
-            // Emit to admin room
-            emitToAdmins({
-              ...notif.toJSON(),
-              leadId: id,
-            });
+            const payload = { ...notif.toJSON(), leadId: id };
+            if (receiverId) {
+              // send to specific user and also to admins
+              await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
+            } else {
+              emitToAdmins(payload);
+            }
           }
 
           if (field === "status") {
@@ -313,13 +333,15 @@ exports.updateLead = async (req, res) => {
               itemId: id,
               message: msg,
               changedBy: changedBy?.name || "System",
+              receiver: receiverId || null,
             });
 
-            // Emit to admin room
-            emitToAdmins({
-              ...notif.toJSON(),
-              leadId: id,
-            });
+            const payload = { ...notif.toJSON(), leadId: id };
+            if (receiverId) {
+              await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
+            } else {
+              emitToAdmins(payload);
+            }
           }
         } catch (notifErr) {
           console.warn("⚠️ Notification creation failed (lead):", notifErr.message);

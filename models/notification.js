@@ -3,12 +3,7 @@
 
 const mongoose = require("mongoose");
 
-// ✅ Helper to get IST time
-function getISTDate() {
-  const now = new Date();
-  const istOffset = 5.5 * 60 * 60 * 1000;
-  return new Date(now.getTime() + istOffset);
-}
+// We store dates in UTC (Date.now). Formatting to IST is done in toJSON for responses.
 
 const notificationSchema = new mongoose.Schema(
   {
@@ -29,7 +24,7 @@ const notificationSchema = new mongoose.Schema(
       type: String,
     },
 
-    // 👇👇 NEW FIELD ADDED
+    // optional metadata
     meta: {
       type: Object,
       default: null,
@@ -39,9 +34,16 @@ const notificationSchema = new mongoose.Schema(
       default: false
     },
 
+    // store as UTC timestamp
+    receiver: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: false,
+    },
+
     createdAt: {
       type: Date,
-      default: getISTDate,
+      default: Date.now,
     },
 //     receiver: {
 //   type: mongoose.Schema.Types.ObjectId, 
@@ -56,15 +58,12 @@ const notificationSchema = new mongoose.Schema(
 // Prevent duplicate
 notificationSchema.index({ type: 1, itemId: 1, message: 1 }, { unique: true });
 
-// Format IST date on output
+// Return createdAt as ISO UTC string for frontend to parse and format correctly
 notificationSchema.methods.toJSON = function () {
   const obj = this.toObject();
-  const istOffset = 5.5 * 60 * 60 * 1000;
-  if (obj.createdAt) {
-    obj.createdAt = new Date(obj.createdAt.getTime() + istOffset)
-      .toISOString()
-      .replace("T", " ")
-      .substring(0, 19);
+  // Return ISO UTC string; frontend will convert to IST as needed
+  if (obj.createdAt && obj.createdAt instanceof Date) {
+    obj.createdAt = obj.createdAt.toISOString();
   }
   return obj;
 };

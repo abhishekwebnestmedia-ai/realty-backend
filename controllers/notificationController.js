@@ -3,11 +3,23 @@
 
 const Notification = require("../models/notification");
 const mongoose = require("mongoose");
+const User = require("../models/user");
+const { emitNotification, emitToAdmins } = require("../utils/socketEmitter");
 
 
 exports.getAllNotifications = async (req, res) => {
   try {
-    const notifications = await Notification.find().sort({ createdAt: -1 });
+    // If user is admin, return all notifications. Otherwise return only notifications addressed to the user.
+    const userRole = req.user?.role || 'user';
+    const userId = req.user?._id;
+
+    let filter = {};
+    if (userRole !== 'admin') {
+      if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+      filter = { receiver: userId };
+    }
+
+    const notifications = await Notification.find(filter).sort({ createdAt: -1 });
 
     res.json({
       success: true,
@@ -68,6 +80,55 @@ exports.markAllAsRead = async (req, res) => {
       message: "Error updating notifications",
       error: err.message,
     });
+  }
+};
+
+
+// ---- TEST: create a notification (protected) ----
+exports.createTestNotification = async (req, res) => {
+  try {
+    const { type = 'Lead', itemId, message = 'Test notification', transferTo, assignTo } = req.body;
+
+    if (!itemId) {
+      return res.status(400).json({ success: false, message: 'itemId is required' });
+    }
+
+    // Resolve receiver: transferTo (name) -> assignTo (id or name)
+    let receiverId = null;
+    if (transferTo) {
+      const r = await User.findOne({ name: transferTo });
+      if (r) receiverId = r._id;
+    }
+
+    if (!receiverId && assignTo) {
+      if (mongoose.Types.ObjectId.isValid(String(assignTo))) {
+        receiverId = assignTo;
+      } else {
+        const r2 = await User.findOne({ name: assignTo });
+        if (r2) receiverId = r2._id;
+      }
+    }
+
+    const notif = await Notification.create({
+      type,
+      itemId,
+      message,
+      changedBy: req.user?.name || 'System',
+      receiver: receiverId || null,
+    });
+
+    const payload = { ...notif.toJSON(), itemId };
+
+    if (receiverId) {
+      await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
+    } else {
+      emitToAdmins(payload);
+    }
+
+    res.status(201).json({ success: true, data: notif });
+  } catch (err) {
+    console.error('createTestNotification error:', err);
+    res.status(500).json({ success: false, message: 'Error creating test notification', error: err.message });
   }
 };
 
