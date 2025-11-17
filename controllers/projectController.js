@@ -1298,6 +1298,7 @@ exports.bulkUploadProjectTypes = async (req, res) => {
 
 
 
+
 // exports.mergeOrCreateHierarchy = async (req, res) => {
 //   try {
 //     const { category, projectcategory, cities = [] } = req.body;
@@ -1320,7 +1321,7 @@ exports.bulkUploadProjectTypes = async (req, res) => {
 //     }
 
 //     const interestedUnits = [];
-//     const addedUnitsDetails = []; // 👈 RETURN THIS
+//     const addedUnitsDetails = [];
 
 //     const allowedStatuses = [
 //       "Vacant",
@@ -1376,7 +1377,6 @@ exports.bulkUploadProjectTypes = async (req, res) => {
 //                   const newUnit = { ...unit, _id: new mongoose.Types.ObjectId() };
 //                   existingTower.units.push(newUnit);
 
-//                   // 🧾 Store full readable + ID info
 //                   addedUnitsDetails.push({
 //                     ids: {
 //                       category,
@@ -1386,7 +1386,10 @@ exports.bulkUploadProjectTypes = async (req, res) => {
 //                       sectorId: existingSec._id,
 //                       projectId: existingProj._id,
 //                       towerId: existingTower._id,
-//                       unitId: newUnit._id
+//                       unitId: newUnit._id,
+//                       // carry over assignment info if present on the unit
+//                       assignTo: newUnit.assignTo || null,
+//                       transferTo: newUnit.transferTo || null
 //                     },
 //                     readable: {
 //                       cityName: existingCity.cityName,
@@ -1399,14 +1402,6 @@ exports.bulkUploadProjectTypes = async (req, res) => {
 //                     },
 //                     notification: newUnit.status === "Interested in calling"
 //                   });
-
-//                   if (newUnit.status === "Interested in calling") {
-//                     interestedUnits.push({
-//                       unitRef: newUnit,
-//                       unitNumber: newUnit.unitNumber,
-//                       projectName: existingProj.projectName
-//                     });
-//                   }
 //                 }
 //               }
 //             }
@@ -1417,25 +1412,36 @@ exports.bulkUploadProjectTypes = async (req, res) => {
 
 //     await typeDoc.save();
 
-//     // ---- SEND NOTIFICATIONS ----
+//     // ---- SEND NOTIFICATIONS (UPDATED) ----
 //     const changedBy = req.user?.name || "System";
 
-//     for (const entry of interestedUnits) {
+//     for (const entry of addedUnitsDetails.filter(u => u.notification)) {
+
 //       const existsNotif = await Notification.findOne({
 //         type: "Inventory",
-//         itemId: entry.unitRef._id
+//         itemId: entry.ids.unitId
 //       });
 
 //       if (!existsNotif) {
+//         // For merge-created inventory notifications: send to admins only
 //         const notif = await Notification.create({
 //           type: "Inventory",
-//           itemId: entry.unitRef._id,
-//           message: `🏢 Unit "${entry.unitNumber}" marked as "Interested in calling" during merge by ${changedBy}`,
-//           changedBy
+//           itemId: entry.ids.unitId,
+//           message: `🏢 Unit "${entry.readable.unitNumber}" marked as "Interested in calling" during merge by ${changedBy}`,
+//           changedBy,
+//           receiver: null,
+
+//           // 👇 Meta inserted
+//           meta: {
+//             ...entry.ids,
+//             ...entry.readable
+//           }
 //         });
 
+//         const payload = notif.toJSON();
+
 //         if (global.io && typeof emitToAdmins === "function") {
-//           emitToAdmins(notif.toJSON());
+//           emitToAdmins(payload);
 //         }
 //       }
 //     }
@@ -1444,8 +1450,8 @@ exports.bulkUploadProjectTypes = async (req, res) => {
 //       success: true,
 //       message: "Hierarchy merged successfully",
 //       totalAdded: addedUnitsDetails.length,
-//       notificationsTriggered: interestedUnits.length,
-//       mergedDetails: addedUnitsDetails, // 👈 MAIN OUTPUT
+//       notificationsTriggered: addedUnitsDetails.filter(u => u.notification).length,
+//       mergedDetails: addedUnitsDetails,
 //       data: typeDoc
 //     });
 
@@ -1454,6 +1460,8 @@ exports.bulkUploadProjectTypes = async (req, res) => {
 //     res.status(500).json({ error: err.message });
 //   }
 // };
+
+
 
 
 exports.mergeOrCreateHierarchy = async (req, res) => {
@@ -1477,7 +1485,6 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
       typeDoc = new ProjectType({ category, projectcategory, cities: [] });
     }
 
-    const interestedUnits = [];
     const addedUnitsDetails = [];
 
     const allowedStatuses = [
@@ -1526,6 +1533,7 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
               for (const unit of tower.units || []) {
                 const exists = existingTower.units.some(u => u.unitNumber === unit.unitNumber);
 
+                // Normalize status
                 unit.status = allowedStatuses.find(
                   s => s.toLowerCase() === (unit.status || "").toLowerCase().trim()
                 ) || "Vacant";
@@ -1534,29 +1542,33 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
                   const newUnit = { ...unit, _id: new mongoose.Types.ObjectId() };
                   existingTower.units.push(newUnit);
 
-                  addedUnitsDetails.push({
-                    ids: {
-                      category,
-                      projectcategory,
-                      cityId: existingCity._id,
-                      divisionId: existingDiv._id,
-                      sectorId: existingSec._id,
-                      projectId: existingProj._id,
-                      towerId: existingTower._id,
-                      unitId: newUnit._id,
-                      // carry over assignment info if present on the unit
-                      assignTo: newUnit.assignTo || null,
-                      transferTo: newUnit.transferTo || null
-                    },
-                    readable: {
+                  // 👇 Create Inventory Entry Automatically
+                  const createdInventory = await Inventory.create({
+                    category,
+                    projectcategory,
+                    cityId: existingCity._id,
+                    divisionId: existingDiv._id,
+                    sectorId: existingSec._id,
+                    projectId: existingProj._id,
+                    towerId: existingTower._id,
+                    unitId: newUnit._id,
+                    unitNumber: newUnit.unitNumber,
+                    status: newUnit.status,
+                    createdBy: req.user?._id || null,
+                    assignTo: newUnit.assignTo || null,
+                    transferTo: newUnit.transferTo || null,
+
+                    meta: {
                       cityName: existingCity.cityName,
                       divisionName: existingDiv.divisionName,
                       sectorName: existingSec.sectorName,
                       projectName: existingProj.projectName,
-                      towerName: existingTower.towerName,
-                      unitNumber: newUnit.unitNumber,
-                      status: newUnit.status
-                    },
+                      towerName: existingTower.towerName
+                    }
+                  });
+
+                  addedUnitsDetails.push({
+                    ...createdInventory.toJSON(),
                     notification: newUnit.status === "Interested in calling"
                   });
                 }
@@ -1569,30 +1581,23 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
 
     await typeDoc.save();
 
-    // ---- SEND NOTIFICATIONS (UPDATED) ----
+    // ---- SEND NOTIFICATIONS ----
     const changedBy = req.user?.name || "System";
 
     for (const entry of addedUnitsDetails.filter(u => u.notification)) {
-
       const existsNotif = await Notification.findOne({
         type: "Inventory",
-        itemId: entry.ids.unitId
+        itemId: entry._id
       });
 
       if (!existsNotif) {
-        // For merge-created inventory notifications: send to admins only
         const notif = await Notification.create({
           type: "Inventory",
-          itemId: entry.ids.unitId,
-          message: `🏢 Unit "${entry.readable.unitNumber}" marked as "Interested in calling" during merge by ${changedBy}`,
+          itemId: entry._id,
+          message: `🏢 Unit "${entry.unitNumber}" marked as "Interested in calling" during merge by ${changedBy}`,
           changedBy,
           receiver: null,
-
-          // 👇 Meta inserted
-          meta: {
-            ...entry.ids,
-            ...entry.readable
-          }
+          meta: entry.meta
         });
 
         const payload = notif.toJSON();
@@ -1608,7 +1613,7 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
       message: "Hierarchy merged successfully",
       totalAdded: addedUnitsDetails.length,
       notificationsTriggered: addedUnitsDetails.filter(u => u.notification).length,
-      mergedDetails: addedUnitsDetails,
+      inventoryCreated: addedUnitsDetails,
       data: typeDoc
     });
 
@@ -1617,8 +1622,6 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
-
 
  
 
