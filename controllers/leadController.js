@@ -188,6 +188,56 @@ exports.assignLead = async (req, res) => {
 
 
 
+// exports.getLeads = async (req, res) => {
+//   try {
+//     // ✅ Step 1 - Ensure the user is authenticated
+//     if (!req.user || !req.user.name) {
+//       return res
+//         .status(401)
+//         .json({ success: false, message: "Unauthorized access" });
+//     }
+
+//     const userRole = req.user.role || "user";
+//     const userName = req.user.name; // 🟢 match by name
+//     let filter = {};
+
+//     // ✅ Step 2 - For non-admin users: prefer `transferTo === userName`.
+//     // If transferTo is not present (null/empty/not set), fall back to `assignTo === req.user._id`.
+//     if (userRole !== "admin") {
+//       const userId = req.user?._id;
+//       filter = {
+//         $or: [
+//           { transferTo: userName },
+//           {
+//             $and: [
+//               { $or: [ { transferTo: { $exists: false } }, { transferTo: null }, { transferTo: "" } ] },
+//               { assignTo: mongoose.Types.ObjectId.isValid(String(userId)) ? mongoose.Types.ObjectId(userId) : userId }
+//             ]
+//           }
+//         ]
+//       };
+//     }
+
+//     // ✅ Step 3 - Fetch filtered leads
+//     const leads = await Lead.find(filter)
+//       .populate("assignTo", "name email role")
+//       .sort({ createdAt: -1 });
+
+//     // ✅ Step 4 - Respond with results
+//     res.status(200).json({
+//       success: true,
+//       role: userRole,
+//       count: leads.length,
+//       data: leads,
+//     });
+//   } catch (err) {
+//     console.error("❌ getLeads error:", err.message);
+//     res
+//       .status(500)
+//       .json({ success: false, message: "Server error fetching leads" });
+//   }
+// };
+
 exports.getLeads = async (req, res) => {
   try {
     // ✅ Step 1 - Ensure the user is authenticated
@@ -201,9 +251,21 @@ exports.getLeads = async (req, res) => {
     const userName = req.user.name; // 🟢 match by name
     let filter = {};
 
-    // ✅ Step 2 - Only filter by `transferTo` for non-admin users
+    // ✅ Step 2 - For non-admin users: prefer `transferTo === userName`.
+    // If transferTo is not present (null/empty/not set), fall back to `assignTo === req.user._id`.
     if (userRole !== "admin") {
-      filter = { transferTo: userName };
+      const userId = req.user?._id;
+      filter = {
+        $or: [
+          { transferTo: userName },
+          {
+            $and: [
+              { $or: [ { transferTo: { $exists: false } }, { transferTo: null }, { transferTo: "" } ] },
+              { assignTo: mongoose.Types.ObjectId.isValid(String(userId)) ? mongoose.Types.ObjectId(userId) : userId }
+            ]
+          }
+        ]
+      };
     }
 
     // ✅ Step 3 - Fetch filtered leads
@@ -826,7 +888,7 @@ exports.createFrom99acres = async (req, res) => {
       customerName: safe(data.customerName || data.name, "Unknown Lead"),
       contactNumber: safe(data.contactNumber || data.phone, "0000000000"),
       email: safe(data.email, "unknown@example.com"),
-      status: safe(data.status, "Hot"),
+      status: safe(data.status, "Not Connected"),
       leadType: safe(data.leadType, "Buyer"),
       requirement: safe(
         data.requirement || data.project || data.propertyType,
