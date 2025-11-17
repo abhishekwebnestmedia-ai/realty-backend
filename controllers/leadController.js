@@ -238,55 +238,71 @@ exports.assignLead = async (req, res) => {
 //   }
 // };
 
+
+
 exports.getLeads = async (req, res) => {
   try {
     // ✅ Step 1 - Ensure the user is authenticated
     if (!req.user || !req.user.name) {
-      return res
-        .status(401)
-        .json({ success: false, message: "Unauthorized access" });
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized access"
+      });
     }
 
     const userRole = req.user.role || "user";
-    const userName = req.user.name; // 🟢 match by name
+    const userName = req.user.name;
     let filter = {};
 
-    // ✅ Step 2 - For non-admin users: prefer `transferTo === userName`.
-    // If transferTo is not present (null/empty/not set), fall back to `assignTo === req.user._id`.
+    // ✅ Step 2 - Apply filtering only if user is NOT admin
     if (userRole !== "admin") {
-      const userId = req.user?._id;
+      const userId = req.user._id?.toString();
+
       filter = {
         $or: [
-          { transferTo: userName },
+          { transferTo: userName }, // Leads transferred to user
           {
             $and: [
-              { $or: [ { transferTo: { $exists: false } }, { transferTo: null }, { transferTo: "" } ] },
-              { assignTo: mongoose.Types.ObjectId.isValid(String(userId)) ? mongoose.Types.ObjectId(userId) : userId }
+              {
+                $or: [
+                  { transferTo: { $exists: false } },
+                  { transferTo: null },
+                  { transferTo: "" }
+                ]
+              },
+              {
+                assignTo: mongoose.isValidObjectId(userId)
+                  ? new mongoose.Types.ObjectId(userId)
+                  : userId
+              }
             ]
           }
         ]
       };
     }
 
-    // ✅ Step 3 - Fetch filtered leads
+    // ✅ Step 3 - Query leads
     const leads = await Lead.find(filter)
       .populate("assignTo", "name email role")
       .sort({ createdAt: -1 });
 
-    // ✅ Step 4 - Respond with results
+    // ✅ Step 4 - Return response
     res.status(200).json({
       success: true,
       role: userRole,
       count: leads.length,
-      data: leads,
+      data: leads
     });
+
   } catch (err) {
-    console.error("❌ getLeads error:", err.message);
-    res
-      .status(500)
-      .json({ success: false, message: "Server error fetching leads" });
+    console.error("❌ getLeads error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error fetching leads"
+    });
   }
 };
+
 
 
 
