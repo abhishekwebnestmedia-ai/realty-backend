@@ -12,6 +12,20 @@ function toISTISOString(date) {
   return ist.toISOString().split(".")[0] + "+05:30";
 }
 
+// 🕒 Format date to readable IST format (DD/MM/YYYY, HH:mm AM/PM IST)
+function formatIST(date) {
+  if (!date) return "N/A";
+  return new Date(date).toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  });
+}
+
 // 🕒 Runs every minute
 cron.schedule("* * * * *", async () => {
   try {
@@ -119,10 +133,8 @@ cron.schedule("* * * * *", async () => {
     });
 
     for (const inv of inventories) {
-      const msg = `🔔 Reminder: Follow up with ${inv.sellerName} (${inv.contactNumbers?.[0] || "N/A"}) at ${new Date(inv.followUpDate).toLocaleTimeString("en-IN", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })}. Property in sector ${inv.sector || "N/A"} — Demand: ${inv.demand || "N/A"}.`;
+      const istTime = formatIST(inv.followUpDate);
+      const msg = `🔔 Reminder: Follow up with ${inv.sellerName} (${inv.contactNumbers?.[0] || "N/A"}) at ${istTime} IST. Property in sector ${inv.sector || "N/A"} — Demand: ${inv.demand || "N/A"}.`;
 
       const exists = await Notification.findOne({
         type: "Inventory",

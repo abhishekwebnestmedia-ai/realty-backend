@@ -8,6 +8,21 @@ const { emitToAdmins, emitNotification } = require('../utils/socketEmitter');
 
 const mongoose = require("mongoose");
 
+// 🕒 Helper: Format date to IST readable format
+function formatIST(date) {
+  if (!date) return "N/A";
+  return new Date(date).toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true
+  });
+}
+
 exports.createInventry = async (req, res) => {
   try {
     const record = new Inventory(req.body);
@@ -343,7 +358,8 @@ exports.updateInventry = async (req, res) => {
 
           // Follow-up Reminder Notification
           if (field === "followUpDate") {
-            const msg = `📅 Follow-up scheduled for Inventory "${oldRecord.sellerName}" on ${new Date(newValue).toLocaleString()} by ${changedBy?.name || "System"}`;
+            const istTime = formatIST(newValue);
+            const msg = `📅 Follow-up scheduled for Inventory "${oldRecord.sellerName}" on ${istTime} IST by ${changedBy?.name || "System"}`;
 
             const notif = await Notification.create({
               type: "Inventory",
