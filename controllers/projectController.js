@@ -1464,6 +1464,239 @@ exports.bulkUploadProjectTypes = async (req, res) => {
 
 
 
+
+
+
+
+// exports.mergeOrCreateHierarchy = async (req, res) => {
+//   try {
+//     const { category, projectcategory, cities = [] } = req.body;
+
+//     if (!category || !projectcategory)
+//       return res.status(400).json({ error: "Missing category or projectcategory" });
+
+//     const allowedCategory = ["Residential", "Commercial"];
+//     const allowedProjectCategory = ["UnderConstruction", "ReadyToMove"];
+
+//     if (!allowedCategory.includes(category))
+//       return res.status(400).json({ error: "Invalid category" });
+
+//     if (!allowedProjectCategory.includes(projectcategory))
+//       return res.status(400).json({ error: "Invalid projectcategory" });
+
+//     let typeDoc = await ProjectType.findOne({ category, projectcategory });
+//     if (!typeDoc) {
+//       typeDoc = new ProjectType({ category, projectcategory, cities: [] });
+//     }
+
+//     const addedUnitsDetails = [];
+
+//     const allowedStatuses = [
+//       "Vacant",
+//       "Rental",
+//       "Self Occupied",
+//       "Interested in calling"
+//     ];
+
+//     // ---- MERGE ----
+//     for (const city of cities) {
+//       let existingCity = typeDoc.cities.find(c => c.cityName === city.cityName);
+//       if (!existingCity) {
+//         typeDoc.cities.push(city);
+//         continue;
+//       }
+
+//       for (const div of city.divisions || []) {
+//         let existingDiv = existingCity.divisions.find(d => d.divisionName === div.divisionName);
+//         if (!existingDiv) {
+//           existingCity.divisions.push(div);
+//           continue;
+//         }
+
+//         for (const sec of div.sectors || []) {
+//           let existingSec = existingDiv.sectors.find(s => s.sectorName === sec.sectorName);
+//           if (!existingSec) {
+//             existingDiv.sectors.push(sec);
+//             continue;
+//           }
+
+//           for (const proj of sec.projects || []) {
+//             let existingProj = existingSec.projects.find(p => p.projectName === proj.projectName);
+//             if (!existingProj) {
+//               existingSec.projects.push(proj);
+//               continue;
+//             }
+
+//             for (const tower of proj.towers || []) {
+//               let existingTower = existingProj.towers.find(t => t.towerName === tower.towerName);
+//               if (!existingTower) {
+//                 existingProj.towers.push(tower);
+//                 continue;
+//               }
+
+//               for (const unit of tower.units || []) {
+//                 const exists = existingTower.units.some(u => u.unitNumber === unit.unitNumber);
+
+//                 // Normalize status
+//                 unit.status = allowedStatuses.find(
+//                   s => s.toLowerCase() === (unit.status || "").toLowerCase().trim()
+//                 ) || "Vacant";
+
+//                 if (!exists) {
+//                   const newUnit = { ...unit, _id: new mongoose.Types.ObjectId() };
+//                   existingTower.units.push(newUnit);
+
+//                   // 👇 Create Inventory Entry Automatically
+//                   const createdInventory = await Inventory.create({
+//                     // Minimal required fields to satisfy Inventory schema
+//                     sellerName: newUnit.ownerName || "AutoImported",
+//                     Project: [existingProj.projectName],
+//                     contactNumbers: newUnit.mobileNumbers || [],
+
+//                     category,
+//                     projectcategory,
+//                     cityId: existingCity._id,
+//                     divisionId: existingDiv._id,
+//                     sectorId: existingSec._id,
+//                     projectId: existingProj._id,
+//                     towerId: existingTower._id,
+//                     unitId: newUnit._id,
+//                     unitNumber: newUnit.unitNumber,
+//                     status: newUnit.status,
+//                     createdBy: req.user?._id || null,
+//                     assignTo: newUnit.assignTo || null,
+//                     transferTo: newUnit.transferTo || null,
+
+//                     meta: {
+//                       cityName: existingCity.cityName,
+//                       divisionName: existingDiv.divisionName,
+//                       sectorName: existingSec.sectorName,
+//                       projectName: existingProj.projectName,
+//                       towerName: existingTower.towerName
+//                     }
+//                   });
+
+//                   addedUnitsDetails.push({
+//                     ...createdInventory.toJSON(),
+//                     unitNumber: newUnit.unitNumber,
+//                     notification: newUnit.status === "Interested in calling"
+//                   });
+//                 }
+//               }
+//             }
+//           }
+//         }
+//       }
+//     }
+
+//     await typeDoc.save();
+
+//     // ---- SEND NOTIFICATIONS / AUTO-MOVE FOR ADMINS ----
+//     const changedBy = req.user?.name || "System";
+
+//     let createdNotifCount = 0;
+//     for (const entry of addedUnitsDetails.filter(u => u.notification)) {
+//       // If requester is an admin, do NOT send a notification.
+//       // Instead mark the project unit as approved and update the Inventory entry
+//       // so it behaves like an immediately approved inventory item.
+//       const isRequesterAdmin = req.user?.role === 'admin';
+
+//       if (isRequesterAdmin) {
+//         try {
+//           // Mark the corresponding unit in the ProjectType doc as approved
+//           const unitId = entry.unitId || entry.unit || entry._id;
+//           let found = false;
+//           for (const city of typeDoc.cities) {
+//             for (const div of city.divisions || []) {
+//               for (const sec of div.sectors || []) {
+//                 for (const proj of sec.projects || []) {
+//                   for (const tower of proj.towers || []) {
+//                     for (const u of tower.units || []) {
+//                       if (!u || !u._id) continue;
+//                       if (u._id.toString() === (unitId && unitId.toString ? unitId.toString() : String(unitId))) {
+//                         u.isApproved = true;
+//                         found = true;
+//                         break;
+//                       }
+//                     }
+//                     if (found) break;
+//                   }
+//                   if (found) break;
+//                 }
+//                 if (found) break;
+//               }
+//               if (found) break;
+//             }
+//             if (found) break;
+//           }
+
+//           if (found) {
+//             await typeDoc.save();
+//           }
+
+//           // Update the Inventory record that was created earlier during merge
+//           // mark it as approved/captured by this admin so clients see it as moved
+//           // into inventory without having to wait for an approval notification.
+//           const invId = entry._id;
+//           if (invId) {
+//             await Inventory.findByIdAndUpdate(invId, {
+//               capturedBy: req.user?.name || 'Admin',
+//               inventoryType: 'Sales',
+//               approvedAt: new Date(),
+//               approvedBy: req.user?._id || null
+//             });
+//           }
+
+//           // Skip sending any notification when admin performs merge
+//           continue;
+//         } catch (err) {
+//           console.error('❌ Admin auto-move error:', err);
+//         }
+//       }
+
+//       // Non-admin behavior: create notification and emit to admins (existing behavior)
+//       const existsNotif = await Notification.findOne({
+//         type: "Inventory",
+//         itemId: entry._id
+//       });
+
+//       if (!existsNotif) {
+//         const notif = await Notification.create({
+//           type: "Inventory",
+//           itemId: entry._id,
+//           message: `🏢 Unit "${entry.unitNumber}" marked as "Interested in calling" during merge by ${changedBy}`,
+//           changedBy,
+//           receiver: null,
+//           meta: entry.meta
+//         });
+
+//         const payload = notif.toJSON();
+
+//         if (global.io && typeof emitToAdmins === "function") {
+//           emitToAdmins(payload);
+//         }
+//         createdNotifCount++;
+//       }
+//     }
+
+//     return res.json({
+//       success: true,
+//       message: "Hierarchy merged successfully",
+//       totalAdded: addedUnitsDetails.length,
+//       notificationsTriggered: createdNotifCount,
+//       inventoryCreated: addedUnitsDetails,
+//       data: typeDoc
+//     });
+
+//   } catch (err) {
+//     console.error("❌ mergeOrCreateHierarchy error:", err);
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+
+ 
+
+
 exports.mergeOrCreateHierarchy = async (req, res) => {
   try {
     const { category, projectcategory, cities = [] } = req.body;
@@ -1494,7 +1727,7 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
       "Interested in calling"
     ];
 
-    // ---- MERGE ----
+    // ---- MERGE PROCESS ----
     for (const city of cities) {
       let existingCity = typeDoc.cities.find(c => c.cityName === city.cityName);
       if (!existingCity) {
@@ -1534,17 +1767,17 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
                 const exists = existingTower.units.some(u => u.unitNumber === unit.unitNumber);
 
                 // Normalize status
-                unit.status = allowedStatuses.find(
-                  s => s.toLowerCase() === (unit.status || "").toLowerCase().trim()
-                ) || "Vacant";
+                unit.status =
+                  allowedStatuses.find(
+                    s => s.toLowerCase() === (unit.status || "").toLowerCase().trim()
+                  ) || "Vacant";
 
                 if (!exists) {
                   const newUnit = { ...unit, _id: new mongoose.Types.ObjectId() };
                   existingTower.units.push(newUnit);
 
-                  // 👇 Create Inventory Entry Automatically
+                  // ---- Create Inventory Automatically ----
                   const createdInventory = await Inventory.create({
-                    // Minimal required fields to satisfy Inventory schema
                     sellerName: newUnit.ownerName || "AutoImported",
                     Project: [existingProj.projectName],
                     contactNumbers: newUnit.mobileNumbers || [],
@@ -1587,89 +1820,62 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
 
     await typeDoc.save();
 
-    // ---- SEND NOTIFICATIONS / AUTO-MOVE FOR ADMINS ----
+    // ---- NOTIFICATIONS ----
     const changedBy = req.user?.name || "System";
-
     let createdNotifCount = 0;
-    for (const entry of addedUnitsDetails.filter(u => u.notification)) {
-      // If requester is an admin, do NOT send a notification.
-      // Instead mark the project unit as approved and update the Inventory entry
-      // so it behaves like an immediately approved inventory item.
-      const isRequesterAdmin = req.user?.role === 'admin';
 
+    for (const entry of addedUnitsDetails.filter(u => u.notification)) {
+      const isRequesterAdmin = req.user?.role === "admin";
+
+      // If admin, auto approve unit and skip notification
       if (isRequesterAdmin) {
         try {
-          // Mark the corresponding unit in the ProjectType doc as approved
-          const unitId = entry.unitId || entry.unit || entry._id;
-          let found = false;
-          for (const city of typeDoc.cities) {
-            for (const div of city.divisions || []) {
-              for (const sec of div.sectors || []) {
-                for (const proj of sec.projects || []) {
-                  for (const tower of proj.towers || []) {
-                    for (const u of tower.units || []) {
-                      if (!u || !u._id) continue;
-                      if (u._id.toString() === (unitId && unitId.toString ? unitId.toString() : String(unitId))) {
-                        u.isApproved = true;
-                        found = true;
-                        break;
-                      }
-                    }
-                    if (found) break;
-                  }
-                  if (found) break;
-                }
-                if (found) break;
-              }
-              if (found) break;
-            }
-            if (found) break;
-          }
-
-          if (found) {
-            await typeDoc.save();
-          }
-
-          // Update the Inventory record that was created earlier during merge
-          // mark it as approved/captured by this admin so clients see it as moved
-          // into inventory without having to wait for an approval notification.
           const invId = entry._id;
           if (invId) {
             await Inventory.findByIdAndUpdate(invId, {
-              capturedBy: req.user?.name || 'Admin',
-              inventoryType: 'Sales',
+              capturedBy: req.user?.name || "Admin",
+              inventoryType: "Sales",
               approvedAt: new Date(),
               approvedBy: req.user?._id || null
             });
           }
-
-          // Skip sending any notification when admin performs merge
           continue;
         } catch (err) {
-          console.error('❌ Admin auto-move error:', err);
+          console.error("❌ Admin auto-move error:", err);
         }
       }
 
-      // Non-admin behavior: create notification and emit to admins (existing behavior)
+      // ---- Non-admin: Create notification ----
       const existsNotif = await Notification.findOne({
         type: "Inventory",
         itemId: entry._id
       });
 
       if (!existsNotif) {
+        const notifMeta = {
+          category,
+          projectcategory,
+          unitNumber: entry.unitNumber,
+          status: entry.status,
+          ownerName: entry.sellerName,
+          contactNumbers: entry.contactNumbers,
+
+          ...entry.meta, // hierarchy details
+
+          fullHierarchyPath: `${entry.meta.cityName} > ${entry.meta.divisionName} > ${entry.meta.sectorName} > ${entry.meta.projectName} > ${entry.meta.towerName} > ${entry.unitNumber}`
+        };
+
         const notif = await Notification.create({
           type: "Inventory",
           itemId: entry._id,
           message: `🏢 Unit "${entry.unitNumber}" marked as "Interested in calling" during merge by ${changedBy}`,
           changedBy,
           receiver: null,
-          meta: entry.meta
+          meta: notifMeta
         });
 
-        const payload = notif.toJSON();
-
         if (global.io && typeof emitToAdmins === "function") {
-          emitToAdmins(payload);
+          emitToAdmins(notif.toJSON());
         }
         createdNotifCount++;
       }
@@ -1689,8 +1895,6 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
- 
 
 
 
