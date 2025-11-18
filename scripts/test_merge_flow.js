@@ -112,7 +112,10 @@ async function run() {
     // Wait a tick and check notifications
     const notifs = await Notification.find({}).lean();
     console.log('\n🔔 Notifications found:', notifs.length);
-    notifs.forEach(n => console.log('-', n.message, '| receiver:', n.receiver, '| createdAt:', n.createdAt));
+    notifs.forEach(n => {
+      console.log('-', n.message, '| receiver:', n.receiver, '| createdAt:', n.createdAt);
+      console.log('  Meta:', JSON.stringify(n.meta, null, 2));
+    });
 
     // Inspect the updated ProjectType
     const updated = await ProjectType.findOne({ category: 'Residential', projectcategory: 'ReadyToMove' });

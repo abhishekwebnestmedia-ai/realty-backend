@@ -100,7 +100,10 @@ async function run() {
 
     const notifs = await Notification.find({}).lean();
     console.log('\n🔔 Notifications found:', notifs.length);
-    notifs.forEach(n => console.log('-', n.message, '| receiver:', n.receiver, '| createdAt:', n.createdAt));
+    notifs.forEach(n => {
+      console.log('-', n.message, '| receiver:', n.receiver, '| createdAt:', n.createdAt);
+      console.log('  Meta:', JSON.stringify(n.meta, null, 2));
+    });
 
     const updated = await ProjectType.findOne({ category: 'Residential', projectcategory: 'ReadyToMove' });
     console.log('\n📦 Units in TowerA:', updated.cities[0].divisions[0].sectors[0].projects[0].towers[0].units.length);
