@@ -17,7 +17,8 @@ const unitSchema = new mongoose.Schema({
   remarks: String,
   isApproved: { type: Boolean, default: false },
   
-  assignTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  assignTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null,index: true },
+  
 });
 
 // --- TOWER ---

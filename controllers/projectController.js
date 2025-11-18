@@ -8,7 +8,7 @@ const Inventory = require('../models/inventryModel');
 const Notification = require('../models/notification');
 const { emitToAdmins } = require('../utils/socketEmitter');
 
-
+const User = require("../models/user");
 
 
 const mongoose = require("mongoose");
@@ -176,141 +176,6 @@ exports.addTower = async (req, res) => {
   }
 };
 
-
-// ✅ Step 7 - Add Floor
-
-
-
-//✅ Step 7 - Add Unit
-// exports.addUnit = async (req, res) => {
-//   try {
-//     const { category, projectcategory, cityId, divisionId, sectorId, projectId, towerId } =
-//       req.params;
-//     const unitData = req.body;
-
-//     const result = await ProjectType.updateOne(
-//       { category, projectcategory },
-//       {
-//         $push: {
-//           "cities.$[city].divisions.$[div].sectors.$[sec].projects.$[proj].towers.$[tow].units":
-//             unitData,
-//         },
-//       },
-//       {
-//         arrayFilters: [
-//           { "city._id": cityId },
-//           { "div._id": divisionId },
-//           { "sec._id": sectorId },
-//           { "proj._id": projectId },
-//           { "tow._id": towerId },
-//         ],
-//       }
-//     );
-
-//     if (result.modifiedCount === 0)
-//       return res.status(404).json({ error: "Tower not found" });
-
-//     res.json({ message: "Unit added successfully" });
-//   } catch (err) {
-//     res.status(500).json({ error: err.message });
-//   }
-// };
-
-
-
-// ✅ Step 7 - Add Unit WITH NOTIFICATION
-
-
-// exports.addUnit = async (req, res) => {
-//   try {
-//     const {
-//       category,
-//       projectcategory,
-//       cityId,
-//       divisionId,
-//       sectorId,
-//       projectId,
-//       towerId
-//     } = req.params;
-
-//     const unitData = req.body;
-
-//     // Insert Unit
-//     const result = await ProjectType.updateOne(
-//       { category, projectcategory },
-//       {
-//         $push: {
-//           "cities.$[city].divisions.$[div].sectors.$[sec].projects.$[proj].towers.$[tow].units":
-//             unitData,
-//         },
-//       },
-//       {
-//         arrayFilters: [
-//           { "city._id": cityId },
-//           { "div._id": divisionId },
-//           { "sec._id": sectorId },
-//           { "proj._id": projectId },
-//           { "tow._id": towerId },
-//         ],
-//       }
-//     );
-
-//     if (result.modifiedCount === 0)
-//       return res.status(404).json({ error: "Tower not found" });
-
-//     // Fetch inserted unit
-//     const updated = await ProjectType.findOne({ category, projectcategory });
-//     const city = updated.cities.id(cityId);
-//     const division = city.divisions.id(divisionId);
-//     const sector = division.sectors.id(sectorId);
-//     const project = sector.projects.id(projectId);
-//     const tower = project.towers.id(towerId);
-//     const addedUnit = tower.units[tower.units.length - 1];
-
-//     // 🔔 Auto Notification (Schema will emit real-time)
-//   if (addedUnit.status?.toLowerCase() === "interested in calling") {
-//   const message = `New unit ${addedUnit.unitNumber} created with status "Interested in calling". Approve to copy into Inventory?`;
-//   const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
-
-//   // Ensure correct objectId type
-//   const itemId = new mongoose.Types.ObjectId(addedUnit._id);
-
-//   const exists = await Notification.findOne({
-//     type: "Inventory",
-//     itemId,
-//     createdAt: { $gte: tenMinAgo }
-//   });
-
-//   if (!exists) {
-//     try {
-//       const notif = await Notification.create({
-//         type: "Inventory",
-//         itemId,
-//         message,
-//         changedBy: req.user?.name || "admin"
-//       });
-
-//       emitToAdmins(notif.toJSON());
-//       console.log("📢 Notification Sent:", notif);
-
-//     } catch (err) {
-//       if (err.code === 11000) {
-//         console.log("⚠ Duplicate notification ignored");
-//       } else {
-//         console.error("❌ Notification create error:", err);
-//       }
-//     }
-//   }
-// }
-
-
-//     res.json({ message: "Unit added successfully", unit: addedUnit });
-
-//   } catch (err) {
-//     console.error("addUnit error:", err);
-//     res.status(500).json({ error: err.message });
-//   }
-// };
 
 
 
@@ -1124,55 +989,157 @@ exports.updateFullHierarchy = async (req, res) => {
 
 // ✅ Bulk Upload API (always inserts)
 
+// exports.bulkUploadProjectTypes = async (req, res) => {
+//   try {
+//     const docs = req.body;
+//     if (!Array.isArray(docs)) {
+//       return res.status(400).json({ error: "Expected an array of project types" });
+//     }
+
+//     const allowedCategory = ["Residential", "Commercial"];
+//     const allowedProjectCategory = ["UnderConstruction", "ReadyToMove"];
+
+//     const normalizedDocs = docs.map(doc => {
+//       const { category, projectcategory, cities = [] } = doc;
+
+//       if (!allowedCategory.includes(category)) {
+//         throw new Error(`Invalid category: ${category}`);
+//       }
+//       if (!allowedProjectCategory.includes(projectcategory)) {
+//         throw new Error(`Invalid projectcategory: ${projectcategory}`);
+//       }
+
+//       return {
+//         category,
+//         projectcategory,
+//         cities: cities.map(city => ({
+//           cityName: city.cityName,
+//           divisions: (city.divisions || []).map(division => ({
+//             divisionName: division.divisionName,
+//             sectors: (division.sectors || []).map(sector => ({
+//               sectorName: sector.sectorName,
+//               projects: (sector.projects || []).map(project => ({
+//                 projectName: project.projectName,
+//                 towers: (project.towers || []).map(tower => ({
+//                   towerName: tower.towerName,
+//                   units: tower.units || []
+//                 }))
+//               }))
+//             }))
+//           }))
+//         }))
+//       };
+//     });
+
+//     const inserted = await ProjectType.insertMany(normalizedDocs, { ordered: false });
+//     res.status(201).json({ message: "Bulk upload successful", data: inserted });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
+ 
+
+
+
+
+// Helper to remove all _id & __v
+function removeIds(obj) {
+  if (Array.isArray(obj)) return obj.map(removeIds);
+  if (obj && typeof obj === "object") {
+    const cleaned = {};
+    for (const key in obj) {
+      if (key !== "_id" && key !== "__v") {
+        cleaned[key] = removeIds(obj[key]);
+      }
+    }
+    return cleaned;
+  }
+  return obj;
+}
+
+// Resolve assignTo user (name, email or id)
+async function resolveAssign(assignToValue) {
+  if (!assignToValue) return null;
+
+  // If ObjectId check
+  if (mongoose.Types.ObjectId.isValid(assignToValue)) {
+    const user = await User.findById(assignToValue);
+    if (user) return user._id;
+  }
+
+  // Search by name or email
+  const user = await User.findOne({
+    $or: [{ name: assignToValue }, { email: assignToValue }]
+  });
+
+  return user ? user._id : null;
+}
+
 exports.bulkUploadProjectTypes = async (req, res) => {
   try {
     const docs = req.body;
     if (!Array.isArray(docs)) {
-      return res.status(400).json({ error: "Expected an array of project types" });
+      return res.status(400).json({ success: false, message: "Expected an array" });
     }
 
     const allowedCategory = ["Residential", "Commercial"];
     const allowedProjectCategory = ["UnderConstruction", "ReadyToMove"];
 
-    const normalizedDocs = docs.map(doc => {
-      const { category, projectcategory, cities = [] } = doc;
+    const finalDocs = [];
 
-      if (!allowedCategory.includes(category)) {
-        throw new Error(`Invalid category: ${category}`);
-      }
-      if (!allowedProjectCategory.includes(projectcategory)) {
-        throw new Error(`Invalid projectcategory: ${projectcategory}`);
+    for (const doc of docs) {
+      const { category, projectcategory } = doc;
+
+      if (!allowedCategory.includes(category))
+        return res.status(400).json({ success: false, message: `Invalid category: ${category}` });
+
+      if (!allowedProjectCategory.includes(projectcategory))
+        return res.status(400).json({ success: false, message: `Invalid projectcategory: ${projectcategory}` });
+
+      // Clean _id values
+      const cleanedDoc = removeIds(doc);
+
+      // Resolve assignTo in deeply nested structure
+      for (const city of cleanedDoc.cities || []) {
+        for (const division of city.divisions || []) {
+          for (const sector of division.sectors || []) {
+            for (const project of sector.projects || []) {
+              for (const tower of project.towers || []) {
+                for (const unit of tower.units || []) {
+                  if (unit.assignTo) {
+                    const resolvedUserId = await resolveAssign(unit.assignTo);
+                    if (!resolvedUserId) {
+                      return res.status(400).json({
+                        success: false,
+                        message: `assignTo user not found: ${unit.assignTo}`
+                      });
+                    }
+                    unit.assignTo = resolvedUserId;
+                  }
+                }
+              }
+            }
+          }
+        }
       }
 
-      return {
-        category,
-        projectcategory,
-        cities: cities.map(city => ({
-          cityName: city.cityName,
-          divisions: (city.divisions || []).map(division => ({
-            divisionName: division.divisionName,
-            sectors: (division.sectors || []).map(sector => ({
-              sectorName: sector.sectorName,
-              projects: (sector.projects || []).map(project => ({
-                projectName: project.projectName,
-                towers: (project.towers || []).map(tower => ({
-                  towerName: tower.towerName,
-                  units: tower.units || []
-                }))
-              }))
-            }))
-          }))
-        }))
-      };
+      finalDocs.push(cleanedDoc);
+    }
+
+    const inserted = await ProjectType.insertMany(finalDocs, { ordered: false });
+
+    res.status(201).json({
+      success: true,
+      message: "Bulk upload successful",
+      insertedCount: inserted.length
     });
 
-    const inserted = await ProjectType.insertMany(normalizedDocs, { ordered: false });
-    res.status(201).json({ message: "Bulk upload successful", data: inserted });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Bulk upload error:", err);
+    res.status(500).json({ success: false, message: err.message });
   }
 };
- 
+
 
 // Helper to remove all _id and __v recursively
 
