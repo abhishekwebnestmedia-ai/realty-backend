@@ -121,19 +121,45 @@ exports.login = async (req, res) => {
 
 
 
+// exports.getProfile = async (req, res) => {
+//   try {
+//     const user = await User.findById(req.user.userId).select('-password');
+//     if (!user) return res.status(404).json({ message: 'User not found' });
+//     res.json(user);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: 'Server error fetching profile' });
+//   }
+// };
+
+
+
 exports.getProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user.userId).select('-password');
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json(user);
+    const user = await User.findById(req.user.userId).select("-password");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // 🔥 Count total assigned and captured leads
+    const totalAssigned = await Lead.countDocuments({ assignTo: user._id });
+
+    const totalCaptured = await Lead.countDocuments({ capturedBy: user.name });
+
+    // Send response with user info + stats
+    res.json({
+      ...user.toObject(),
+      stats: {
+        totalCaptured,
+        totalAssigned,
+      },
+    });
+
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error fetching profile' });
+    console.error("Error fetching profile:", err);
+    res.status(500).json({ message: "Server error fetching profile" });
   }
 };
-
-
-
 
 
 exports.logout = async (req, res) => {
