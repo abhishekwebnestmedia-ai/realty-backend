@@ -15,7 +15,9 @@ const unitSchema = new mongoose.Schema({
     default: "Vacant" 
   },
   remarks: String,
-  isApproved: { type: Boolean, default: false }
+  isApproved: { type: Boolean, default: false },
+  
+  assignTo: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
 });
 
 // --- TOWER ---

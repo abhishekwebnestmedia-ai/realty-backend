@@ -71,15 +71,71 @@ router.patch(
 // ==========================
 
 // Get ALL projectTypes with hierarchy
+// router.get("/project-types", authMiddleware, async (req, res) => {
+//   try {
+//     const ProjectType = require("../models/project");
+//     const docs = await ProjectType.find();
+//     res.json(docs);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+
 router.get("/project-types", authMiddleware, async (req, res) => {
   try {
     const ProjectType = require("../models/project");
-    const docs = await ProjectType.find();
-    res.json(docs);
+    const userId = req.user._id.toString();
+    const isAdmin = req.user.role === "admin";
+
+    // Admin = return everything
+    if (isAdmin) {
+      const docs = await ProjectType.find();
+      return res.json(docs);
+    }
+
+    // USER → filter assigned units only
+    const docs = await ProjectType.find().lean(); // lean = faster
+
+    const filtered = docs.map(pt => ({
+      ...pt,
+      cities: pt.cities.map(city => ({
+        ...city,
+        divisions: city.divisions.map(div => ({
+          ...div,
+          sectors: div.sectors.map(sec => ({
+            ...sec,
+            projects: sec.projects.map(project => ({
+              ...project,
+              towers: project.towers.map(tower => ({
+                ...tower,
+                units: tower.units.filter(u => u.assignTo?.toString() === userId)
+              }))
+            }))
+          }))
+        }))
+      }))
+    }));
+
+    // Remove empty branches (clean response)
+    const cleaned = filtered.filter(pt =>
+      pt.cities.some(city =>
+        city.divisions.some(div =>
+          div.sectors.some(sec =>
+            sec.projects.some(project =>
+              project.towers.some(tower => tower.units.length > 0)
+            )
+          )
+        )
+      )
+    );
+
+    res.json(cleaned);
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // Get a single projectType with hierarchy
 router.get("/project-types/:category/:projectcategory", authMiddleware, async (req, res) => { 
