@@ -4,7 +4,8 @@ const jwt = require('jsonwebtoken');
 
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
-const Lead = require("../models/Lead");
+const Lead = require("../models/leadModel");
+
 
 
 exports.register = async (req, res) => {
