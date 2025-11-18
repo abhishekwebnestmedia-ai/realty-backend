@@ -580,34 +580,41 @@ exports.updateUnit = async (req, res) => {
       towerId,
       unitId,
     } = req.params;
-    const updateData = req.body;
+
+    const updateData = req.body; // Only update changed fields
+
+    // Convert update object keys to dynamic $set paths
+    const updateFields = Object.fromEntries(
+      Object.entries(updateData).map(([key, value]) => [
+        `cities.$[city].divisions.$[div].sectors.$[sec].projects.$[proj].towers.$[tow].units.$[unit].${key}`,
+        value,
+      ])
+    );
 
     const result = await ProjectType.updateOne(
       { category, projectcategory },
-      {
-        $set: {
-          "cities.$[city].divisions.$[div].sectors.$[sec].projects.$[proj].towers.$[tow].units.$[unit]":
-            updateData,
-        },
-      },
+      { $set: updateFields },
       {
         arrayFilters: [
-          { "city._id": cityId },
-          { "div._id": divisionId },
-          { "sec._id": sectorId },
-          { "proj._id": projectId },
-          { "tow._id": towerId },
-          { "unit._id": unitId },
+          { "city._id": new mongoose.Types.ObjectId(cityId) },
+          { "div._id": new mongoose.Types.ObjectId(divisionId) },
+          { "sec._id": new mongoose.Types.ObjectId(sectorId) },
+          { "proj._id": new mongoose.Types.ObjectId(projectId) },
+          { "tow._id": new mongoose.Types.ObjectId(towerId) },
+          { "unit._id": new mongoose.Types.ObjectId(unitId) },
         ],
       }
     );
 
-    if (result.modifiedCount === 0)
-      return res.status(404).json({ error: "Unit not found" });
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({ error: "Unit not found or no changes applied" });
+    }
 
-    res.json({ message: "Unit updated successfully" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.json({ success: true, message: "Unit updated successfully" });
+
+  } catch (error) {
+    console.error("Update Unit Error:", error);
+    res.status(500).json({ error: error.message });
   }
 };
 
