@@ -66,20 +66,7 @@ router.patch(
 
 
 
-// ==========================
-// READ ROUTES (GET APIs)
-// ==========================
 
-// Get ALL projectTypes with hierarchy
-// router.get("/project-types", authMiddleware, async (req, res) => {
-//   try {
-//     const ProjectType = require("../models/project");
-//     const docs = await ProjectType.find();
-//     res.json(docs);
-//   } catch (err) {
-//     res.status(500).json({ error: err.message });
-//   }
-// });
 
 router.get("/project-types", authMiddleware, async (req, res) => {
   try {
