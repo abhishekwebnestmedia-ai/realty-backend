@@ -1697,6 +1697,12 @@ exports.bulkUploadProjectTypes = async (req, res) => {
  
 
 
+
+
+
+
+
+
 exports.mergeOrCreateHierarchy = async (req, res) => {
   try {
     const { category, projectcategory, cities = [] } = req.body;
@@ -1820,16 +1826,16 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
 
     await typeDoc.save();
 
-    // ---- NOTIFICATIONS ----
+    // ---- NOTIFICATIONS (ADMIN ONLY) ----
     const changedBy = req.user?.name || "System";
+    const isRequesterAdmin = req.user?.role === "admin";
     let createdNotifCount = 0;
 
-    for (const entry of addedUnitsDetails.filter(u => u.notification)) {
-      const isRequesterAdmin = req.user?.role === "admin";
-
-      // If admin, auto approve unit and skip notification
-      if (isRequesterAdmin) {
+    // 🔹 Only create notifications if requester is admin
+    if (isRequesterAdmin) {
+      for (const entry of addedUnitsDetails.filter(u => u.notification)) {
         try {
+          // Auto-approve the inventory entry
           const invId = entry._id;
           if (invId) {
             await Inventory.findByIdAndUpdate(invId, {
@@ -1839,46 +1845,49 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
               approvedBy: req.user?._id || null
             });
           }
-          continue;
+
+          // Create notification (only for admins) with rich meta
+          const existsNotif = await Notification.findOne({
+            type: "Inventory",
+            itemId: entry._id
+          });
+
+          if (!existsNotif) {
+            const notifMeta = {
+              category,
+              projectcategory,
+              unitNumber: entry.unitNumber,
+              status: entry.status,
+              ownerName: entry.sellerName,
+              contactNumbers: entry.contactNumbers,
+              createdBy: changedBy,
+
+              ...entry.meta, // hierarchy details (cityName, divisionName, sectorName, projectName, towerName)
+
+              fullHierarchyPath: `${entry.meta.cityName} > ${entry.meta.divisionName} > ${entry.meta.sectorName} > ${entry.meta.projectName} > ${entry.meta.towerName} > ${entry.unitNumber}`
+            };
+
+            const notif = await Notification.create({
+              type: "Inventory",
+              itemId: entry._id,
+              message: `🏢 Unit "${entry.unitNumber}" marked as "Interested in calling" during merge by ${changedBy}`,
+              changedBy,
+              receiver: null,
+              meta: notifMeta
+            });
+
+            if (global.io && typeof emitToAdmins === "function") {
+              emitToAdmins(notif.toJSON());
+            }
+            createdNotifCount++;
+          }
         } catch (err) {
-          console.error("❌ Admin auto-move error:", err);
+          console.error("❌ Admin notification error:", err);
         }
       }
-
-      // ---- Non-admin: Create notification ----
-      const existsNotif = await Notification.findOne({
-        type: "Inventory",
-        itemId: entry._id
-      });
-
-      if (!existsNotif) {
-        const notifMeta = {
-          category,
-          projectcategory,
-          unitNumber: entry.unitNumber,
-          status: entry.status,
-          ownerName: entry.sellerName,
-          contactNumbers: entry.contactNumbers,
-
-          ...entry.meta, // hierarchy details
-
-          fullHierarchyPath: `${entry.meta.cityName} > ${entry.meta.divisionName} > ${entry.meta.sectorName} > ${entry.meta.projectName} > ${entry.meta.towerName} > ${entry.unitNumber}`
-        };
-
-        const notif = await Notification.create({
-          type: "Inventory",
-          itemId: entry._id,
-          message: `🏢 Unit "${entry.unitNumber}" marked as "Interested in calling" during merge by ${changedBy}`,
-          changedBy,
-          receiver: null,
-          meta: notifMeta
-        });
-
-        if (global.io && typeof emitToAdmins === "function") {
-          emitToAdmins(notif.toJSON());
-        }
-        createdNotifCount++;
-      }
+    } else {
+      // Non-admin users: no notifications created (units are created without triggering notifications)
+      // Only admins see merge-created unit notifications
     }
 
     return res.json({
@@ -1895,11 +1904,6 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
-
-
-
-
 
 
 

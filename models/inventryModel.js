@@ -45,6 +45,13 @@ const inventorySchema = new mongoose.Schema(
     source: { type: [String] },
     loanStatus: { type: String },
     remarks: { type: String },
+    meta: {
+      cityName: { type: String },
+      divisionName: { type: String },
+      sectorName: { type: String },
+      projectName: { type: String },
+      towerName: { type: String }
+    }
   },
   { timestamps: true }
 );
