@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
+const Lead = require("../models/Lead");
 
 
 exports.register = async (req, res) => {
@@ -169,16 +170,52 @@ exports.getAllUsers = async (req, res) => {
 
 
 
+// exports.getTeams = async (req, res) => {
+//   try {
+//     const users = await User.find()
+//       .select("_id name email role phoneNumber designation address empid permissions") // ✅ Added permissions
+//       .sort({ createdAt: -1 });
+
+//     res.status(200).json({
+//       message: "Users fetched successfully",
+//       count: users.length,
+//       users,
+//     });
+
+//   } catch (err) {
+//     console.error("Error fetching teams:", err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
+
+
 exports.getTeams = async (req, res) => {
   try {
     const users = await User.find()
-      .select("_id name email role phoneNumber designation address empid permissions") // ✅ Added permissions
+      .select("_id name email role phoneNumber designation address empid permissions")
       .sort({ createdAt: -1 });
+
+    // 🔥 Add lead stats for each user
+    const updatedUsers = await Promise.all(
+      users.map(async (user) => {
+        const totalAssigned = await Lead.countDocuments({ assignTo: user._id });
+
+        const totalCaptured = await Lead.countDocuments({ capturedBy: user.name });
+
+        return {
+          ...user.toObject(),
+          stats: {
+            totalCaptured,
+            totalAssigned,
+          },
+        };
+      })
+    );
 
     res.status(200).json({
       message: "Users fetched successfully",
-      count: users.length,
-      users,
+      count: updatedUsers.length,
+      users: updatedUsers,
     });
 
   } catch (err) {
@@ -186,7 +223,6 @@ exports.getTeams = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
 
 
 exports.changeUserRole = async (req, res) => {
@@ -479,6 +515,9 @@ exports.updateUserPermissions = async (req, res) => {
     res.status(500).json({ message: 'Internal server error.' });
   }
 };
+
+
+
 
 
 
