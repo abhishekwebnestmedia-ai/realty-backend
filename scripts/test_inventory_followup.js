@@ -31,6 +31,7 @@ async function run() {
       name: 'admin',
       email: 'admin@test.com',
       password: 'hash',
+      empid: 'ADMIN-1',
       role: 'admin'
     });
 
@@ -38,6 +39,7 @@ async function run() {
       name: 'salesman1',
       email: 'salesman@test.com',
       password: 'hash',
+      empid: 'SALE-1',
       role: 'user'
     });
 
@@ -114,8 +116,12 @@ async function run() {
     const notifs2 = await Notification.find({ type: 'Inventory', itemId: inventory._id }).lean();
     console.log('🔔 Total notifications:', notifs2.length);
     const latestNotif = notifs2[notifs2.length - 1];
-    console.log('   Latest:', latestNotif.message);
-    console.log('   Receiver routing: transferTo should be resolved to user ID');
+    if (latestNotif) {
+      console.log('   Latest:', latestNotif.message);
+      console.log('   Receiver routing: transferTo should be resolved to user ID');
+    } else {
+      console.log('   No notifications found for this inventory');
+    }
 
     // Test 3: Verify notification meta/structure
     console.log('\n🧪 TEST 3: Verify notification structure');
