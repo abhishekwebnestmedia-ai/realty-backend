@@ -62,12 +62,31 @@ function snapshotUnit(unit = {}) {
     _id: unit._id?.toString?.() || null,
     unitNumber: unit.unitNumber || null,
     ownerName: unit.ownerName || null,
-    mobileNumbers: unit.mobileNumbers || [],
+    mobileNumbers: normalizeMobileNumbers(unit.mobileNumbers),
     email: unit.email || null,
     status: unit.status || null,
     remarks: unit.remarks || null,
     assignTo: unit.assignTo || null,
   };
+}
+
+// Ensure mobile numbers are always returned as an array of trimmed strings
+function normalizeMobileNumbers(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map(String).map(s => s.trim()).filter(Boolean);
+  if (typeof raw === 'string') return raw.trim() ? [raw.trim()] : [];
+  if (typeof raw === 'object') {
+    try {
+      return Object.values(raw)
+        .flat()
+        .map(String)
+        .map(s => s.trim())
+        .filter(Boolean);
+    } catch (e) {
+      return [];
+    }
+  }
+  return [];
 }
 
 async function resolveReceiverFromInventory(inv) {
@@ -113,6 +132,11 @@ async function createInventoryNotification({
     ...meta,
   };
 
+  // Ensure any unit snapshot in meta has normalized mobileNumbers
+  if (payloadMeta.unit) {
+    payloadMeta.unit.mobileNumbers = normalizeMobileNumbers(payloadMeta.unit.mobileNumbers);
+  }
+
   const notif = await Notification.create({
     type: 'Inventory',
     itemId: inventory._id,
@@ -149,7 +173,7 @@ async function upsertInventoryFromUnit({
     towerNo: hierarchy.towerName || '',
     sector: hierarchy.sectorName || '',
     Project: hierarchy.projectName ? [hierarchy.projectName] : [],
-    contactNumbers: Array.isArray(unit.mobileNumbers) ? unit.mobileNumbers : [],
+    contactNumbers: normalizeMobileNumbers(unit.mobileNumbers),
     remarks: unit.remarks || '',
     inventoryType: targetType,
     assignTo: unit.assignTo || null,
