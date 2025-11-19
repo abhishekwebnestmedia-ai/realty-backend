@@ -7,6 +7,13 @@ const ProjectType = require("../models/project"); // projectTypeSchema
 const Inventory = require('../models/inventryModel');
 const Notification = require('../models/notification');
 const { emitNotification, emitToAdmins } = require('../utils/socketEmitter');
+const {
+  determineInventoryIntent,
+  buildHierarchyMeta,
+  upsertInventoryFromUnit,
+  notifyAdminsForApproval,
+  createInventoryNotification,
+} = require('../services/unitInventorySync');
 
 const User = require("../models/user");
 
@@ -251,88 +258,68 @@ exports.addUnit = async (req, res) => {
       return res.status(500).json({ error: "Updated document not found" });
     }
 
-    const addedUnit =
-      updatedDoc.cities.id(cityId)
-        .divisions.id(divisionId)
-        .sectors.id(sectorId)
-        .projects.id(projectId)
-        .towers.id(towerId)
-        .units.slice(-1)[0];
+    const cityDoc = updatedDoc.cities.id(cityId);
+    const divisionDoc = cityDoc?.divisions.id(divisionId);
+    const sectorDoc = divisionDoc?.sectors.id(sectorId);
+    const projectDoc = sectorDoc?.projects.id(projectId);
+    const towerDoc = projectDoc?.towers.id(towerId);
+    const addedUnit = towerDoc?.units.slice(-1)[0];
+
+    if (!cityDoc || !divisionDoc || !sectorDoc || !projectDoc || !towerDoc || !addedUnit) {
+      return res.status(404).json({ error: "Unable to resolve unit hierarchy" });
+    }
 
     console.log("📌 Extracted Unit Data From DB:", addedUnit);
 
-    // Notification logic
-    if (!addedUnit || !addedUnit.status) {
-      console.log("⚠ No status found or unit not created. Skipping notification.");
-    } else if (addedUnit.status.trim().toLowerCase() === "interested in calling") {
-      console.log("🟢 Notification Condition MATCHED!");
+    const hierarchyMeta = buildHierarchyMeta({
+      category,
+      projectcategory,
+      city: cityDoc,
+      division: divisionDoc,
+      sector: sectorDoc,
+      project: projectDoc,
+      tower: towerDoc,
+      unit: addedUnit,
+    });
 
-      const changedBy = req.user?.name || "System";
-      const msg = `🏢 New Unit "${addedUnit.unitNumber}" created with status → Interested in calling (${changedBy})`;
+    const intent = determineInventoryIntent(addedUnit.status);
+    const actor = req.user
+      ? { _id: req.user._id || req.user.userId, name: req.user.name, email: req.user.email }
+      : null;
 
-      console.log("📝 Notification message:", msg);
+    if (intent.shouldSync) {
+      if (req.user?.role === 'admin') {
+        const { inventory, isNew } = await upsertInventoryFromUnit({
+          unit: addedUnit,
+          hierarchy: hierarchyMeta,
+          targetType: intent.targetType,
+          actor,
+        });
 
-      const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+        addedUnit.isApproved = true;
+        await updatedDoc.save();
 
-      console.log("🔍 Checking duplicate notification...");
+        const message = isNew
+          ? `Inventory created from unit "${addedUnit.unitNumber}" (${intent.label})`
+          : `Inventory for unit "${addedUnit.unitNumber}" updated (${intent.label})`;
 
-      const alreadyExists = await Notification.findOne({
-        type: "Inventory",
-        itemId: addedUnit._id,
-        message: msg,
-        createdAt: { $gte: twoMinAgo },
-      });
-
-      console.log("🧪 Duplicate Check Result:", alreadyExists);
-
-      if (!alreadyExists) {
-        console.log("🚀 No duplicate found → Creating Notification Now...");
-        try {
-          // Resolve assignTo (if present) so we can notify assigned user directly
-          let receiverId = null;
-          if (addedUnit.assignTo) {
-            try {
-              receiverId = await resolveAssign(addedUnit.assignTo);
-            } catch (e) {
-              console.warn('Failed to resolve assignTo for notification:', e);
-              receiverId = null;
-            }
-          }
-
-          const notifPayload = {
-            type: "Inventory",
-            itemId: addedUnit._id,
-            message: msg,
-            changedBy,
-            receiver: receiverId || null
-          };
-
-          const notif = await Notification.create(notifPayload);
-
-          console.log("📦 Notification CREATED IN DB:", notif);
-
-          // Emit to assigned user (if any) AND admins; fallback to admins only
-          if (global.io) {
-            if (receiverId) {
-              await emitNotification(receiverId.toString(), notif.toJSON(), { emitToAdmin: true });
-              console.log("📡 Real-time Notification Emitted to assigned user + Admins!");
-            } else {
-              emitToAdmins(notif.toJSON());
-              console.log("📡 Real-time Notification Emitted to Admins!");
-            }
-          } else {
-            console.log("⚠ Socket.IO not initialized — cannot emit.");
-          }
-
-        } catch (err) {
-          console.error("❌ Notification Create ERROR:", err);
-        }
+        await createInventoryNotification({
+          inventory,
+          message,
+          action: 'inventory_auto_sync',
+          meta: { hierarchy: hierarchyMeta },
+          changedBy: actor?.name || 'System',
+        });
       } else {
-        console.log("⚠ Duplicate notification detected → NOT inserted.");
+        addedUnit.isApproved = false;
+        await updatedDoc.save();
+        await notifyAdminsForApproval({
+          unit: addedUnit,
+          hierarchy: hierarchyMeta,
+          targetType: intent.targetType,
+          requestedBy: actor,
+        });
       }
-
-    } else {
-      console.log(`🔴 Notification condition failed — Status is: "${addedUnit.status}"`);
     }
 
     console.log("✅ UNIT ADD PROCESS COMPLETED");
@@ -365,83 +352,15 @@ exports.approveUnit = async (req, res) => {
   try {
     const confirm = req.body.confirm?.toLowerCase();
 
-    if (!confirm)
+    if (!confirm) {
       return res.status(400).json({ message: "Please confirm: yes or no" });
-
-    if (confirm === "no")
-      return res.json({ message: "Approval cancelled. Unit stays in Projects." });
-
-    const {
-      category, projectcategory,
-      cityId, divisionId, sectorId, projectId, towerId, unitId
-    } = req.params;
-
-    const proj = await ProjectType.findOne({ category, projectcategory });
-    if (!proj) return res.status(404).json({ error: "ProjectType not found" });
-
-    let foundUnit = null, projectName = "", sectorName = "", towerName = "";
-
-    // Find unit in hierarchy
-    proj.cities.forEach(city => {
-      if (city._id.toString() !== cityId) return;
-      city.divisions.forEach(div => {
-        if (div._id.toString() !== divisionId) return;
-        div.sectors.forEach(sec => {
-          if (sec._id.toString() !== sectorId) return;
-          sectorName = sec.sectorName;
-          sec.projects.forEach(p => {
-            if (p._id.toString() !== projectId) return;
-            projectName = p.projectName;
-            p.towers.forEach(t => {
-              if (t._id.toString() !== towerId) return;
-              towerName = t.towerName;
-              t.units.forEach(u => {
-                if (u._id.toString() === unitId) foundUnit = u;
-              });
-            });
-          });
-        });
-      });
-    });
-
-    if (!foundUnit)
-      return res.status(404).json({ error: "Unit not found" });
-
-    // ✔ Correct field name
-    const existsInInventory = await Inventory.findOne({
-      unitNumber: foundUnit.unitNumber
-    });
-
-    if (foundUnit.isApproved && existsInInventory) {
-      return res.json({
-        success: true,
-        alreadyApproved: true,
-        message: "Unit already approved & exists in Inventory.",
-        inventoryId: existsInInventory._id
-      });
     }
 
-    if (foundUnit.status !== "Interested in calling")
-      return res.status(400).json({ error: "Unit is not Interested in calling" });
+    if (confirm === 'no') {
+      return res.json({ message: "Approval cancelled. Unit stays in Projects." });
+    }
 
-    // Approve
-    foundUnit.isApproved = true;
-    await proj.save();
-
-    // ✔ Add assignTo + hierarchy info
-    const newInv = await Inventory.create({
-      sellerName: foundUnit.ownerName || "",
-      unitNumber: foundUnit.unitNumber,
-      towerNo: towerName,
-      sector: sectorName,
-      Project: [projectName],
-      contactNumbers: foundUnit.mobileNumbers || [],
-      remarks: foundUnit.remarks || "",
-      inventoryType: "Sales",
-      assignTo: foundUnit.assignTo || null,
-      capturedBy: req.user?.name || "Admin",
-
-      // hierarchy mapping
+    const {
       category,
       projectcategory,
       cityId,
@@ -449,26 +368,115 @@ exports.approveUnit = async (req, res) => {
       sectorId,
       projectId,
       towerId,
-      unitId
+      unitId,
+    } = req.params;
+
+    const proj = await ProjectType.findOne({ category, projectcategory });
+    if (!proj) return res.status(404).json({ error: "ProjectType not found" });
+
+    const cityDoc = proj.cities.id(cityId);
+    const divisionDoc = cityDoc?.divisions.id(divisionId);
+    const sectorDoc = divisionDoc?.sectors.id(sectorId);
+    const projectDoc = sectorDoc?.projects.id(projectId);
+    const towerDoc = projectDoc?.towers.id(towerId);
+    const unitDoc = towerDoc?.units.id(unitId);
+
+    if (!cityDoc || !divisionDoc || !sectorDoc || !projectDoc || !towerDoc || !unitDoc) {
+      return res.status(404).json({ error: "Unit not found" });
+    }
+
+    const hierarchyMeta = buildHierarchyMeta({
+      category,
+      projectcategory,
+      city: cityDoc,
+      division: divisionDoc,
+      sector: sectorDoc,
+      project: projectDoc,
+      tower: towerDoc,
+      unit: unitDoc,
     });
 
-    // Notification
-    const notif = await Notification.create({
-      type: "Inventory",
-      itemId: newInv._id,
-      message: `Unit ${foundUnit.unitNumber} approved and copied to Inventory.`,
-      changedBy: req.user?.name || "admin",
-      meta: {
-        category, projectcategory, cityId, divisionId, sectorId, projectId, towerId, unitId
+    if (unitDoc.isApproved) {
+      const existing = await Inventory.findOne({ unitId: hierarchyMeta.unitId });
+      return res.json({
+        success: true,
+        alreadyApproved: true,
+        message: "Unit already approved & synced to inventory",
+        inventoryId: existing?._id || null,
+      });
+    }
+
+    const intent = determineInventoryIntent(unitDoc.status);
+    if (!intent.shouldSync) {
+      return res.status(400).json({ error: "Unit status is not eligible for inventory sync" });
+    }
+
+    unitDoc.isApproved = true;
+    await proj.save();
+
+    const actor = req.user
+      ? { _id: req.user._id || req.user.userId, name: req.user.name, email: req.user.email }
+      : null;
+
+    const { inventory, isNew } = await upsertInventoryFromUnit({
+      unit: unitDoc,
+      hierarchy: hierarchyMeta,
+      targetType: intent.targetType,
+      actor,
+    });
+
+    const message = isNew
+      ? `Unit ${unitDoc.unitNumber} approved and moved to inventory (${intent.label}).`
+      : `Unit ${unitDoc.unitNumber} inventory refreshed (${intent.label}).`;
+
+    await createInventoryNotification({
+      inventory,
+      message,
+      action: 'inventory_approval_result',
+      meta: { hierarchy: hierarchyMeta },
+      changedBy: req.user?.name || 'Admin',
+    });
+
+    let requesterNotified = false;
+    const { notificationId } = req.body;
+    if (notificationId) {
+      try {
+        const approvalNotif = await Notification.findById(notificationId);
+        if (approvalNotif) {
+          approvalNotif.read = true;
+          approvalNotif.meta = {
+            ...(approvalNotif.meta || {}),
+            resolvedAt: new Date().toISOString(),
+            resolvedBy: req.user?.name || 'Admin',
+            inventoryId: inventory?._id,
+          };
+          await approvalNotif.save();
+
+          const requester = approvalNotif.meta?.requestedBy;
+          if (requester?.id && mongoose.Types.ObjectId.isValid(String(requester.id))) {
+            const receipt = await Notification.create({
+              type: 'Inventory',
+              itemId: inventory._id,
+              message: `Your unit "${unitDoc.unitNumber}" request (${intent.label}) was approved by ${req.user?.name || 'Admin'}.`,
+              action: 'inventory_approval_result',
+              changedBy: req.user?.name || 'Admin',
+              receiver: requester.id,
+              meta: { hierarchy: hierarchyMeta, inventoryId: inventory._id },
+            });
+            await emitNotification(requester.id.toString(), receipt.toJSON(), { emitToAdmin: true });
+            requesterNotified = true;
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to finalize approval notification:', err.message);
       }
-    });
-
-    emitToAdmins(notif.toJSON());
+    }
 
     return res.json({
       success: true,
-      message: "Unit approved & copied to Inventory",
-      inventoryId: newInv._id
+      message,
+      inventory,
+      requesterNotified,
     });
 
   } catch (err) {
@@ -492,96 +500,125 @@ exports.updateUnit = async (req, res) => {
       unitId,
     } = req.params;
 
-    const updateData = req.body; // Only update changed fields
+    const updates = { ...req.body };
 
-    // Convert update object keys to dynamic $set paths
-    const updateFields = Object.fromEntries(
-      Object.entries(updateData).map(([key, value]) => [
-        `cities.$[city].divisions.$[div].sectors.$[sec].projects.$[proj].towers.$[tow].units.$[unit].${key}`,
-        value,
-      ])
-    );
+    const proj = await ProjectType.findOne({ category, projectcategory });
+    if (!proj) return res.status(404).json({ error: "Project structure not found" });
 
-    const result = await ProjectType.updateOne(
-      { category, projectcategory },
-      { $set: updateFields },
-      {
-        arrayFilters: [
-          { "city._id": new mongoose.Types.ObjectId(cityId) },
-          { "div._id": new mongoose.Types.ObjectId(divisionId) },
-          { "sec._id": new mongoose.Types.ObjectId(sectorId) },
-          { "proj._id": new mongoose.Types.ObjectId(projectId) },
-          { "tow._id": new mongoose.Types.ObjectId(towerId) },
-          { "unit._id": new mongoose.Types.ObjectId(unitId) },
-        ],
-      }
-    );
+    const cityDoc = proj.cities.id(cityId);
+    const divisionDoc = cityDoc?.divisions.id(divisionId);
+    const sectorDoc = divisionDoc?.sectors.id(sectorId);
+    const projectDoc = sectorDoc?.projects.id(projectId);
+    const towerDoc = projectDoc?.towers.id(towerId);
+    const unitDoc = towerDoc?.units.id(unitId);
 
-    if (result.modifiedCount === 0) {
-      return res.status(404).json({ error: "Unit not found or no changes applied" });
+    if (!cityDoc || !divisionDoc || !sectorDoc || !projectDoc || !towerDoc || !unitDoc) {
+      return res.status(404).json({ error: "Unit not found" });
     }
 
-    // If status was changed to Interested in calling, create & emit notification
-    try {
-      if (updateData.status && String(updateData.status).trim().toLowerCase() === 'interested in calling') {
-        // fetch the project doc and locate the unit
-        const proj = await ProjectType.findOne({ category, projectcategory });
-        if (proj) {
-          const city = proj.cities.id(cityId);
-          const division = city?.divisions.id(divisionId);
-          const sector = division?.sectors.id(sectorId);
-          const project = sector?.projects.id(projectId);
-          const tower = project?.towers.id(towerId);
-          const foundUnit = tower?.units.id(unitId);
+    const beforeUpdate = unitDoc.toObject();
 
-          if (foundUnit) {
-            const changedBy = req.user?.name || 'System';
-            const msg = `🏢 Unit "${foundUnit.unitNumber}" status changed to Interested in calling (${changedBy})`;
+    // Normalize status if provided
+    if (updates.status) {
+      const allowedStatuses = ["Vacant", "Rental", "Self Occupied", "Interested in calling"];
+      updates.status = allowedStatuses.find(
+        (s) => s.toLowerCase() === String(updates.status).toLowerCase().trim()
+      ) || unitDoc.status;
+    }
 
-            const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
-            const alreadyExists = await Notification.findOne({
-              type: 'Inventory',
-              itemId: foundUnit._id,
-              message: msg,
-              createdAt: { $gte: twoMinAgo }
-            });
-
-            if (!alreadyExists) {
-              let receiverId = null;
-              if (foundUnit.assignTo) {
-                try {
-                  receiverId = await resolveAssign(foundUnit.assignTo);
-                } catch (e) {
-                  console.warn('Failed to resolve assignTo for update notification:', e);
-                }
-              }
-
-              const notifPayload = {
-                type: 'Inventory',
-                itemId: foundUnit._id,
-                message: msg,
-                changedBy,
-                receiver: receiverId || null
-              };
-
-              const notif = await Notification.create(notifPayload);
-
-              if (global.io) {
-                if (receiverId) {
-                  await emitNotification(receiverId.toString(), notif.toJSON(), { emitToAdmin: true });
-                } else {
-                  emitToAdmins(notif.toJSON());
-                }
-              }
-            }
-          }
+    // Resolve assignTo if provided
+    if (Object.prototype.hasOwnProperty.call(updates, 'assignTo')) {
+      if (!updates.assignTo) {
+        unitDoc.assignTo = null;
+      } else {
+        const resolved = await resolveAssign(updates.assignTo);
+        if (!resolved) {
+          return res.status(400).json({ error: "assignTo user not found" });
         }
+        unitDoc.assignTo = resolved;
       }
-    } catch (err) {
-      console.error('Notification after updateUnit failed:', err);
     }
 
-    res.json({ success: true, message: "Unit updated successfully" });
+    const mutableFields = [
+      'unitNumber',
+      'ownerName',
+      'email',
+      'status',
+      'remarks',
+      'followUpDate',
+      'mobileNumbers',
+    ];
+
+    mutableFields.forEach((field) => {
+      if (!Object.prototype.hasOwnProperty.call(updates, field)) return;
+      if (field === 'mobileNumbers') {
+        unitDoc.mobileNumbers = Array.isArray(updates.mobileNumbers)
+          ? updates.mobileNumbers
+          : [];
+      } else {
+        unitDoc[field] = updates[field];
+      }
+    });
+
+    await proj.save();
+
+    const hierarchyMeta = buildHierarchyMeta({
+      category,
+      projectcategory,
+      city: cityDoc,
+      division: divisionDoc,
+      sector: sectorDoc,
+      project: projectDoc,
+      tower: towerDoc,
+      unit: unitDoc,
+    });
+
+    const intent = determineInventoryIntent(unitDoc.status);
+    const actor = req.user
+      ? { _id: req.user._id || req.user.userId, name: req.user.name, email: req.user.email }
+      : null;
+
+    if (intent.shouldSync) {
+      if (req.user?.role === 'admin') {
+        const { inventory, isNew } = await upsertInventoryFromUnit({
+          unit: unitDoc,
+          hierarchy: hierarchyMeta,
+          targetType: intent.targetType,
+          actor,
+        });
+        unitDoc.isApproved = true;
+        await proj.save();
+
+        await createInventoryNotification({
+          inventory,
+          message: isNew
+            ? `Inventory created from unit "${unitDoc.unitNumber}" (${intent.label}).`
+            : `Inventory for unit "${unitDoc.unitNumber}" updated (${intent.label}).`,
+          action: 'inventory_auto_sync',
+          meta: { hierarchy: hierarchyMeta },
+          changedBy: actor?.name || 'System',
+        });
+      } else {
+        unitDoc.isApproved = false;
+        await proj.save();
+        await notifyAdminsForApproval({
+          unit: unitDoc,
+          hierarchy: hierarchyMeta,
+          targetType: intent.targetType,
+          requestedBy: actor,
+        });
+      }
+    }
+
+    const statusChanged = beforeUpdate.status !== unitDoc.status;
+
+    res.json({
+      success: true,
+      message: statusChanged
+        ? `Unit status updated to ${unitDoc.status}`
+        : 'Unit updated successfully',
+      unit: unitDoc,
+    });
 
   } catch (error) {
     console.error("Update Unit Error:", error);

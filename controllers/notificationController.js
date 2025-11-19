@@ -68,7 +68,11 @@ exports.markAsRead = async (req, res) => {
 // ---- MARK ALL AS READ ----
 exports.markAllAsRead = async (req, res) => {
   try {
-    await Notification.updateMany({}, { read: true });
+    const userRole = req.user?.role || 'user';
+    const userId = req.user?._id;
+
+    const filter = userRole === 'admin' ? {} : { receiver: userId };
+    await Notification.updateMany(filter, { read: true });
 
     res.json({
       success: true,
