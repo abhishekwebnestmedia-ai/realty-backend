@@ -170,7 +170,7 @@ async function upsertInventoryFromUnit({
   const base = {
     sellerName: unit.ownerName || '',
     unitNumber: unit.unitNumber,
-     unitNo: unit.unitNumber || '999999',   // <--- ADDED
+     unitNo: unit.unitNumber || '999999' ,
   email: unit.email || 'abhishek@hotmail.com',
     towerNo: hierarchy.towerName || '',
     sector: hierarchy.sectorName || '',

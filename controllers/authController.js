@@ -162,37 +162,102 @@ exports.login = async (req, res) => {
 // };
 
 
+// exports.getProfile = async (req, res) => {
+//   try {
+//     const user = await User.findById(req.user.userId).select("-password");
+//     if (!user) {
+//       return res.status(404).json({ message: "User not found" });
+//     }
+
+//     // 🔥 Count Leads
+//     const totalAssigned = await Lead.countDocuments({ assignTo: user._id });
+//     const totalCaptured = await Lead.countDocuments({ capturedBy: user.name });
+
+//     // 🔥 Count Buyer Inventory (Sales)
+//     const totalBuyerInventory = await Inventory.countDocuments({
+//       assignTo: user._id,
+//       inventoryType: "Sales"
+//     });
+
+//     // 🔥 Count Rent Inventory
+//     const totalRentInventory = await Inventory.countDocuments({
+//       assignTo: user._id,
+//       inventoryType: "Rent"
+//     });
+
+//     // 🔥 Full Inventory Total
+//     const totalInventory = totalBuyerInventory + totalRentInventory;
+
+//     res.json({
+//       ...user.toObject(),
+//       stats: {
+//         totalCaptured,
+//         totalAssigned,
+//         totalBuyerInventory,
+//         totalRentInventory,
+//         totalInventory
+//       },
+//     });
+
+//   } catch (err) {
+//     console.error("Error fetching profile:", err);
+//     res.status(500).json({ message: "Server error fetching profile" });
+//   }
+// };
+
+
 exports.getProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select("-password");
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    // 🔥 Count Leads
+    // -------------------- LEAD COUNTS --------------------
+    
+    // Total Leads Assigned
     const totalAssigned = await Lead.countDocuments({ assignTo: user._id });
+
+    // Total Leads Captured by User
     const totalCaptured = await Lead.countDocuments({ capturedBy: user.name });
 
-    // 🔥 Count Buyer Inventory (Sales)
+    // Buyer Leads
+    const totalBuyerLeads = await Lead.countDocuments({
+      assignTo: user._id,
+      leadType: "Buyer"
+    });
+
+    // Rental Leads
+    const totalRentalLeads = await Lead.countDocuments({
+      assignTo: user._id,
+      leadType: "Rental"
+    });
+
+
+    // -------------------- INVENTORY COUNTS --------------------
     const totalBuyerInventory = await Inventory.countDocuments({
       assignTo: user._id,
       inventoryType: "Sales"
     });
 
-    // 🔥 Count Rent Inventory
     const totalRentInventory = await Inventory.countDocuments({
       assignTo: user._id,
       inventoryType: "Rent"
     });
 
-    // 🔥 Full Inventory Total
     const totalInventory = totalBuyerInventory + totalRentInventory;
 
+
+    // -------------------- RESPONSE --------------------
     res.json({
       ...user.toObject(),
       stats: {
+        // Lead Stats
         totalCaptured,
         totalAssigned,
+        totalBuyerLeads,
+        totalRentalLeads,
+        totalLeadCount: totalBuyerLeads + totalRentalLeads,
+
+        // Inventory Stats
         totalBuyerInventory,
         totalRentInventory,
         totalInventory
@@ -204,6 +269,7 @@ exports.getProfile = async (req, res) => {
     res.status(500).json({ message: "Server error fetching profile" });
   }
 };
+
 
 
 exports.logout = async (req, res) => {
@@ -298,6 +364,59 @@ exports.getAllUsers = async (req, res) => {
 
 
 
+// exports.getTeams = async (req, res) => {
+//   try {
+//     const users = await User.find()
+//       .select("_id name email role phoneNumber designation address empid permissions")
+//       .sort({ createdAt: -1 });
+
+//     const updatedUsers = await Promise.all(
+//       users.map(async (user) => {
+
+//         // 🔹 Count Assigned Leads
+//         const totalAssigned = await Lead.countDocuments({ assignTo: user._id });
+
+//         // 🔹 Count Captured Leads
+//         const totalCaptured = await Lead.countDocuments({ capturedBy: user.name });
+
+//         // 🔹 Count Sales (Buyer Inventory)
+//         const totalBuyerInventory = await Inventory.countDocuments({
+//           assignTo: user._id,
+//           inventoryType: "Sales"
+//         });
+
+//         // 🔹 Count Rent Inventory
+//         const totalRentInventory = await Inventory.countDocuments({
+//           assignTo: user._id,
+//           inventoryType: "Rent"
+//         });
+
+//         return {
+//           ...user.toObject(),
+//           stats: {
+//             totalCaptured,
+//             totalAssigned,
+//             totalBuyerInventory,
+//             totalRentInventory
+//           },
+//         };
+//       })
+//     );
+
+//     res.status(200).json({
+//       message: "Users fetched successfully",
+//       count: updatedUsers.length,
+//       users: updatedUsers,
+//     });
+
+//   } catch (err) {
+//     console.error("Error fetching teams:", err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
+
+
+
 exports.getTeams = async (req, res) => {
   try {
     const users = await User.find()
@@ -307,31 +426,54 @@ exports.getTeams = async (req, res) => {
     const updatedUsers = await Promise.all(
       users.map(async (user) => {
 
-        // 🔹 Count Assigned Leads
+        // -------------------- LEAD COUNTS --------------------
+
         const totalAssigned = await Lead.countDocuments({ assignTo: user._id });
 
-        // 🔹 Count Captured Leads
         const totalCaptured = await Lead.countDocuments({ capturedBy: user.name });
 
-        // 🔹 Count Sales (Buyer Inventory)
-        const totalBuyerInventory = await Inventory.countDocuments({
+        const totalBuyerLeads = await Lead.countDocuments({
           assignTo: user._id,
-          inventoryType: "Sales"
+          leadType: "Buyer",
         });
 
-        // 🔹 Count Rent Inventory
+        const totalRentalLeads = await Lead.countDocuments({
+          assignTo: user._id,
+          leadType: "Rental",
+        });
+
+        const totalLeadCount = totalBuyerLeads + totalRentalLeads;
+
+
+        // -------------------- INVENTORY COUNTS --------------------
+
+        const totalBuyerInventory = await Inventory.countDocuments({
+          assignTo: user._id,
+          inventoryType: "Sales",
+        });
+
         const totalRentInventory = await Inventory.countDocuments({
           assignTo: user._id,
-          inventoryType: "Rent"
+          inventoryType: "Rent",
         });
+
+        const totalInventory = totalBuyerInventory + totalRentInventory;
+
 
         return {
           ...user.toObject(),
           stats: {
+            // Lead Stats
             totalCaptured,
             totalAssigned,
+            totalBuyerLeads,
+            totalRentalLeads,
+            totalLeadCount,
+
+            // Inventory Stats
             totalBuyerInventory,
-            totalRentInventory
+            totalRentInventory,
+            totalInventory
           },
         };
       })
@@ -348,8 +490,6 @@ exports.getTeams = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
-
 
 
 
