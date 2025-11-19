@@ -8,20 +8,28 @@ const { emitToAdmins, emitNotification } = require('../utils/socketEmitter');
 
 const mongoose = require("mongoose");
 
-// 🕒 Helper: Format date to IST readable format
-function formatIST(date) {
-  if (!date) return "N/A";
-  return new Date(date).toLocaleString("en-IN", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true
-  });
-}
+const buildInventoryMeta = (record) => {
+  if (!record) return {};
+  return {
+    inventoryId: record._id,
+    sellerName: record.sellerName,
+    inventoryType: record.inventoryType,
+    status: record.status,
+    assignTo: record.assignTo,
+    transferTo: record.transferTo,
+    contactNumbers: record.contactNumbers,
+    followUpDate: record.followUpDate,
+    hierarchy: {
+      cityId: record.cityId,
+      divisionId: record.divisionId,
+      sectorId: record.sectorId,
+      projectId: record.projectId,
+      towerId: record.towerId,
+      unitId: record.unitId,
+      ...(record.meta || {}),
+    },
+  };
+};
 
 exports.createInventry = async (req, res) => {
   try {
@@ -158,23 +166,7 @@ exports.updateInventry = async (req, res) => {
               message: msg,
               changedBy: changedBy?.name || "System",
               receiver: receiverId || null,
-            });
-
-            const payload = { ...notif.toJSON(), inventoryId: id };
-            receiverId ? await emitNotification(receiverId.toString(), payload, { emitToAdmin: true }) : emitToAdmins(payload);
-          }
-
-          // Follow-up Reminder Notification
-          if (field === "followUpDate") {
-            const istTime = formatIST(newValue);
-            const msg = `📅 Follow-up scheduled for Inventory "${oldRecord.sellerName}" on ${istTime} IST by ${changedBy?.name || "System"}`;
-
-            const notif = await Notification.create({
-              type: "Inventory",
-              itemId: id,
-              message: msg,
-              changedBy: changedBy?.name || "System",
-              receiver: receiverId || null,
+              meta: buildInventoryMeta(updatedRecord),
             });
 
             const payload = { ...notif.toJSON(), inventoryId: id };

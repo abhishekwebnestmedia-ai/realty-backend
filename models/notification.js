@@ -20,6 +20,10 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    action: {
+      type: String,
+      default: null,
+    },
     changedBy: {
       type: String,
     },
@@ -27,7 +31,7 @@ const notificationSchema = new mongoose.Schema(
     // optional metadata
     meta: {
       type: Object,
-      default: null,
+      default: () => ({}),
     },
      read: {
       type: Boolean,

@@ -52,90 +52,133 @@ cron.schedule("* * * * *", async () => {
 
     // ----------------- INVENTORIES -----------------
 
-  for (const lead of leads) {
-  // ✅ Use correct fields from Lead model
-  const msg = `🔔 Reminder: Follow up with ${lead.customerName} (${lead.contactNumber}). Requirement: ${lead.projects || lead.remark || "N/A"}.`;
+    for (const lead of leads) {
+      const msg = `🔔 Reminder: Follow up with ${lead.customerName} (${lead.contactNumber}). Requirement: ${lead.projects || lead.remark || "N/A"}.`;
+      const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
 
-  // 🧠 Prevent duplicate notifications within 2 minutes
-  const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+      const exists = await Notification.findOne({
+        type: "Lead",
+        itemId: lead._id,
+        message: msg,
+        createdAt: { $gte: twoMinutesAgo },
+      });
 
-  const exists = await Notification.findOne({
-    type: "Lead",
-    itemId: lead._id,
-    message: msg,
-    createdAt: { $gte: twoMinutesAgo },
-  });
-
-  if (exists) {
-    console.log(`⏩ Skipped duplicate lead notification for ${lead.clientName}`);
-    continue;
-  }
-
-  try {
-    // ✅ Create notification
-    const notif = await Notification.create({
-      type: "Lead",
-      itemId: lead._id,
-      message: msg,
-    });
-
-    console.log(`✅ Lead notification created for ${lead.clientName}`);
-
-    // 🕒 Convert timestamp to IST for payload
-    const istOffset = 5.5 * 60 * 60 * 1000;
-    const createdAtIST = new Date(notif.createdAt.getTime() + istOffset)
-      .toISOString()
-      .replace("T", " ")
-      .substring(0, 19);
-
-    const payload = {
-      type: "Lead",
-      itemId: lead._id,
-      message: msg,
-      createdAt: createdAtIST,
-    };
-
-    // 🔔 Determine recipient: transferTo (name) -> assignTo (id or name) -> admins
-    try {
-      let receiverId = null;
-      if (lead.transferTo) {
-        const r = await User.findOne({ name: lead.transferTo });
-        if (r) receiverId = r._id;
+      if (exists) {
+        console.log(`⏩ Skipped duplicate lead notification for ${lead.customerName}`);
+        continue;
       }
 
-      if (!receiverId && lead.assignedTo) {
-        if (mongoose.Types.ObjectId.isValid(String(lead.assignedTo))) {
-          receiverId = lead.assignedTo;
+      let receiverId = null;
+      try {
+        if (lead.transferTo) {
+          const r = await User.findOne({ name: lead.transferTo });
+          if (r) receiverId = r._id;
+        }
+
+        const assignCandidate = lead.assignTo || lead.assignedTo;
+        if (!receiverId && assignCandidate) {
+          if (mongoose.Types.ObjectId.isValid(String(assignCandidate))) {
+            receiverId = assignCandidate;
+          } else {
+            const r2 = await User.findOne({ name: assignCandidate });
+            if (r2) receiverId = r2._id;
+          }
+        }
+      } catch (resolveErr) {
+        console.error("❌ Error resolving lead recipient:", resolveErr);
+      }
+
+      try {
+        const notif = await Notification.create({
+          type: "Lead",
+          itemId: lead._id,
+          message: msg,
+          receiver: receiverId || null,
+          meta: {
+            leadId: lead._id,
+            customerName: lead.customerName,
+            contactNumber: lead.contactNumber,
+            followUpAt: lead.followUp,
+            followUpReadable: formatIST(lead.followUp),
+            assignTo: assignCandidate,
+            transferTo: lead.transferTo,
+          },
+        });
+
+        console.log(`✅ Lead notification created for ${lead.customerName}`);
+
+        const istOffset = 5.5 * 60 * 60 * 1000;
+        const createdAtIST = new Date(notif.createdAt.getTime() + istOffset)
+          .toISOString()
+          .replace("T", " ")
+          .substring(0, 19);
+
+        const payload = {
+          ...notif.toJSON(),
+          createdAt: createdAtIST,
+        };
+
+        if (receiverId) {
+          await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
         } else {
-          const r2 = await User.findOne({ name: lead.assignedTo });
-          if (r2) receiverId = r2._id;
+          emitToAdmins(payload);
+          console.log(`📩 Unassigned lead notification sent to admins`);
+        }
+      } catch (err) {
+        console.error(`❌ Lead notification error for ${lead.customerName}:`, err);
+      }
+    }
+
+    
+    
+    // Support both `followUpDate` (Inventory) and legacy `followUp` keys
+    let inventories = await Inventory.find({
+      $or: [
+        { followUpDate: { $gte: startStr, $lte: endStr } },
+        { followUp: { $gte: startStr, $lte: endStr } },
+      ],
+    });
+
+    // Fallback: if no inventories matched by string-range (different stored format),
+    // scan inventories with followUp fields and parse their values to detect matches.
+    if (!inventories.length) {
+      const candidates = await Inventory.find({
+        $or: [{ followUpDate: { $exists: true } }, { followUp: { $exists: true } }],
+      });
+
+      const matched = [];
+      for (const inv of candidates) {
+        const raw = inv.followUpDate || inv.followUp || null;
+        if (!raw) continue;
+
+        // Try to parse common formats (ISO, epoch, or already IST string)
+        let parsed = null;
+        // If raw matches YYYY-MM-DD HH:mm:ss, convert to ISO by replacing space
+        const maybeISO = raw.replace(' ', 'T');
+        const tryDates = [maybeISO, raw, new Date(raw)];
+        for (const t of tryDates) {
+          const d = new Date(t);
+          if (!isNaN(d.getTime())) {
+            parsed = d;
+            break;
+          }
+        }
+
+        if (!parsed) continue;
+
+        const parsedStr = toISTDBString(parsed);
+        if (parsedStr >= startStr && parsedStr <= endStr) {
+          matched.push(inv);
         }
       }
 
-      if (receiverId) {
-        await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
-      } else {
-        emitToAdmins(payload);
-        console.log(`📩 Unassigned lead notification sent to admins`);
-      }
-    } catch (e) {
-      console.error("❌ Error resolving lead recipient:", e);
-      emitToAdmins(payload);
+      if (matched.length) inventories = matched;
     }
 
-  } catch (err) {
-    console.error(`❌ Lead notification error for ${lead.clientName}:`, err);
-  }
-}
-
-    
-    
-    const inventories = await Inventory.find({
-      followUpDate: { $gte: startStr, $lte: endStr },
-    });
-
     for (const inv of inventories) {
-      const istTime = formatIST(inv.followUpDate);
+      // Use whichever follow-up field is present (support legacy `followUp`)
+      const followUpValue = inv.followUpDate || inv.followUp || null;
+      const istTime = formatIST(followUpValue);
       const msg = `🔔 Reminder: Follow up with ${inv.sellerName} (${inv.contactNumbers?.[0] || "N/A"}) at ${istTime} IST. Property in sector ${inv.sector || "N/A"} — Demand: ${inv.demand || "N/A"}.`;
 
       const exists = await Notification.findOne({
@@ -151,47 +194,66 @@ cron.schedule("* * * * *", async () => {
       }
 
       try {
+        let receiverId = null;
+        if (inv.transferTo) {
+          const r = await User.findOne({ name: inv.transferTo });
+          if (r) receiverId = r._id;
+        }
+
+        const assignCandidate = inv.assignedTo || inv.assignTo;
+        if (!receiverId && assignCandidate) {
+          if (mongoose.Types.ObjectId.isValid(String(assignCandidate))) {
+            receiverId = assignCandidate;
+          } else {
+            const r2 = await User.findOne({ name: assignCandidate });
+            if (r2) receiverId = r2._id;
+          }
+        }
+
         const notif = await Notification.create({
           type: "Inventory",
           itemId: inv._id,
           message: msg,
+          receiver: receiverId || null,
+          meta: {
+            inventoryId: inv._id,
+            sellerName: inv.sellerName,
+            contactNumbers: inv.contactNumbers,
+            followUpDate: followUpValue,
+            followUpReadable: istTime,
+            inventoryType: inv.inventoryType,
+            assignTo: assignCandidate,
+            transferTo: inv.transferTo,
+            hierarchy: {
+              cityId: inv.cityId,
+              divisionId: inv.divisionId,
+              sectorId: inv.sectorId,
+              projectId: inv.projectId,
+              towerId: inv.towerId,
+              unitId: inv.unitId,
+              ...(inv.meta || {}),
+            },
+          },
         });
 
         console.log(`✅ Inventory notification created for ${inv.sellerName}`);
 
+        const istOffset = 5.5 * 60 * 60 * 1000;
+        const createdAtIST = new Date(notif.createdAt.getTime() + istOffset)
+          .toISOString()
+          .replace("T", " ")
+          .substring(0, 19);
+
         const payload = {
-          type: "Inventory",
-          itemId: inv._id,
-          message: msg,
-          createdAt: notif.createdAt,
+          ...notif.toJSON(),
+          createdAt: createdAtIST,
         };
 
-        // Determine receiver for inventory: transferTo -> assignTo -> admins
-        try {
-          let receiverId = null;
-          if (inv.transferTo) {
-            const r = await User.findOne({ name: inv.transferTo });
-            if (r) receiverId = r._id;
-          }
-
-          if (!receiverId && inv.assignedTo) {
-            if (mongoose.Types.ObjectId.isValid(String(inv.assignedTo))) {
-              receiverId = inv.assignedTo;
-            } else {
-              const r2 = await User.findOne({ name: inv.assignedTo });
-              if (r2) receiverId = r2._id;
-            }
-          }
-
-          if (receiverId) {
-            await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
-          } else {
-            emitToAdmins(payload);
-            console.log(`📩 Unassigned inventory notification sent to admins`);
-          }
-        } catch (e) {
-          console.error("❌ Error resolving inventory recipient:", e);
+        if (receiverId) {
+          await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
+        } else {
           emitToAdmins(payload);
+          console.log(`📩 Unassigned inventory notification sent to admins`);
         }
 
       } catch (err) {

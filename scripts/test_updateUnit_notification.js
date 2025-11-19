@@ -3,6 +3,7 @@ const { MongoMemoryServer } = require('mongodb-memory-server');
 const mongoose = require('mongoose');
 
 const ProjectType = require('../models/project');
+const Inventory = require('../models/inventryModel');
 const User = require('../models/user');
 const Notification = require('../models/notification');
 const projectController = require('../controllers/projectController');
@@ -84,13 +85,20 @@ async function run() {
     // Call updateUnit
     await projectController.updateUnit(req, res);
 
-    // Check notifications
-    const notifs = await Notification.find({ type: 'Inventory', itemId: new mongoose.Types.ObjectId(unitId) });
-    console.log('Notifications found for unit:', notifs.length);
-    notifs.forEach(n => console.log(' -', n.message, ' receiver:', n.receiver));
+    const inv = await Inventory.findOne({ unitId });
+    if (!inv) {
+      console.error('❌ Inventory record was not created for the unit');
+    } else {
+      console.log('✅ Inventory created with type:', inv.inventoryType, ' assignTo:', inv.assignTo);
+    }
 
-    if (notifs.length === 0) console.error('❌ No notification created for status change');
-    else console.log('✅ Notification created successfully');
+    // Check notifications linked to the inventory record
+    const notifs = await Notification.find({ type: 'Inventory', itemId: inv?._id });
+    console.log('Notifications found for inventory:', notifs.length);
+    notifs.forEach(n => console.log(' -', n.message, ' action:', n.action, ' receiver:', n.receiver));
+
+    if (notifs.some(n => n.action === 'inventory_auto_sync')) console.log('✅ Auto-sync notification created');
+    else console.error('❌ Expected auto-sync notification not found');
 
   } catch (err) {
     console.error('Test failed:', err);
