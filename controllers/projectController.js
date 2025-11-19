@@ -1,5 +1,3 @@
-
-
 const ProjectType = require("../models/project"); // projectTypeSchema
 // shashakn
 

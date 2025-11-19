@@ -43,9 +43,48 @@ cron.schedule("* * * * *", async () => {
     console.log(`🔍 Checking follow-ups between ${startStr} and ${endStr}`);
 
     // ----------------- LEADS -----------------
-    const leads = await Lead.find({
-      followUp: { $gte: startStr, $lte: endStr },
+    // Support both `followUpDate` (if introduced) and legacy `followUp` keys stored as strings
+    let leads = await Lead.find({
+      $or: [
+        { followUpDate: { $gte: startStr, $lte: endStr } },
+        { followUp: { $gte: startStr, $lte: endStr } },
+      ],
     });
+
+    // Fallback: if no leads matched by string-range (different stored format like ISO),
+    // scan leads with followUp fields and parse their values to detect matches.
+    if (!leads.length) {
+      const leadCandidates = await Lead.find({
+        $or: [{ followUpDate: { $exists: true } }, { followUp: { $exists: true } }],
+      });
+
+      const matchedLeads = [];
+      for (const ld of leadCandidates) {
+        const raw = ld.followUpDate || ld.followUp || null;
+        if (!raw) continue;
+
+        // Try to parse common formats (ISO, epoch, or already IST string)
+        let parsed = null;
+        const maybeISO = String(raw).replace(' ', 'T');
+        const tryDates = [maybeISO, raw, new Date(raw)];
+        for (const t of tryDates) {
+          const d = new Date(t);
+          if (!isNaN(d.getTime())) {
+            parsed = d;
+            break;
+          }
+        }
+
+        if (!parsed) continue;
+
+        const parsedStr = toISTDBString(parsed);
+        if (parsedStr >= startStr && parsedStr <= endStr) {
+          matchedLeads.push(ld);
+        }
+      }
+
+      if (matchedLeads.length) leads = matchedLeads;
+    }
 
 
 
