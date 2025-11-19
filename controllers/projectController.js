@@ -6,7 +6,7 @@ const ProjectType = require("../models/project"); // projectTypeSchema
 
 const Inventory = require('../models/inventryModel');
 const Notification = require('../models/notification');
-const { emitToAdmins } = require('../utils/socketEmitter');
+const { emitNotification, emitToAdmins } = require('../utils/socketEmitter');
 
 const User = require("../models/user");
 
@@ -288,19 +288,38 @@ exports.addUnit = async (req, res) => {
       if (!alreadyExists) {
         console.log("🚀 No duplicate found → Creating Notification Now...");
         try {
-          const notif = await Notification.create({
+          // Resolve assignTo (if present) so we can notify assigned user directly
+          let receiverId = null;
+          if (addedUnit.assignTo) {
+            try {
+              receiverId = await resolveAssign(addedUnit.assignTo);
+            } catch (e) {
+              console.warn('Failed to resolve assignTo for notification:', e);
+              receiverId = null;
+            }
+          }
+
+          const notifPayload = {
             type: "Inventory",
             itemId: addedUnit._id,
             message: msg,
-            changedBy
-          });
+            changedBy,
+            receiver: receiverId || null
+          };
+
+          const notif = await Notification.create(notifPayload);
 
           console.log("📦 Notification CREATED IN DB:", notif);
 
-          // Emit to admins
+          // Emit to assigned user (if any) AND admins; fallback to admins only
           if (global.io) {
-            emitToAdmins(notif.toJSON());
-            console.log("📡 Real-time Notification Emitted to Admins!");
+            if (receiverId) {
+              await emitNotification(receiverId.toString(), notif.toJSON(), { emitToAdmin: true });
+              console.log("📡 Real-time Notification Emitted to assigned user + Admins!");
+            } else {
+              emitToAdmins(notif.toJSON());
+              console.log("📡 Real-time Notification Emitted to Admins!");
+            }
           } else {
             console.log("⚠ Socket.IO not initialized — cannot emit.");
           }
@@ -500,6 +519,66 @@ exports.updateUnit = async (req, res) => {
 
     if (result.modifiedCount === 0) {
       return res.status(404).json({ error: "Unit not found or no changes applied" });
+    }
+
+    // If status was changed to Interested in calling, create & emit notification
+    try {
+      if (updateData.status && String(updateData.status).trim().toLowerCase() === 'interested in calling') {
+        // fetch the project doc and locate the unit
+        const proj = await ProjectType.findOne({ category, projectcategory });
+        if (proj) {
+          const city = proj.cities.id(cityId);
+          const division = city?.divisions.id(divisionId);
+          const sector = division?.sectors.id(sectorId);
+          const project = sector?.projects.id(projectId);
+          const tower = project?.towers.id(towerId);
+          const foundUnit = tower?.units.id(unitId);
+
+          if (foundUnit) {
+            const changedBy = req.user?.name || 'System';
+            const msg = `🏢 Unit "${foundUnit.unitNumber}" status changed to Interested in calling (${changedBy})`;
+
+            const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+            const alreadyExists = await Notification.findOne({
+              type: 'Inventory',
+              itemId: foundUnit._id,
+              message: msg,
+              createdAt: { $gte: twoMinAgo }
+            });
+
+            if (!alreadyExists) {
+              let receiverId = null;
+              if (foundUnit.assignTo) {
+                try {
+                  receiverId = await resolveAssign(foundUnit.assignTo);
+                } catch (e) {
+                  console.warn('Failed to resolve assignTo for update notification:', e);
+                }
+              }
+
+              const notifPayload = {
+                type: 'Inventory',
+                itemId: foundUnit._id,
+                message: msg,
+                changedBy,
+                receiver: receiverId || null
+              };
+
+              const notif = await Notification.create(notifPayload);
+
+              if (global.io) {
+                if (receiverId) {
+                  await emitNotification(receiverId.toString(), notif.toJSON(), { emitToAdmin: true });
+                } else {
+                  emitToAdmins(notif.toJSON());
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Notification after updateUnit failed:', err);
     }
 
     res.json({ success: true, message: "Unit updated successfully" });

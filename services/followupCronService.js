@@ -1,15 +1,16 @@
 const cron = require("node-cron");
+const mongoose = require('mongoose');
 const Lead = require("../models/leadModel");
 const Inventory = require("../models/inventryModel");
 const Notification = require("../models/notification");
 const User = require("../models/user");
 const { emitNotification, emitToAdmins } = require("../utils/socketEmitter");
 
-// 🔹 Convert JS Date → "YYYY-MM-DDTHH:mm:ss+05:30" (IST)
-function toISTISOString(date) {
+// 🔹 Convert JS Date → "YYYY-MM-DD HH:mm:ss" (IST) matching Lead/Inventory storage
+function toISTDBString(date) {
   const istOffset = 5.5 * 60 * 60 * 1000;
   const ist = new Date(date.getTime() + istOffset);
-  return ist.toISOString().split(".")[0] + "+05:30";
+  return ist.toISOString().replace('T', ' ').substring(0, 19);
 }
 
 // 🕒 Format date to readable IST format (DD/MM/YYYY, HH:mm AM/PM IST)
@@ -35,8 +36,9 @@ cron.schedule("* * * * *", async () => {
     const targetStart = new Date(now.getTime() - 30 * 1000);
     const targetEnd = new Date(now.getTime() + 30 * 1000);
 
-    const startStr = toISTISOString(targetStart);
-    const endStr = toISTISOString(targetEnd);
+    // Use same DB string format used by Lead/Inventory models
+    const startStr = toISTDBString(targetStart);
+    const endStr = toISTDBString(targetEnd);
 
     console.log(`🔍 Checking follow-ups between ${startStr} and ${endStr}`);
 

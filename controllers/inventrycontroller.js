@@ -187,36 +187,6 @@ exports.updateInventry = async (req, res) => {
       }
     }
 
-    // 🔥 AUTO REMINDER WHEN FOLLOW-UP DATE == CURRENT TIME
-    if (updatedRecord.followUpDate) {
-      const now = new Date();
-      const followUp = new Date(updatedRecord.followUpDate);
-
-      // Compare only date + hour + minute
-      if (
-        followUp.getFullYear() === now.getFullYear() &&
-        followUp.getMonth() === now.getMonth() &&
-        followUp.getDate() === now.getDate() &&
-        followUp.getHours() === now.getHours() &&
-        followUp.getMinutes() === now.getMinutes()
-      ) {
-        const receiverId = updatedRecord.assignTo?._id;
-
-        const autoMsg = `⏰ Reminder: Follow-up call scheduled now for inventory "${updatedRecord.sellerName}".`;
-
-        const notif = await Notification.create({
-          type: "Inventory",
-          itemId: id,
-          message: autoMsg,
-          changedBy: "System",
-          receiver: receiverId || null,
-        });
-
-        const payload = { ...notif.toJSON(), inventoryId: id };
-        receiverId ? await emitNotification(receiverId.toString(), payload, { emitToAdmin: true }) : emitToAdmins(payload);
-      }
-    }
-
     return res.json({ success: true, message: "Inventory updated successfully", data: updatedRecord });
 
   } catch (err) {
