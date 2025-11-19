@@ -1282,6 +1282,20 @@ exports.bulkUploadProjectTypes = async (req, res) => {
 // };
 
 
+async function resolveAssignTo(assignTo) {
+  if (!assignTo) return null;
+
+  // If it's already a valid ObjectId → check user
+  if (mongoose.Types.ObjectId.isValid(assignTo)) {
+    const user = await User.findById(assignTo);
+    if (user) return user;
+  }
+
+  // Search by name or email
+  return await User.findOne({
+    $or: [{ name: assignTo }, { email: assignTo }]
+  });
+}
 
 
 exports.mergeOrCreateHierarchy = async (req, res) => {
