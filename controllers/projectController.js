@@ -1455,7 +1455,7 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
           approvedAt: new Date(),
           approvedBy: req.user?._id || null
         });
-        continue;
+        // continue;
       }
 
       const existsNotif = await Notification.findOne({
@@ -1499,4 +1499,6 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+
 
