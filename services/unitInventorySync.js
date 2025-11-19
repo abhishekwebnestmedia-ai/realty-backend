@@ -218,10 +218,13 @@ async function upsertInventoryFromUnit({
 async function notifyAdminsForApproval({ unit, hierarchy, targetType, requestedBy }) {
   if (!unit || !hierarchy) return null;
 
+  // ensure we have a canonical unitId to use in queries / payloads
+  const unitId = hierarchy.unitId || (unit && unit._id ? unit._id.toString() : null);
+
   const existing = await Notification.findOne({
     type: 'Inventory',
     action: 'inventory_approval',
-    itemId: hierarchy.unitId,
+    itemId: unitId,
     read: false,
   });
 
@@ -229,19 +232,22 @@ async function notifyAdminsForApproval({ unit, hierarchy, targetType, requestedB
     return existing;
   }
 
+  // ensure hierarchy includes unitId so frontend can build approve URL
+  const ensuredHierarchy = Object.assign({}, hierarchy || {}, { unitId: unitId });
+
   const payloadMeta = {
     action: 'inventory_approval',
     targetType,
     requestedBy: requestedBy
       ? { id: requestedBy._id, name: requestedBy.name, email: requestedBy.email }
       : null,
-    hierarchy,
+    hierarchy: ensuredHierarchy,
     unit: snapshotUnit(unit),
   };
 
   const notif = await Notification.create({
     type: 'Inventory',
-    itemId: hierarchy.unitId,
+    itemId: unitId,
     action: 'inventory_approval',
     message: `Approval needed: Unit "${unit.unitNumber}" marked as ${targetType === 'Rent' ? 'Rental' : 'For Sale'} by ${requestedBy?.name || 'User'}`,
     changedBy: requestedBy?.name || 'User',
