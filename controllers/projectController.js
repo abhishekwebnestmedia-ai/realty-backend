@@ -1281,21 +1281,19 @@ exports.bulkUploadProjectTypes = async (req, res) => {
 //   }
 // };
 
-
 async function resolveAssignTo(assignTo) {
   if (!assignTo) return null;
 
-  // If it's already a valid ObjectId → check user
   if (mongoose.Types.ObjectId.isValid(assignTo)) {
     const user = await User.findById(assignTo);
     if (user) return user;
   }
 
-  // Search by name or email
   return await User.findOne({
     $or: [{ name: assignTo }, { email: assignTo }]
   });
 }
+
 
 
 exports.mergeOrCreateHierarchy = async (req, res) => {
@@ -1315,82 +1313,54 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
       return res.status(400).json({ error: "Invalid projectcategory" });
 
     let typeDoc = await ProjectType.findOne({ category, projectcategory });
-    if (!typeDoc) {
-      typeDoc = new ProjectType({ category, projectcategory, cities: [] });
-    }
+    if (!typeDoc) typeDoc = new ProjectType({ category, projectcategory, cities: [] });
 
     const addedUnitsDetails = [];
-
     const allowedStatuses = [
-      "Vacant",
-      "Rental",
-      "Self Occupied",
-      "Interested in calling"
+      "Vacant", "Rental", "Self Occupied", "Interested in calling"
     ];
 
-    // ----------- MERGE STARTS HERE -----------
+    
+    // ===================== MERGE =====================
     for (const city of cities) {
       let existingCity = typeDoc.cities.find(c => c.cityName === city.cityName);
-      if (!existingCity) {
-        typeDoc.cities.push(city);
-        continue;
-      }
+      if (!existingCity) { typeDoc.cities.push(city); continue; }
 
       for (const div of city.divisions || []) {
         let existingDiv = existingCity.divisions.find(d => d.divisionName === div.divisionName);
-        if (!existingDiv) {
-          existingCity.divisions.push(div);
-          continue;
-        }
+        if (!existingDiv) { existingCity.divisions.push(div); continue; }
 
         for (const sec of div.sectors || []) {
           let existingSec = existingDiv.sectors.find(s => s.sectorName === sec.sectorName);
-          if (!existingSec) {
-            existingDiv.sectors.push(sec);
-            continue;
-          }
+          if (!existingSec) { existingDiv.sectors.push(sec); continue; }
 
           for (const proj of sec.projects || []) {
             let existingProj = existingSec.projects.find(p => p.projectName === proj.projectName);
-            if (!existingProj) {
-              existingSec.projects.push(proj);
-              continue;
-            }
+            if (!existingProj) { existingSec.projects.push(proj); continue; }
 
             for (const tower of proj.towers || []) {
               let existingTower = existingProj.towers.find(t => t.towerName === tower.towerName);
-              if (!existingTower) {
-                existingProj.towers.push(tower);
-                continue;
-              }
+              if (!existingTower) { existingProj.towers.push(tower); continue; }
 
               for (const unit of tower.units || []) {
 
-                // normalize status
-                unit.status =
-                  allowedStatuses.find(
-                    s => s.toLowerCase() === (unit.status || "").toLowerCase().trim()
-                  ) || "Vacant";
+                unit.status = allowedStatuses.includes(unit.status) ? unit.status : "Vacant";
 
-                const existingUnit = existingTower.units.find(
-                  u => u.unitNumber === unit.unitNumber
-                );
+                const existingUnit = existingTower.units.find(u => u.unitNumber === unit.unitNumber);
 
-                // -------- Resolve assignTo (name/email/id allowed) --------
-                let resolvedUser = null;
-                if (unit.assignTo) {
-                  resolvedUser = await resolveAssignTo(unit.assignTo);
-                }
+                let resolvedUser = unit.assignTo ? await resolveAssignTo(unit.assignTo) : null;
 
-                // ------ IF UNIT ALREADY EXISTS ------
+
+                // Update existing unit
                 if (existingUnit) {
-                  if (!existingUnit.assignTo && resolvedUser) {
+                  if (!existingUnit.assignTo && resolvedUser)
                     existingUnit.assignTo = resolvedUser._id;
-                  }
+                  
                   continue;
                 }
 
-                // ------ NEW UNIT ------
+
+                // Create new unit
                 const newUnit = {
                   ...unit,
                   assignTo: resolvedUser ? resolvedUser._id : null,
@@ -1399,12 +1369,12 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
 
                 existingTower.units.push(newUnit);
 
-                // ---- Create Inventory Automatically ----
+
+                // Create Inventory
                 const createdInventory = await Inventory.create({
                   sellerName: newUnit.ownerName || "AutoImported",
                   Project: [existingProj.projectName],
                   contactNumbers: newUnit.mobileNumbers || [],
-
                   category,
                   projectcategory,
                   cityId: existingCity._id,
@@ -1417,21 +1387,27 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
                   status: newUnit.status,
                   createdBy: req.user?._id || null,
                   assignTo: resolvedUser ? resolvedUser._id : null,
-
-                  meta: {
-                    cityName: existingCity.cityName,
-                    divisionName: existingDiv.divisionName,
-                    sectorName: existingSec.sectorName,
-                    projectName: existingProj.projectName,
-                    towerName: existingTower.towerName
-                  }
                 });
 
                 addedUnitsDetails.push({
                   ...createdInventory.toJSON(),
-                  unitNumber: newUnit.unitNumber,
+                  meta: {
+                    cityId: existingCity._id,
+                    divisionId: existingDiv._id,
+                    sectorId: existingSec._id,
+                    projectId: existingProj._id,
+                    towerId: existingTower._id,
+                    unitId: newUnit._id,
+
+                    cityName: existingCity.cityName,
+                    divisionName: existingDiv.divisionName,
+                    sectorName: existingSec.sectorName,
+                    projectName: existingProj.projectName,
+                    towerName: existingTower.towerName,
+                  },
                   notification: newUnit.status === "Interested in calling"
                 });
+
               }
             }
           }
@@ -1441,38 +1417,47 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
 
     await typeDoc.save();
 
-    // ----------- NOTIFICATIONS -----------
+
+
+    // ===================== NOTIFICATIONS =====================
     const changedBy = req.user?.name || "System";
-    const isRequesterAdmin = req.user?.role === "admin";
+    const isAdmin = req.user?.role === "admin";
     let createdNotifCount = 0;
+
+    const admins = await User.find({ role: "admin" }).select("_id");
+
 
     for (const entry of addedUnitsDetails.filter(u => u.notification)) {
 
-      if (isRequesterAdmin) {
+      // Admin created → auto approve, NO notification
+      if (isAdmin) {
         await Inventory.findByIdAndUpdate(entry._id, {
-          capturedBy: req.user?.name || "Admin",
-          inventoryType: "Sales",
           approvedAt: new Date(),
-          approvedBy: req.user?._id || null
+          approvedBy: req.user?._id,
+          capturedBy: req.user?.name || "Admin",
+          inventoryType: "Sales"
         });
-        // continue;
+        continue;
       }
 
-      const existsNotif = await Notification.findOne({
+      // Normal user → notify admins
+      const exists = await Notification.findOne({
         type: "Inventory",
         itemId: entry._id
       });
 
-      if (!existsNotif) {
+      if (!exists) {
+
         const notif = await Notification.create({
           type: "Inventory",
           itemId: entry._id,
-          message: `🏢 Unit "${entry.unitNumber}" marked as "Interested in calling" during merge by ${changedBy}`,
+          message: `📢 New unit "${entry.unitNumber}" requires admin approval.`,
+          receiver: admins.map(a => a._id),
           changedBy,
-          receiver: null,
           meta: {
             ...entry.meta,
-            assignedTo: entry.assignTo || null,
+            assignTo: entry.assignTo || null,
+            createdBy: changedBy,
             fullHierarchyPath: `${entry.meta.cityName} > ${entry.meta.divisionName} > ${entry.meta.sectorName} > ${entry.meta.projectName} > ${entry.meta.towerName} > ${entry.unitNumber}`
           }
         });
@@ -1485,12 +1470,14 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
       }
     }
 
+
+
     return res.json({
       success: true,
       message: "Hierarchy merged successfully",
       totalAdded: addedUnitsDetails.length,
       notificationsTriggered: createdNotifCount,
-      inventoryCreated: addedUnitsDetails,
+      inventory: addedUnitsDetails,
       data: typeDoc
     });
 
@@ -1499,7 +1486,6 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
 
 
 
