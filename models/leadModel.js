@@ -23,6 +23,30 @@ function getISTDateTime() {
   return istDate.toISOString().replace('T', ' ').substring(0, 19);
 }
 
+// ✅ Helper: Convert a Date (or parseable input) to IST DB string (YYYY-MM-DD HH:mm:ss)
+function formatToISTDBString(input) {
+  if (!input) return null;
+  let d = null;
+  if (input instanceof Date) d = input;
+  else {
+    // Replace space-with-T for common 'YYYY-MM-DD HH:mm:ss' -> ISO
+    try {
+      const maybe = String(input).trim();
+      const tryVals = [maybe.replace(' ', 'T'), maybe, new Date(maybe)];
+      for (const t of tryVals) {
+        const dt = new Date(t);
+        if (!isNaN(dt.getTime())) { d = dt; break; }
+      }
+    } catch {
+      d = null;
+    }
+  }
+  if (!d) return null;
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const ist = new Date(d.getTime() + istOffset);
+  return ist.toISOString().replace('T', ' ').substring(0, 19);
+}
+
 const leadSchema = new mongoose.Schema(
   {
     customerName: { type: String, required: true },
@@ -70,7 +94,13 @@ const leadSchema = new mongoose.Schema(
 //
 leadSchema.pre('save', function (next) {
   if (!this.date) this.date = getISTDateTime();
-  if (!this.followUp) this.followUp = getISTDateTime();
+  // Normalize followUp to IST DB string when possible
+  if (!this.followUp) {
+    this.followUp = getISTDateTime();
+  } else {
+    const normalized = formatToISTDBString(this.followUp);
+    if (normalized) this.followUp = normalized;
+  }
   next();
 });
 
@@ -139,7 +169,13 @@ leadSchema.pre('findOneAndUpdate', function (next) {
   const update = this.getUpdate();
   if (update) {
     const target = update.$set ? update.$set : update;
+    // Normalize string fields
     formatStringFields(target);
+    // If followUp is present in update, normalize to IST DB string
+    if (target.followUp) {
+      const normalized = formatToISTDBString(target.followUp);
+      if (normalized) target.followUp = normalized;
+    }
   }
   next();
 });
