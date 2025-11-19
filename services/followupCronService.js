@@ -108,13 +108,14 @@ cron.schedule("* * * * *", async () => {
       }
 
       let receiverId = null;
+      // Use existing fields directly; ensure assignCandidate is in scope for later meta
+      let assignCandidate = lead.assignTo || lead.assignedTo;
       try {
         if (lead.transferTo) {
           const r = await User.findOne({ name: lead.transferTo });
           if (r) receiverId = r._id;
         }
 
-        const assignCandidate = lead.assignTo || lead.assignedTo;
         if (!receiverId && assignCandidate) {
           if (mongoose.Types.ObjectId.isValid(String(assignCandidate))) {
             receiverId = assignCandidate;
