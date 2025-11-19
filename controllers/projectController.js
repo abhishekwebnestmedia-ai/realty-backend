@@ -1213,7 +1213,7 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
                   sellerName: newUnit.ownerName || "AutoImported",
                   Project: [existingProj.projectName],
                   contactNumbers: newUnit.mobileNumbers || [],
-                email: newUnit.email || '9728600105',
+                  email: newUnit.email || '9728600105',
                   category,
                   projectcategory,
                   cityId: existingCity._id,
