@@ -18,6 +18,18 @@ const User = require("../models/user");
 
 const mongoose = require("mongoose");
 
+// Helper: Resolve full user info from `req.user` (fetch role if missing)
+async function resolveActorFromReq(req) {
+  if (!req || !req.user) return null;
+  try {
+    if (req.user.role) return { _id: req.user._id || req.user.userId, name: req.user.name, email: req.user.email, role: req.user.role };
+    const u = await User.findById(req.user._id).select('name email role');
+    if (u) return { _id: u._id, name: u.name, email: u.email, role: u.role };
+  } catch (err) {
+    console.warn('resolveActorFromReq failed:', err.message);
+  }
+  return { _id: req.user._id || req.user.userId, name: req.user.name, email: req.user.email, role: null };
+}
 // ✅ Step 1 - Create ProjectType (root)
 exports.createProjectType = async (req, res) => {
   try {
@@ -281,12 +293,10 @@ exports.addUnit = async (req, res) => {
     });
 
     const intent = determineInventoryIntent(addedUnit.status);
-    const actor = req.user
-      ? { _id: req.user._id || req.user.userId, name: req.user.name, email: req.user.email }
-      : null;
+      const actor = await resolveActorFromReq(req);
 
     if (intent.shouldSync) {
-      if (req.user?.role === 'admin') {
+        if (actor?.role === 'admin') {
         const { inventory, isNew } = await upsertInventoryFromUnit({
           unit: addedUnit,
           hierarchy: hierarchyMeta,
@@ -572,12 +582,10 @@ exports.updateUnit = async (req, res) => {
     });
 
     const intent = determineInventoryIntent(unitDoc.status);
-    const actor = req.user
-      ? { _id: req.user._id || req.user.userId, name: req.user.name, email: req.user.email }
-      : null;
+      const actor = await resolveActorFromReq(req);
 
     if (intent.shouldSync) {
-      if (req.user?.role === 'admin') {
+      if (actor?.role === 'admin') {
         const { inventory, isNew } = await upsertInventoryFromUnit({
           unit: unitDoc,
           hierarchy: hierarchyMeta,
@@ -704,9 +712,7 @@ exports.deleteEntity = async (req, res) => {
     }
 
     // ---- Unit ----
-    const unit = tower.units.id(unitId);
-    if (!unit) return res.status(404).json({ error: "Unit not found" });
-
+          const actor = await resolveActorFromReq(req);
     await unit.deleteOne();
     await typeDoc.save();
 
@@ -1249,11 +1255,10 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
 
     await typeDoc.save();
 
-
-
-    // ===================== NOTIFICATIONS =====================
-    const changedBy = req.user?.name || "System";
-    const isAdmin = req.user?.role === "admin";
+    // ----------- NOTIFICATIONS -----------
+    const actor = await resolveActorFromReq(req);
+    const changedBy = actor?.name || "System";
+    const isRequesterAdmin = actor?.role === "admin";
     let createdNotifCount = 0;
 
     const admins = await User.find({ role: "admin" }).select("_id");
