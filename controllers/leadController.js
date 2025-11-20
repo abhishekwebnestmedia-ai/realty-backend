@@ -137,69 +137,129 @@ exports.assignLead = async (req, res) => {
 
 
 
+// exports.getLeads = async (req, res) => {
+//   try {
+//     // ✅ Step 1 - Ensure the user is authenticated
+//     if (!req.user || !req.user.name) {
+//       return res.status(401).json({
+//         success: false,
+//         message: "Unauthorized access"
+//       });
+//     }
+
+//     const userRole = req.user.role || "user";
+//     const userName = req.user.name;
+//     let filter = {};
+
+//     // ✅ Step 2 - Apply filtering only if user is NOT admin
+//     if (userRole !== "admin") {
+//       const userId = req.user._id?.toString();
+
+//       filter = {
+//         $or: [
+//           { transferTo: userName }, // Leads transferred to user
+//           {
+//             $and: [
+//               {
+//                 $or: [
+//                   { transferTo: { $exists: false } },
+//                   { transferTo: null },
+//                   { transferTo: "" }
+//                 ]
+//               },
+//               {
+//                 assignTo: mongoose.isValidObjectId(userId)
+//                   ? new mongoose.Types.ObjectId(userId)
+//                   : userId
+//               }
+//             ]
+//           }
+//         ]
+//       };
+//     }
+
+//     // ✅ Step 3 - Query leads
+//     const leads = await Lead.find(filter)
+//       .populate("assignTo", "name email role")
+//       .sort({ createdAt: -1 });
+
+//     // ✅ Step 4 - Return response
+//     res.status(200).json({
+//       success: true,
+//       role: userRole,
+//       count: leads.length,
+//       data: leads
+//     });
+
+//   } catch (err) {
+//     console.error("❌ getLeads error:", err);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error fetching leads"
+//     });
+//   }
+// };
+
+
 exports.getLeads = async (req, res) => {
   try {
-    // ✅ Step 1 - Ensure the user is authenticated
-    if (!req.user || !req.user.name) {
+    if (!req.user || !req.user._id) {
       return res.status(401).json({
         success: false,
-        message: "Unauthorized access"
+        message: "Unauthorized access",
       });
     }
 
     const userRole = req.user.role || "user";
+    const userId = req.user._id.toString();
     const userName = req.user.name;
+
     let filter = {};
 
-    // ✅ Step 2 - Apply filtering only if user is NOT admin
+    // Admin sees all leads (including transferred)
     if (userRole !== "admin") {
-      const userId = req.user._id?.toString();
-
       filter = {
+        status: { $ne: "Dead Lead" },  // ❌ exclude dead leads
         $or: [
-          { transferTo: userName }, // Leads transferred to user
-          {
-            $and: [
-              {
-                $or: [
-                  { transferTo: { $exists: false } },
-                  { transferTo: null },
-                  { transferTo: "" }
-                ]
-              },
-              {
-                assignTo: mongoose.isValidObjectId(userId)
-                  ? new mongoose.Types.ObjectId(userId)
-                  : userId
-              }
-            ]
-          }
+          { transferTo: userName }, // priority 1
+          { assignTo: mongoose.isValidObjectId(userId)
+            ? new mongoose.Types.ObjectId(userId)
+            : userId 
+          } // priority 2
         ]
       };
     }
 
-    // ✅ Step 3 - Query leads
-    const leads = await Lead.find(filter)
+    // Fetch leads
+    let leads = await Lead.find(filter)
       .populate("assignTo", "name email role")
       .sort({ createdAt: -1 });
 
-    // ✅ Step 4 - Return response
+    // Reorder to prioritize transferTo first
+    if (userRole !== "admin") {
+      leads = [
+        ...leads.filter(l => l.transferTo === userName),
+        ...leads.filter(l =>
+          l.assignTo && l.assignTo._id?.toString() === userId && l.transferTo !== userName
+        )
+      ];
+    }
+
     res.status(200).json({
       success: true,
       role: userRole,
       count: leads.length,
-      data: leads
+      data: leads,
     });
 
   } catch (err) {
     console.error("❌ getLeads error:", err);
     res.status(500).json({
       success: false,
-      message: "Server error fetching leads"
+      message: "Server error fetching leads",
     });
   }
 };
-
 
 
 

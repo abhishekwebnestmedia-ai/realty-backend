@@ -69,11 +69,7 @@ const leadSchema = new mongoose.Schema(
     //   type: String,
     //   default: getISTDateTime,
     // },
-followUp: {
-  type: String,
-  default: null,
-}
-,
+
   
 
     requirement: { type: String },

@@ -26,6 +26,7 @@ const userSchema = new mongoose.Schema(
     lastLoginAt: { type: Date },
     lastLogoutAt: { type: Date },
     isLoggedIn: { type: Boolean, default: false },
+    isApproved: { type: Boolean, default: false },
 
     passwordResetToken: { type: String },
     passwordResetExpires: { type: Date },

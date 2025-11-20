@@ -206,58 +206,140 @@ exports.login = async (req, res) => {
 // };
 
 
+// exports.getProfile = async (req, res) => {
+//   try {
+//     const user = await User.findById(req.user.userId).select("-password");
+//     if (!user) return res.status(404).json({ message: "User not found" });
+
+//     // -------------------- LEAD COUNTS --------------------
+    
+//     // Total Leads Assigned
+//     const totalAssigned = await Lead.countDocuments({ assignTo: user._id });
+
+//     // Total Leads Captured by User
+//     const totalCaptured = await Lead.countDocuments({ capturedBy: user.name });
+
+//     // Buyer Leads
+//     const totalBuyerLeads = await Lead.countDocuments({
+//       assignTo: user._id,
+//       leadType: "Buyer"
+//     });
+
+//     // Rental Leads
+//     const totalRentalLeads = await Lead.countDocuments({
+//       assignTo: user._id,
+//       leadType: "Rental"
+//     });
+
+
+//     // -------------------- INVENTORY COUNTS --------------------
+//     const totalBuyerInventory = await Inventory.countDocuments({
+//       assignTo: user._id,
+//       inventoryType: "Sales"
+//     });
+
+//     const totalRentInventory = await Inventory.countDocuments({
+//       assignTo: user._id,
+//       inventoryType: "Rent"
+//     });
+
+//     const totalInventory = totalBuyerInventory + totalRentInventory;
+
+
+//     // -------------------- RESPONSE --------------------
+//     res.json({
+//       ...user.toObject(),
+//       stats: {
+//         // Lead Stats
+//         totalCaptured,
+//         totalAssigned,
+//         totalBuyerLeads,
+//         totalRentalLeads,
+//         totalLeadCount: totalBuyerLeads + totalRentalLeads,
+
+//         // Inventory Stats
+//         totalBuyerInventory,
+//         totalRentInventory,
+//         totalInventory
+//       },
+//     });
+
+//   } catch (err) {
+//     console.error("Error fetching profile:", err);
+//     res.status(500).json({ message: "Server error fetching profile" });
+//   }
+// };
+
+
 exports.getProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // -------------------- LEAD COUNTS --------------------
-    
-    // Total Leads Assigned
-    const totalAssigned = await Lead.countDocuments({ assignTo: user._id });
+    const userId = user._id;
 
-    // Total Leads Captured by User
-    const totalCaptured = await Lead.countDocuments({ capturedBy: user.name });
+    // -------------------- LEADS COUNT --------------------
+    const totalAssigned = await Lead.countDocuments({ assignTo: userId });
+    const totalCaptured = await Lead.countDocuments({ capturedBy: userId });
 
-    // Buyer Leads
     const totalBuyerLeads = await Lead.countDocuments({
-      assignTo: user._id,
+      assignTo: userId,
       leadType: "Buyer"
     });
 
-    // Rental Leads
     const totalRentalLeads = await Lead.countDocuments({
-      assignTo: user._id,
+      assignTo: userId,
       leadType: "Rental"
     });
 
+    // -------------------- STATUS BASED COUNTS (Individual Fields) --------------------
+    const statuses = [
+      "Hot",
+      "Not Connected",
+      "Serious",
+      "Potential",
+      "Futuristic",
+      "Dead Lead",
+      "Completed"
+    ];
+
+    const statusCounts = {};
+
+    for (const status of statuses) {
+      const formattedKey = status.replace(/\s+/g, ""); // remove spaces
+      statusCounts[formattedKey] = await Lead.countDocuments({
+        assignTo: userId,
+        status
+      });
+    }
 
     // -------------------- INVENTORY COUNTS --------------------
     const totalBuyerInventory = await Inventory.countDocuments({
-      assignTo: user._id,
+      assignTo: userId,
       inventoryType: "Sales"
     });
 
     const totalRentInventory = await Inventory.countDocuments({
-      assignTo: user._id,
+      assignTo: userId,
       inventoryType: "Rent"
     });
 
     const totalInventory = totalBuyerInventory + totalRentInventory;
 
-
-    // -------------------- RESPONSE --------------------
+    // -------------------- FINAL RESPONSE --------------------
     res.json({
       ...user.toObject(),
       stats: {
-        // Lead Stats
         totalCaptured,
         totalAssigned,
         totalBuyerLeads,
         totalRentalLeads,
         totalLeadCount: totalBuyerLeads + totalRentalLeads,
 
-        // Inventory Stats
+        // 🔥 Individual status fields
+        ...statusCounts,
+
+        // Inventory stats
         totalBuyerInventory,
         totalRentInventory,
         totalInventory
