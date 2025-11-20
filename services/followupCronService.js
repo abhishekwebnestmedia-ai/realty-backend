@@ -92,7 +92,7 @@ cron.schedule("* * * * *", async () => {
     // ----------------- INVENTORIES -----------------
 
     for (const lead of leads) {
-      const msg = `🔔 Reminder: Follow up with ${lead.customerName} (${lead.contactNumber}). Requirement: ${lead.projects || lead.remark || "N/A"}.`;
+      const msg = `🔔 Reminder: Follow up with ${lead.customerName} (${lead.contactNumber}). `;
       const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
 
       const exists = await Notification.findOne({
@@ -219,7 +219,7 @@ cron.schedule("* * * * *", async () => {
       // Use whichever follow-up field is present (support legacy `followUp`)
       const followUpValue = inv.followUpDate || inv.followUp || null;
       const istTime = formatIST(followUpValue);
-      const msg = `🔔 Reminder: Follow up with ${inv.sellerName} (${inv.contactNumbers?.[0] || "N/A"}) at ${istTime} IST. Property in sector ${inv.sector || "N/A"} — Demand: ${inv.demand || "N/A"}.`;
+      const msg = `🔔 Reminder: Follow up with ${inv.sellerName} (${inv.contactNumbers?.[0] || "N/A"}) at ${istTime} IST.  `;
 
       const exists = await Notification.findOne({
         type: "Inventory",

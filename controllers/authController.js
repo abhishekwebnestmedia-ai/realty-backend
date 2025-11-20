@@ -499,6 +499,91 @@ exports.getAllUsers = async (req, res) => {
 
 
 
+// exports.getTeams = async (req, res) => {
+//   try {
+//     const users = await User.find()
+//       .select("_id name email role phoneNumber designation address empid permissions")
+//       .sort({ createdAt: -1 });
+
+//     const updatedUsers = await Promise.all(
+//       users.map(async (user) => {
+
+//         // -------------------- LEAD COUNTS --------------------
+
+//         const totalAssigned = await Lead.countDocuments({ assignTo: user._id });
+
+//         const totalCaptured = await Lead.countDocuments({ capturedBy: user.name });
+
+//         const totalBuyerLeads = await Lead.countDocuments({
+//           assignTo: user._id,
+//           leadType: "Buyer",
+//         });
+
+//         const totalRentalLeads = await Lead.countDocuments({
+//           assignTo: user._id,
+//           leadType: "Rental",
+//         });
+
+//         const totalLeadCount = totalBuyerLeads + totalRentalLeads;
+
+
+//         // -------------------- INVENTORY COUNTS --------------------
+
+//         const totalBuyerInventory = await Inventory.countDocuments({
+//           assignTo: user._id,
+//           inventoryType: "Sales",
+//         });
+
+//         const totalRentInventory = await Inventory.countDocuments({
+//           assignTo: user._id,
+//           inventoryType: "Rent",
+//         });
+
+//         const totalInventory = totalBuyerInventory + totalRentInventory;
+
+
+//         return {
+//           ...user.toObject(),
+//           stats: {
+//             // Lead Stats
+//             totalCaptured,
+//             totalAssigned,
+//             totalBuyerLeads,
+//             totalRentalLeads,
+//             totalLeadCount,
+
+//             // Inventory Stats
+//             totalBuyerInventory,
+//             totalRentInventory,
+//             totalInventory
+//           },
+//         };
+//       })
+//     );
+
+//     res.status(200).json({
+//       message: "Users fetched successfully",
+//       count: updatedUsers.length,
+//       users: updatedUsers,
+//     });
+
+//   } catch (err) {
+//     console.error("Error fetching teams:", err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
+
+
+const statuses = [
+  "Hot",
+  "Not Connected",
+  "Serious",
+  "Potential",
+  "Futuristic",
+  "Dead Lead",
+  "Completed"
+];
+
 exports.getTeams = async (req, res) => {
   try {
     const users = await User.find()
@@ -509,10 +594,8 @@ exports.getTeams = async (req, res) => {
       users.map(async (user) => {
 
         // -------------------- LEAD COUNTS --------------------
-
         const totalAssigned = await Lead.countDocuments({ assignTo: user._id });
-
-        const totalCaptured = await Lead.countDocuments({ capturedBy: user.name });
+        const totalCaptured = await Lead.countDocuments({ capturedBy: user._id });
 
         const totalBuyerLeads = await Lead.countDocuments({
           assignTo: user._id,
@@ -526,9 +609,18 @@ exports.getTeams = async (req, res) => {
 
         const totalLeadCount = totalBuyerLeads + totalRentalLeads;
 
+        // -------------------- STATUS BASED COUNTS --------------------
+        const statusCounts = {};
+
+        for (const status of statuses) {
+          const formattedKey = status.replace(/\s+/g, ""); // remove spaces same as profile
+          statusCounts[formattedKey] = await Lead.countDocuments({
+            assignTo: user._id,
+            status
+          });
+        }
 
         // -------------------- INVENTORY COUNTS --------------------
-
         const totalBuyerInventory = await Inventory.countDocuments({
           assignTo: user._id,
           inventoryType: "Sales",
@@ -541,7 +633,6 @@ exports.getTeams = async (req, res) => {
 
         const totalInventory = totalBuyerInventory + totalRentInventory;
 
-
         return {
           ...user.toObject(),
           stats: {
@@ -552,10 +643,13 @@ exports.getTeams = async (req, res) => {
             totalRentalLeads,
             totalLeadCount,
 
-            // Inventory Stats
+            // 🔥 Add Status breakdown here
+            ...statusCounts,
+
+            // Inventory stats
             totalBuyerInventory,
             totalRentInventory,
-            totalInventory
+            totalInventory,
           },
         };
       })

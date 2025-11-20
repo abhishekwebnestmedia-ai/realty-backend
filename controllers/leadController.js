@@ -343,7 +343,7 @@ exports.updateLead = async (req, res) => {
           }
 
           if (field === "assignTo") {
-            const msg = `👤 Lead "${oldLead.customerName}" was reassigned to ${newValue || "N/A"} by ${changedBy?.name || "System"}`;
+            const msg = `👤 Lead "${oldLead.customerName}" was reassigned  by ${changedBy?.name || "System"}`;
             const notif = await Notification.create({
               type: "Lead",
               itemId: id,
@@ -362,7 +362,7 @@ exports.updateLead = async (req, res) => {
           }
 
           if (field === "status") {
-            const msg = `🔄 Lead "${oldLead.customerName}" status changed from ${oldValue || "N/A"} → ${newValue} by ${changedBy?.name || "System"}`;
+            const msg = `🔄 Lead "${oldLead.customerName}" status changed by ${changedBy?.name || "System"}`;
             const notif = await Notification.create({
               type: "Lead",
               itemId: id,
