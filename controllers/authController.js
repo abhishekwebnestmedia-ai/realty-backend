@@ -8,267 +8,282 @@ const Lead = require("../models/leadModel");
 const Inventory = require('../models/inventryModel'); 
 
 
+// exports.register = async (req, res) => {
+//   try {
+//     const { name, email, password, phoneNumber, address, empid, designation } = req.body;
+
+
+//     let missingFields = [];
+//     if (!name) missingFields.push('Name is missing');
+//     if (!email) missingFields.push('Email is missing');
+//     if (!password) missingFields.push('Password is missing');
+
+//     if (missingFields.length > 0) {
+//       return res.status(400).json({ message: missingFields.join(', ') });
+//     }
+
+//     if (name.length < 3) {
+//       return res.status(400).json({ message: 'Name must be at least 3 characters' });
+//     }
+
+//     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+//     if (!emailRegex.test(email)) {
+//       return res.status(400).json({ message: 'Invalid email format' });
+//     }
+
+//     if (password.length < 6) {
+//       return res.status(400).json({ message: 'Password must be at least 6 characters' });
+//     }
+
+
+//     const existingUser = await User.findOne({ email });
+//     if (existingUser) {
+//       return res.status(400).json({ message: 'User already exists' });
+//     }
+
+//     // --- Hash password ---
+//     const salt = await bcrypt.genSalt(10);
+//     const hashedPassword = await bcrypt.hash(password, salt);
+
+//     // --- Save user ---
+//     const user = new User({
+//       name, email, password: hashedPassword, phoneNumber,   // ✅ Added
+//       // ✅ Added
+//       designation, address, empid,
+//     });
+//     await user.save();
+
+//     res.status(201).json({ message: 'User registered successfully' });
+
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// };
+
+
+
+
+// exports.login = async (req, res) => {
+//   try {
+//     const { email, password } = req.body;
+
+//     // --- Field-specific validation ---
+//     let missingFields = [];
+//     if (!email) missingFields.push('Email is missing');
+//     if (!password) missingFields.push('Password is missing');
+
+//     if (missingFields.length > 0) {
+//       return res.status(400).json({ message: missingFields.join(', ') });
+//     }
+
+//     const user = await User.findOne({ email });
+//     if (!user) return res.status(400).json({ message: 'Invalid credentials' });
+
+//     const isMatch = await bcrypt.compare(password, user.password);
+//     if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
+
+//     // ✅ Update login info
+//     if (!user.firstLoginAt) {
+//       user.firstLoginAt = new Date();   // only once
+//     }
+//     user.lastLoginAt = new Date();      // always update
+//     user.isLoggedIn = true;
+//     await user.save();
+
+//     // ✅ Include role in JWT
+//     const token = jwt.sign(
+//       {
+//         userId: user._id,
+//          name: user.name,
+//         email: user.email,
+//         role: user.role
+//       },
+//       process.env.JWT_SECRET,
+//       { expiresIn: '9h' }
+//     );
+
+//     res.json({
+//       token,
+//       role: user.role,
+//       userId: user._id,
+
+//         name: user.name,
+//       userId: user._id,
+//       message: 'Login successful',
+//     });
+
+//   } catch (err) {
+//     console.error("❌ login error:", err);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// };
+
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: 'webnestmediacrm@gmail.com',
+    pass: 'dfvh ewny oqak kgtl'
+  }
+});
+
+
 exports.register = async (req, res) => {
   try {
     const { name, email, password, phoneNumber, address, empid, designation } = req.body;
 
-
-    let missingFields = [];
-    if (!name) missingFields.push('Name is missing');
-    if (!email) missingFields.push('Email is missing');
-    if (!password) missingFields.push('Password is missing');
-
-    if (missingFields.length > 0) {
-      return res.status(400).json({ message: missingFields.join(', ') });
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: "Name, Email & Password are required" });
     }
-
-    if (name.length < 3) {
-      return res.status(400).json({ message: 'Name must be at least 3 characters' });
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: 'Invalid email format' });
-    }
-
-    if (password.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters' });
-    }
-
 
     const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: 'User already exists' });
-    }
+    if (existingUser) return res.status(400).json({ message: "User already exists" });
 
-    // --- Hash password ---
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // --- Save user ---
     const user = new User({
-      name, email, password: hashedPassword, phoneNumber,   // ✅ Added
-      // ✅ Added
-      designation, address, empid,
+      name,
+      email,
+      password: hashedPassword,
+      phoneNumber,
+      designation,
+      address,
+      empid,
+      isApproved: false
     });
+
     await user.save();
 
-    res.status(201).json({ message: 'User registered successfully' });
+    // Generate Approval Token
+    const approvalToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: "48h" });
+    const approvalUrl = `${process.env.BACKEND_URL}/api/auth/approve-user/${approvalToken}`;
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Server error' });
+    // Send Email to Admin
+    await transporter.sendMail({
+      from: `"RealtyXpo" <${process.env.EMAIL_USER}>`,
+      to: process.env.ADMIN_EMAIL,
+      subject: "New User Requires Approval",
+      html: `
+        <h3>New User Registered</h3>
+        <p><strong>Name:</strong> ${user.name}</p>
+        <p><strong>Email:</strong> ${user.email}</p><br>
+        <a href="${approvalUrl}" style="padding:10px;background:green;color:white;text-decoration:none;border-radius:5px;">
+          Approve User
+        </a>
+      `
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "User registered successfully — Waiting for admin approval."
+    });
+
+  } catch (error) {
+    console.log("REGISTER ERROR:", error);
+    res.status(500).json({ message: "Server Error" });
   }
 };
-
-
-
 
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // --- Field-specific validation ---
-    let missingFields = [];
-    if (!email) missingFields.push('Email is missing');
-    if (!password) missingFields.push('Password is missing');
-
-    if (missingFields.length > 0) {
-      return res.status(400).json({ message: missingFields.join(', ') });
-    }
-
     const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: 'Invalid credentials' });
+    if (!user) return res.status(400).json({ message: "Invalid credentials" });
+
+    // ❌ Block login if not approved
+    if (!user.isApproved) {
+      return res.status(403).json({ message: "Your account is pending approval. Please wait." });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
+    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
-    // ✅ Update login info
-    if (!user.firstLoginAt) {
-      user.firstLoginAt = new Date();   // only once
-    }
-    user.lastLoginAt = new Date();      // always update
-    user.isLoggedIn = true;
-    await user.save();
-
-    // ✅ Include role in JWT
     const token = jwt.sign(
-      {
-        userId: user._id,
-         name: user.name,
-        email: user.email,
-        role: user.role
-      },
+      { userId: user._id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: '9h' }
+      { expiresIn: "9h" }
     );
 
     res.json({
+      message: "Login successful",
       token,
-      role: user.role,
-      userId: user._id,
-
+      user: {
+        id: user._id,
         name: user.name,
-      userId: user._id,
-      message: 'Login successful',
+        email: user.email
+      }
     });
 
   } catch (err) {
-    console.error("❌ login error:", err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("LOGIN ERROR:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+exports.approveUser = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { confirm } = req.query; // yes or no
+
+    // Decode token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+
+    if (!user) return res.status(404).send("User not found ❌");
+
+    // If no confirmation value → ask admin
+    if (!confirm) {
+      return res.status(200).send(`
+        <h3>Approve this user?</h3>
+        <p><strong>Name:</strong> ${user.name}</p>
+        <p><strong>Email:</strong> ${user.email}</p>
+        <br>
+        <a href="?confirm=yes" style="padding:10px;background:green;color:white;text-decoration:none;border-radius:5px;">YES - Approve</a>
+        &nbsp;&nbsp;
+        <a href="?confirm=no" style="padding:10px;background:red;color:white;text-decoration:none;border-radius:5px;">NO - Reject</a>
+      `);
+    }
+
+    // If admin chooses NO → delete user
+    if (confirm.toLowerCase() === "no") {
+      await User.findByIdAndDelete(user._id);
+
+      return res.status(200).send("❌ User rejected and removed from the system.");
+    }
+
+    // If admin chooses YES → approve user
+    if (confirm.toLowerCase() === "yes") {
+      if (user.isApproved) {
+        return res.status(200).send("✔ User is already approved.");
+      }
+
+      user.isApproved = true;
+      await user.save();
+
+      // Send approval email
+      await transporter.sendMail({
+        to: user.email,
+        subject: "Account Approved 🎉",
+        html: `<p>Your RealtyXpo account has been approved. You may now log in.</p>`
+      });
+
+      return res.status(200).send("✔ User Approved Successfully!");
+    }
+
+    // If wrong value sent
+    return res.status(400).send("Invalid confirmation value. Use confirm=yes or confirm=no");
+
+  } catch (err) {
+    console.error(err);
+    res.status(400).send("Invalid or expired approval link ❌");
   }
 };
 
 
 
-// exports.getProfile = async (req, res) => {
-//   try {
-//     const user = await User.findById(req.user.userId).select('-password');
-//     if (!user) return res.status(404).json({ message: 'User not found' });
-//     res.json(user);
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ message: 'Server error fetching profile' });
-//   }
-// };
 
-
-
-// exports.getProfile = async (req, res) => {
-//   try {
-//     const user = await User.findById(req.user.userId).select("-password");
-//     if (!user) {
-//       return res.status(404).json({ message: "User not found" });
-//     }
-
-//     // 🔥 Count total assigned and captured leads
-//     const totalAssigned = await Lead.countDocuments({ assignTo: user._id });
-
-//     const totalCaptured = await Lead.countDocuments({ capturedBy: user.name });
-
-//     // Send response with user info + stats
-//     res.json({
-//       ...user.toObject(),
-//       stats: {
-//         totalCaptured,
-//         totalAssigned,
-//       },
-//     });
-
-//   } catch (err) {
-//     console.error("Error fetching profile:", err);
-//     res.status(500).json({ message: "Server error fetching profile" });
-//   }
-// };
-
-
-// exports.getProfile = async (req, res) => {
-//   try {
-//     const user = await User.findById(req.user.userId).select("-password");
-//     if (!user) {
-//       return res.status(404).json({ message: "User not found" });
-//     }
-
-//     // 🔥 Count Leads
-//     const totalAssigned = await Lead.countDocuments({ assignTo: user._id });
-//     const totalCaptured = await Lead.countDocuments({ capturedBy: user.name });
-
-//     // 🔥 Count Buyer Inventory (Sales)
-//     const totalBuyerInventory = await Inventory.countDocuments({
-//       assignTo: user._id,
-//       inventoryType: "Sales"
-//     });
-
-//     // 🔥 Count Rent Inventory
-//     const totalRentInventory = await Inventory.countDocuments({
-//       assignTo: user._id,
-//       inventoryType: "Rent"
-//     });
-
-//     // 🔥 Full Inventory Total
-//     const totalInventory = totalBuyerInventory + totalRentInventory;
-
-//     res.json({
-//       ...user.toObject(),
-//       stats: {
-//         totalCaptured,
-//         totalAssigned,
-//         totalBuyerInventory,
-//         totalRentInventory,
-//         totalInventory
-//       },
-//     });
-
-//   } catch (err) {
-//     console.error("Error fetching profile:", err);
-//     res.status(500).json({ message: "Server error fetching profile" });
-//   }
-// };
-
-
-// exports.getProfile = async (req, res) => {
-//   try {
-//     const user = await User.findById(req.user.userId).select("-password");
-//     if (!user) return res.status(404).json({ message: "User not found" });
-
-//     // -------------------- LEAD COUNTS --------------------
-    
-//     // Total Leads Assigned
-//     const totalAssigned = await Lead.countDocuments({ assignTo: user._id });
-
-//     // Total Leads Captured by User
-//     const totalCaptured = await Lead.countDocuments({ capturedBy: user.name });
-
-//     // Buyer Leads
-//     const totalBuyerLeads = await Lead.countDocuments({
-//       assignTo: user._id,
-//       leadType: "Buyer"
-//     });
-
-//     // Rental Leads
-//     const totalRentalLeads = await Lead.countDocuments({
-//       assignTo: user._id,
-//       leadType: "Rental"
-//     });
-
-
-//     // -------------------- INVENTORY COUNTS --------------------
-//     const totalBuyerInventory = await Inventory.countDocuments({
-//       assignTo: user._id,
-//       inventoryType: "Sales"
-//     });
-
-//     const totalRentInventory = await Inventory.countDocuments({
-//       assignTo: user._id,
-//       inventoryType: "Rent"
-//     });
-
-//     const totalInventory = totalBuyerInventory + totalRentInventory;
-
-
-//     // -------------------- RESPONSE --------------------
-//     res.json({
-//       ...user.toObject(),
-//       stats: {
-//         // Lead Stats
-//         totalCaptured,
-//         totalAssigned,
-//         totalBuyerLeads,
-//         totalRentalLeads,
-//         totalLeadCount: totalBuyerLeads + totalRentalLeads,
-
-//         // Inventory Stats
-//         totalBuyerInventory,
-//         totalRentInventory,
-//         totalInventory
-//       },
-//     });
-
-//   } catch (err) {
-//     console.error("Error fetching profile:", err);
-//     res.status(500).json({ message: "Server error fetching profile" });
-//   }
-// };
 
 
 exports.getProfile = async (req, res) => {
@@ -388,190 +403,6 @@ exports.getAllUsers = async (req, res) => {
 };
 
 
-
-// exports.getTeams = async (req, res) => {
-//   try {
-//     const users = await User.find()
-//       .select("_id name email role phoneNumber designation address empid permissions") // ✅ Added permissions
-//       .sort({ createdAt: -1 });
-
-//     res.status(200).json({
-//       message: "Users fetched successfully",
-//       count: users.length,
-//       users,
-//     });
-
-//   } catch (err) {
-//     console.error("Error fetching teams:", err);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
-
-
-// exports.getTeams = async (req, res) => {
-//   try {
-//     const users = await User.find()
-//       .select("_id name email role phoneNumber designation address empid permissions")
-//       .sort({ createdAt: -1 });
-
-//     // 🔥 Add lead stats for each user
-//     const updatedUsers = await Promise.all(
-//       users.map(async (user) => {
-//         const totalAssigned = await Lead.countDocuments({ assignTo: user._id });
-
-//         const totalCaptured = await Lead.countDocuments({ capturedBy: user.name });
-
-//         return {
-//           ...user.toObject(),
-//           stats: {
-//             totalCaptured,
-//             totalAssigned,
-//           },
-//         };
-//       })
-//     );
-
-//     res.status(200).json({
-//       message: "Users fetched successfully",
-//       count: updatedUsers.length,
-//       users: updatedUsers,
-//     });
-
-//   } catch (err) {
-//     console.error("Error fetching teams:", err);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
-
-
-
-
-// exports.getTeams = async (req, res) => {
-//   try {
-//     const users = await User.find()
-//       .select("_id name email role phoneNumber designation address empid permissions")
-//       .sort({ createdAt: -1 });
-
-//     const updatedUsers = await Promise.all(
-//       users.map(async (user) => {
-
-//         // 🔹 Count Assigned Leads
-//         const totalAssigned = await Lead.countDocuments({ assignTo: user._id });
-
-//         // 🔹 Count Captured Leads
-//         const totalCaptured = await Lead.countDocuments({ capturedBy: user.name });
-
-//         // 🔹 Count Sales (Buyer Inventory)
-//         const totalBuyerInventory = await Inventory.countDocuments({
-//           assignTo: user._id,
-//           inventoryType: "Sales"
-//         });
-
-//         // 🔹 Count Rent Inventory
-//         const totalRentInventory = await Inventory.countDocuments({
-//           assignTo: user._id,
-//           inventoryType: "Rent"
-//         });
-
-//         return {
-//           ...user.toObject(),
-//           stats: {
-//             totalCaptured,
-//             totalAssigned,
-//             totalBuyerInventory,
-//             totalRentInventory
-//           },
-//         };
-//       })
-//     );
-
-//     res.status(200).json({
-//       message: "Users fetched successfully",
-//       count: updatedUsers.length,
-//       users: updatedUsers,
-//     });
-
-//   } catch (err) {
-//     console.error("Error fetching teams:", err);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
-
-
-
-// exports.getTeams = async (req, res) => {
-//   try {
-//     const users = await User.find()
-//       .select("_id name email role phoneNumber designation address empid permissions")
-//       .sort({ createdAt: -1 });
-
-//     const updatedUsers = await Promise.all(
-//       users.map(async (user) => {
-
-//         // -------------------- LEAD COUNTS --------------------
-
-//         const totalAssigned = await Lead.countDocuments({ assignTo: user._id });
-
-//         const totalCaptured = await Lead.countDocuments({ capturedBy: user.name });
-
-//         const totalBuyerLeads = await Lead.countDocuments({
-//           assignTo: user._id,
-//           leadType: "Buyer",
-//         });
-
-//         const totalRentalLeads = await Lead.countDocuments({
-//           assignTo: user._id,
-//           leadType: "Rental",
-//         });
-
-//         const totalLeadCount = totalBuyerLeads + totalRentalLeads;
-
-
-//         // -------------------- INVENTORY COUNTS --------------------
-
-//         const totalBuyerInventory = await Inventory.countDocuments({
-//           assignTo: user._id,
-//           inventoryType: "Sales",
-//         });
-
-//         const totalRentInventory = await Inventory.countDocuments({
-//           assignTo: user._id,
-//           inventoryType: "Rent",
-//         });
-
-//         const totalInventory = totalBuyerInventory + totalRentInventory;
-
-
-//         return {
-//           ...user.toObject(),
-//           stats: {
-//             // Lead Stats
-//             totalCaptured,
-//             totalAssigned,
-//             totalBuyerLeads,
-//             totalRentalLeads,
-//             totalLeadCount,
-
-//             // Inventory Stats
-//             totalBuyerInventory,
-//             totalRentInventory,
-//             totalInventory
-//           },
-//         };
-//       })
-//     );
-
-//     res.status(200).json({
-//       message: "Users fetched successfully",
-//       count: updatedUsers.length,
-//       users: updatedUsers,
-//     });
-
-//   } catch (err) {
-//     console.error("Error fetching teams:", err);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
 
 
 const statuses = [
@@ -737,13 +568,7 @@ exports.deleteUser = async (req, res) => {
 };
 
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: 'fullstackdeveloperabhi1@gmail.com',
-    pass: 'geoe oqaq ngth kpfm'
-  }
-});
+
 
 
 
