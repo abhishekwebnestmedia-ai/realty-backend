@@ -555,6 +555,8 @@ exports.updateUnit = async (req, res) => {
       'remarks',
       'followUpDate',
       'mobileNumbers',
+      'typology',
+      'size',
     ];
 
     mutableFields.forEach((field) => {
@@ -563,6 +565,15 @@ exports.updateUnit = async (req, res) => {
         unitDoc.mobileNumbers = Array.isArray(updates.mobileNumbers)
           ? updates.mobileNumbers
           : [];
+      } else if (field === 'typology') {
+        // Accept string (comma-separated) or array
+        if (typeof updates.typology === 'string') {
+          unitDoc.typology = updates.typology.split(',').map(s => s.trim()).filter(Boolean);
+        } else if (Array.isArray(updates.typology)) {
+          unitDoc.typology = updates.typology.map(s => typeof s === 'string' ? s.trim() : s).filter(Boolean);
+        } else {
+          unitDoc.typology = [];
+        }
       } else {
         unitDoc[field] = updates[field];
       }
@@ -1226,6 +1237,8 @@ exports.mergeOrCreateHierarchy = async (req, res) => {
                   status: newUnit.status,
                   createdBy: req.user?._id || null,
                   assignTo: resolvedUser ? resolvedUser._id : null,
+                  typology: newUnit.typology || [],
+                  size: newUnit.size || null,
                 });
 
                 addedUnitsDetails.push({

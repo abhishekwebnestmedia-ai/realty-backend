@@ -189,6 +189,8 @@ async function upsertInventoryFromUnit({
     projectId: hierarchy.projectId,
     towerId: hierarchy.towerId,
     unitId: hierarchy.unitId,
+    typology: unit.typology || [],
+    size: unit.size || null,
     meta: {
       cityName: hierarchy.cityName,
       divisionName: hierarchy.divisionName,
