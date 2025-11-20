@@ -339,28 +339,26 @@ exports.approveUser = async (req, res) => {
   try {
     const { token } = req.params;
 
-    // Decode token
+    // Decode JWT token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.userId);
 
-    // User not found
-    if (!user) {
-      return res.status(404).send("❌ User not found");
-    }
+    // If user doesn't exist
+    if (!user) return res.status(404).send("❌ User not found");
 
-    // Already approved
+    // If already approved
     if (user.isApproved) {
       return res.status(200).send(`
-        <h2>✔ User Already Approved</h2>
-        <p>${user.name} (${user.email}) already has login access.</p>
+        <h2>✔ Already Approved</h2>
+        <p>${user.name} (${user.email}) already has access.</p>
       `);
     }
 
-    // Approve user
+    // Approve the user (NO email sent)
     user.isApproved = true;
     await user.save();
 
-    // Response to admin (no email sent to user)
+    // Admin confirmation message
     return res.status(200).send(`
       <h2>✔ User Approved Successfully</h2>
       <p>${user.name} (${user.email}) can now log in.</p>
@@ -371,6 +369,8 @@ exports.approveUser = async (req, res) => {
     return res.status(400).send("❌ Invalid or expired approval link");
   }
 };
+
+
 
 
 
@@ -832,6 +832,8 @@ exports.updateUserPermissions = async (req, res) => {
     res.status(500).json({ message: 'Internal server error.' });
   }
 };
+
+
 
 
 
