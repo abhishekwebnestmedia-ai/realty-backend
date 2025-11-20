@@ -129,6 +129,7 @@ const transporter = nodemailer.createTransport({
 });
 
 
+
 exports.register = async (req, res) => {
   try {
     const { name, email, password, phoneNumber, address, empid, designation } = req.body;
@@ -156,20 +157,27 @@ exports.register = async (req, res) => {
     await user.save();
 
     // Generate Approval Token
-    const approvalToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: "48h" });
+    const approvalToken = jwt.sign(
+      { userId: user._id }, 
+      process.env.JWT_SECRET, 
+      { expiresIn: "48h" }
+    );
+
     const approvalUrl = `${process.env.BACKEND_URL}/api/auth/approve-user/${approvalToken}`;
 
-    // Send Email to Admin
+    // Send Approval Email to Admin
     await transporter.sendMail({
-      from: `"RealtyXpo" <${process.env.EMAIL_USER}>`,
-      to: process.env.ADMIN_EMAIL,
+      from: `"RealtyXpo CRM" <webnestmediacrm@gmail.com>`,
+      to: "webnestmediacrm@gmail.com", 
       subject: "New User Requires Approval",
       html: `
-        <h3>New User Registered</h3>
+        <h2>New User Registration Request</h2>
         <p><strong>Name:</strong> ${user.name}</p>
-        <p><strong>Email:</strong> ${user.email}</p><br>
-        <a href="${approvalUrl}" style="padding:10px;background:green;color:white;text-decoration:none;border-radius:5px;">
-          Approve User
+        <p><strong>Email:</strong> ${user.email}</p>
+        <br>
+        <a href="${approvalUrl}" 
+        style="background:green;color:white;padding:12px 18px;text-decoration:none;border-radius:5px;">
+          APPROVE USER
         </a>
       `
     });
@@ -185,6 +193,9 @@ exports.register = async (req, res) => {
   }
 };
 
+
+
+// ---------------- LOGIN ----------------
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -192,7 +203,7 @@ exports.login = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(400).json({ message: "Invalid credentials" });
 
-    // ❌ Block login if not approved
+    // Block login if not approved
     if (!user.isApproved) {
       return res.status(403).json({ message: "Your account is pending approval. Please wait." });
     }
@@ -222,58 +233,51 @@ exports.login = async (req, res) => {
   }
 };
 
+
+
+// ---------------- APPROVE USER ----------------
 exports.approveUser = async (req, res) => {
   try {
     const { token } = req.params;
-    const { confirm } = req.query; // yes or no
+    const { confirm } = req.query;
 
-    // Decode token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.userId);
 
     if (!user) return res.status(404).send("User not found ❌");
 
-    // If no confirmation value → ask admin
     if (!confirm) {
       return res.status(200).send(`
         <h3>Approve this user?</h3>
         <p><strong>Name:</strong> ${user.name}</p>
-        <p><strong>Email:</strong> ${user.email}</p>
-        <br>
-        <a href="?confirm=yes" style="padding:10px;background:green;color:white;text-decoration:none;border-radius:5px;">YES - Approve</a>
-        &nbsp;&nbsp;
-        <a href="?confirm=no" style="padding:10px;background:red;color:white;text-decoration:none;border-radius:5px;">NO - Reject</a>
+        <p><strong>Email:</strong> ${user.email}</p><br>
+        <a href="?confirm=yes" style="padding:10px;background:green;color:white;border-radius:5px;">YES</a>
+        <a href="?confirm=no" style="padding:10px;background:red;color:white;border-radius:5px;margin-left:10px;">NO</a>
       `);
     }
 
-    // If admin chooses NO → delete user
     if (confirm.toLowerCase() === "no") {
       await User.findByIdAndDelete(user._id);
-
-      return res.status(200).send("❌ User rejected and removed from the system.");
+      return res.status(200).send("❌ User rejected and deleted.");
     }
 
-    // If admin chooses YES → approve user
     if (confirm.toLowerCase() === "yes") {
-      if (user.isApproved) {
-        return res.status(200).send("✔ User is already approved.");
-      }
+
+      if (user.isApproved) return res.status(200).send("✔ User already approved.");
 
       user.isApproved = true;
       await user.save();
 
-      // Send approval email
       await transporter.sendMail({
         to: user.email,
         subject: "Account Approved 🎉",
-        html: `<p>Your RealtyXpo account has been approved. You may now log in.</p>`
+        html: `<p>Your RealtyXpo account is approved. You may now log in.</p>`
       });
 
       return res.status(200).send("✔ User Approved Successfully!");
     }
 
-    // If wrong value sent
-    return res.status(400).send("Invalid confirmation value. Use confirm=yes or confirm=no");
+    return res.status(400).send("Invalid query. Use ?confirm=yes or ?confirm=no");
 
   } catch (err) {
     console.error(err);
