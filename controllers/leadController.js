@@ -576,71 +576,131 @@ exports.getLeadChangeHistory = async (req, res) => {
 
 
 // ✅ Receive leads from 99acres.com
-exports.createFrom99acres = async (req, res) => {
-  try {
-    const { secret } = req.query;
+// exports.createFrom99acres = async (req, res) => {
+//   try {
+//     const { secret } = req.query;
 
-    // 🔒 Validate secret key
-    if (secret !== process.env.LEAD_WEBHOOK_SECRET) {
-      return res.status(403).json({ success: false, message: "Unauthorized source" });
-    }
+//     // 🔒 Validate secret key
+//     if (secret !== process.env.LEAD_WEBHOOK_SECRET) {
+//       return res.status(403).json({ success: false, message: "Unauthorized source" });
+//     }
 
-    const data = req.body;
+//     const data = req.body;
 
-    // ✅ Map incoming fields to your CRM model
-    const leadData = {
-      customerName: data.customerName || data.name || "Unknown",
-      contactNumber: data.contactNumber || data.phone || "",
-      email: data.email || "",
-      status: "Hot", // Default for new leads
-      leadType: "Buyer",
-      requirement: data.requirement || data.project || "",
-      remark: `From 99acres. Project: ${data.project || "N/A"}, City: ${data.city || "N/A"}`,
-      source: "99acres",
-      capturedBy: "99acres",
-    };
+//     // ✅ Map incoming fields to your CRM model
+//     const leadData = {
+//       customerName: data.customerName || data.name || "Unknown",
+//       contactNumber: data.contactNumber || data.phone || "",
+//       email: data.email || "",
+//       status: "Hot", // Default for new leads
+//       leadType: "Buyer",
+//       requirement: data.requirement || data.project || "",
+//       remark: `From 99acres. Project: ${data.project || "N/A"}, City: ${data.city || "N/A"}`,
+//       source: "99acres",
+//       capturedBy: "99acres",
+//     };
 
-    // ✅ Create lead
-    const lead = new Lead(leadData);
-    await lead.save();
+//     // ✅ Create lead
+//     const lead = new Lead(leadData);
+//     await lead.save();
 
-    // ✅ Optional: Create notification for your CRM
-    try {
-      const notif = await Notification.create({
-        type: "Lead",
-        itemId: lead._id,
-        message: `📥 New lead from 99acres: ${lead.customerName}`,
-        changedBy: "99acres",
-      });
+//     // ✅ Optional: Create notification for your CRM
+//     try {
+//       const notif = await Notification.create({
+//         type: "Lead",
+//         itemId: lead._id,
+//         message: `📥 New lead from 99acres: ${lead.customerName}`,
+//         changedBy: "99acres",
+//       });
 
-      // Emit to admin room
-      emitToAdmins({
-        ...notif.toJSON(),
-        leadId: lead._id,
-      });
-    } catch (notifErr) {
-      console.warn("⚠️ Notification failed:", notifErr.message);
-    }
+//       // Emit to admin room
+//       emitToAdmins({
+//         ...notif.toJSON(),
+//         leadId: lead._id,
+//       });
+//     } catch (notifErr) {
+//       console.warn("⚠️ Notification failed:", notifErr.message);
+//     }
 
-    res.status(201).json({ success: true, message: "Lead received successfully", data: lead });
-  } catch (err) {
-    console.error("❌ 99acres webhook error:", err);
-    res.status(500).json({ success: false, message: "Server error while receiving lead" });
-  }
-};
+//     res.status(201).json({ success: true, message: "Lead received successfully", data: lead });
+//   } catch (err) {
+//     console.error("❌ 99acres webhook error:", err);
+//     res.status(500).json({ success: false, message: "Server error while receiving lead" });
+//   }
+// };
 
 
 
 // ✅ Receive leads from 99acres.com
+// exports.createFrom99acres = async (req, res) => {
+//   try {
+//     const { secret } = req.query;
+
+//     // 🔒 Validate secret key
+//     if (secret !== process.env.LEAD_WEBHOOK_SECRET) {
+//       return res
+//         .status(403)
+//         .json({ success: false, message: "Unauthorized source" });
+//     }
+
+//     const data = req.body || {};
+
+//     // 🧠 Helper for safe defaults
+//     const safe = (val, fallback) =>
+//       val && val.toString().trim() !== "" ? val : fallback;
+
+//     // ✅ Map incoming data to your Lead schema fields (with defaults)
+//     const leadData = {
+//       customerName: safe(data.customerName || data.name, "Unknown Lead"),
+//       contactNumber: safe(data.contactNumber || data.phone, "0000000000"),
+//       email: safe(data.email, "unknown@example.com"),
+//       status: safe(data.status, "Not Connected"),
+//       leadType: safe(data.leadType, "Buyer"),
+//       requirement: safe(
+//         data.requirement || data.project || data.propertyType,
+//         "No specific requirement provided"
+//       ),
+//       remark: `Lead from 99acres. Project: ${safe(
+//         data.project,
+//         "N/A"
+//       )}, City: ${safe(data.city, "N/A")}, Budget: ${safe(
+//         data.budget,
+//         "Not mentioned"
+//       )}`,
+//       source: "99acres",
+//       capturedBy: "99acres",
+//       Budget: safe(data.budget, "Not Provided"),
+//       transferTo: safe(data.assignedAgent, "Unassigned"),
+//     };
+
+//     // ✅ Create and save lead
+//     const lead = new Lead(leadData);
+//     await lead.save();
+
+//     res.status(201).json({
+//       success: true,
+//       message: "✅ Lead received and saved successfully",
+//       data: lead,
+//     });
+//   } catch (err) {
+//     console.error("❌ 99acres webhook error:", err);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error while saving 99acres lead",
+//     });
+//   }
+// };
+
 exports.createFrom99acres = async (req, res) => {
   try {
     const { secret } = req.query;
 
     // 🔒 Validate secret key
     if (secret !== process.env.LEAD_WEBHOOK_SECRET) {
-      return res
-        .status(403)
-        .json({ success: false, message: "Unauthorized source" });
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized source",
+      });
     }
 
     const data = req.body || {};
@@ -649,31 +709,34 @@ exports.createFrom99acres = async (req, res) => {
     const safe = (val, fallback) =>
       val && val.toString().trim() !== "" ? val : fallback;
 
-    // ✅ Map incoming data to your Lead schema fields (with defaults)
+    // ✅ Map incoming data to schema fields
     const leadData = {
       customerName: safe(data.customerName || data.name, "Unknown Lead"),
       contactNumber: safe(data.contactNumber || data.phone, "0000000000"),
       email: safe(data.email, "unknown@example.com"),
       status: safe(data.status, "Not Connected"),
       leadType: safe(data.leadType, "Buyer"),
+
       requirement: safe(
         data.requirement || data.project || data.propertyType,
         "No specific requirement provided"
       ),
-      remark: `Lead from 99acres. Project: ${safe(
-        data.project,
+
+      remark: `Lead from 99acres. Project: ${safe(data.project, "N/A")}, City: ${safe(
+        data.city,
         "N/A"
-      )}, City: ${safe(data.city, "N/A")}, Budget: ${safe(
-        data.budget,
-        "Not mentioned"
-      )}`,
+      )}, Budget: ${safe(data.budget, "Not mentioned")}`,
+
       source: "99acres",
       capturedBy: "99acres",
       Budget: safe(data.budget, "Not Provided"),
       transferTo: safe(data.assignedAgent, "Unassigned"),
+
+      // ⛔ Ensure Follow-up remains blank
+      followUp: null,
     };
 
-    // ✅ Create and save lead
+    // 🧾 Create & save the lead
     const lead = new Lead(leadData);
     await lead.save();
 
@@ -682,6 +745,7 @@ exports.createFrom99acres = async (req, res) => {
       message: "✅ Lead received and saved successfully",
       data: lead,
     });
+
   } catch (err) {
     console.error("❌ 99acres webhook error:", err);
     res.status(500).json({
@@ -690,6 +754,7 @@ exports.createFrom99acres = async (req, res) => {
     });
   }
 };
+
 
 
 
