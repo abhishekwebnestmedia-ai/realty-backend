@@ -184,7 +184,7 @@ exports.register = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: "User registered successfully — Waiting for admin approval."
+      message: "User registered successfully "
     });
 
   } catch (error) {
@@ -287,45 +287,83 @@ exports.login = async (req, res) => {
 
 
 
+// exports.approveUser = async (req, res) => {
+//   try {
+//     const { token } = req.params;
+
+//     // Decode JWT token
+//     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+//     const user = await User.findById(decoded.userId);
+
+//     // If user doesn't exist
+//     if (!user) return res.status(404).send("❌ User not found");
+
+//     // If already approved
+//     if (user.isApproved) {
+//       return res.status(200).send(`
+//         <h2>✔ Already Approved</h2>
+//         <p>${user.name} (${user.email}) already has access.</p>
+//       `);
+//     }
+
+//     // Approve the user
+//     user.isApproved = true;
+//     await user.save();
+
+//     // Send email to user
+//     await transporter.sendMail({
+//       from: `"RealtyXpo" <webnestmediacrm@gmail.com>`,
+//       to: user.email,
+//       subject: "Account Approved 🎉",
+//       html: `
+//         <h2>Welcome to RealtyXpo 🎉</h2>
+//         <p>Your account has been successfully approved.</p>
+//         <p>You can now log in and use the platform.</p>
+//       `
+//     });
+
+//     // Admin response after clicking
+//     return res.status(200).send(`
+//       <h2>✔ User Approved Successfully</h2>
+//       <p>${user.name} (${user.email}) can now login.</p>
+//     `);
+
+//   } catch (err) {
+//     console.error(err);
+//     return res.status(400).send("❌ Invalid or expired approval link");
+//   }
+// };
+
+
 exports.approveUser = async (req, res) => {
   try {
     const { token } = req.params;
 
-    // Decode JWT token
+    // Decode token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.userId);
 
-    // If user doesn't exist
-    if (!user) return res.status(404).send("❌ User not found");
+    // User not found
+    if (!user) {
+      return res.status(404).send("❌ User not found");
+    }
 
-    // If already approved
+    // Already approved
     if (user.isApproved) {
       return res.status(200).send(`
-        <h2>✔ Already Approved</h2>
-        <p>${user.name} (${user.email}) already has access.</p>
+        <h2>✔ User Already Approved</h2>
+        <p>${user.name} (${user.email}) already has login access.</p>
       `);
     }
 
-    // Approve the user
+    // Approve user
     user.isApproved = true;
     await user.save();
 
-    // Send email to user
-    await transporter.sendMail({
-      from: `"RealtyXpo" <webnestmediacrm@gmail.com>`,
-      to: user.email,
-      subject: "Account Approved 🎉",
-      html: `
-        <h2>Welcome to RealtyXpo 🎉</h2>
-        <p>Your account has been successfully approved.</p>
-        <p>You can now log in and use the platform.</p>
-      `
-    });
-
-    // Admin response after clicking
+    // Response to admin (no email sent to user)
     return res.status(200).send(`
       <h2>✔ User Approved Successfully</h2>
-      <p>${user.name} (${user.email}) can now login.</p>
+      <p>${user.name} (${user.email}) can now log in.</p>
     `);
 
   } catch (err) {
@@ -333,7 +371,6 @@ exports.approveUser = async (req, res) => {
     return res.status(400).send("❌ Invalid or expired approval link");
   }
 };
-
 
 
 
