@@ -23,7 +23,7 @@ router.get('/loggedinUser', authMiddleware, authController.getLoggedInUsers);
 router.get('/activeuser', authMiddleware, authController.getUsersLoginStatusSimple);
 router.put('/change-role/:userId', authMiddleware, authController.changeUserRole);
 router .get("/teams",authMiddleware, authController.getTeams);
-router.get("/approve-user/:token",authMiddleware,authController.approveUser);
+router.get("/approve-user/:token",authController.approveUser);
 
 
 
@@ -40,3 +40,6 @@ router.put('/permissions', authMiddleware, authController.updateUserPermissions)
 
 
 module.exports = router;
+
+
+
