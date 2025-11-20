@@ -205,14 +205,7 @@ exports.deleteInventry = async (req, res) => {
 };
 
 
-// exports.getAllInventry = async (req, res) => {
-//   try {
-//     const records = await Inventory.find().sort({ createdAt: -1 }); // Sort by createdAt descending
-//     res.json(records);
-//   } catch (err) {
-//     res.status(500).json({ error: err.message });
-//   }
-// };
+
 
 exports.getAllInventry = async (req, res) => {
   try {
@@ -252,23 +245,6 @@ exports.getAllInventry = async (req, res) => {
   }
 };
 
-// exports.getInventryByAssignTo = async (req, res) => {
-//   try {
-//     const { assignTo } = req.query; // pass ?assignTo=Abhishek
-
-//     let filter = {};
-//     if (assignTo) {
-//       filter.assignTo = { $regex: new RegExp("^" + assignTo + "$", "i") }; // case-insensitive
-//     }
-
-//     const records = await Inventory.find(filter).sort({ createdAt: -1 });
-
-//     res.status(200).json(records);
-//   } catch (err) {
-//     console.error("Error fetching inventory:", err);
-//     res.status(500).json({ error: "Server error" });
-//   }
-// };
 
 exports.getInventoryByTransferTo = async (req, res) => {
   try {
