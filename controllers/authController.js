@@ -375,86 +375,45 @@ exports.approveUser = async (req, res) => {
 
 
 
-exports.getProfile = async (req, res) => {
+
+
+exports.approveUser = async (req, res) => {
   try {
-    const user = await User.findById(req.user.userId).select("-password");
-    if (!user) return res.status(404).json({ message: "User not found" });
+    const { token } = req.params;
 
-    const userId = user._id;
+    // Decode token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId);
 
-    // -------------------- LEADS COUNT --------------------
-    const totalAssigned = await Lead.countDocuments({ assignTo: userId });
-    const totalCaptured = await Lead.countDocuments({ capturedBy: userId });
-
-    const totalBuyerLeads = await Lead.countDocuments({
-      assignTo: userId,
-      leadType: "Buyer"
-    });
-
-    const totalRentalLeads = await Lead.countDocuments({
-      assignTo: userId,
-      leadType: "Rental"
-    });
-
-    // -------------------- STATUS BASED COUNTS (Individual Fields) --------------------
-    const statuses = [
-      "Hot",
-      "Not Connected",
-      "Serious",
-      "Potential",
-      "Futuristic",
-      "Dead Lead",
-      "Completed"
-    ];
-
-    const statusCounts = {};
-
-    for (const status of statuses) {
-      const formattedKey = status.replace(/\s+/g, ""); // remove spaces
-      statusCounts[formattedKey] = await Lead.countDocuments({
-        assignTo: userId,
-        status
-      });
+    // User not found
+    if (!user) {
+      return res.status(404).send("❌ User not found");
     }
 
-    // -------------------- INVENTORY COUNTS --------------------
-    const totalBuyerInventory = await Inventory.countDocuments({
-      assignTo: userId,
-      inventoryType: "Sales"
-    });
+    // Already approved
+    if (user.isApproved) {
+      return res.status(200).send(`
+        <h2>✔ User Already Approved</h2>
+        <p>${user.name} (${user.email}) already has login access.</p>
+      `);
+    }
 
-    const totalRentInventory = await Inventory.countDocuments({
-      assignTo: userId,
-      inventoryType: "Rent"
-    });
+    // Approve user
+    user.isApproved = true;
+    await user.save();
 
-    const totalInventory = totalBuyerInventory + totalRentInventory;
-
-    // -------------------- FINAL RESPONSE --------------------
-    res.json({
-      ...user.toObject(),
-      stats: {
-        totalCaptured,
-        totalAssigned,
-        totalBuyerLeads,
-        totalRentalLeads,
-        totalLeadCount: totalBuyerLeads + totalRentalLeads,
-
-        // 🔥 Individual status fields
-        ...statusCounts,
-
-        // Inventory stats
-        totalBuyerInventory,
-        totalRentInventory,
-        totalInventory
-      },
-    });
+    // Response to admin (no email sent to user)
+    return res.status(200).send(`
+      <h2>✔ User Approved Successfully</h2>
+      <p>${user.name} (${user.email}) can now log in.</p>
+    `);
 
   } catch (err) {
-    console.error("Error fetching profile:", err);
-    res.status(500).json({ message: "Server error fetching profile" });
+    console.error(err);
+    return res.status(400).send("❌ Invalid or expired approval link");
   }
 };
+
 
 
 
@@ -873,6 +832,10 @@ exports.updateUserPermissions = async (req, res) => {
     res.status(500).json({ message: 'Internal server error.' });
   }
 };
+
+
+
+
 
 
 
