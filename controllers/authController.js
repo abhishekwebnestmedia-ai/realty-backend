@@ -235,104 +235,8 @@ exports.login = async (req, res) => {
 
 
 
-// ---------------- APPROVE USER ----------------
-// exports.approveUser = async (req, res) => {
-//   try {
-//     const { token } = req.params;
-//     const { confirm } = req.query;
-
-//     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-//     const user = await User.findById(decoded.userId);
-
-//     if (!user) return res.status(404).send("User not found ❌");
-
-//     if (!confirm) {
-//       return res.status(200).send(`
-//         <h3>Approve this user?</h3>
-//         <p><strong>Name:</strong> ${user.name}</p>
-//         <p><strong>Email:</strong> ${user.email}</p><br>
-//         <a href="?confirm=yes" style="padding:10px;background:green;color:white;border-radius:5px;">YES</a>
-//         <a href="?confirm=no" style="padding:10px;background:red;color:white;border-radius:5px;margin-left:10px;">NO</a>
-//       `);
-//     }
-
-//     if (confirm.toLowerCase() === "no") {
-//       await User.findByIdAndDelete(user._id);
-//       return res.status(200).send("❌ User rejected and deleted.");
-//     }
-
-//     if (confirm.toLowerCase() === "yes") {
-
-//       if (user.isApproved) return res.status(200).send("✔ User already approved.");
-
-//       user.isApproved = true;
-//       await user.save();
-
-//       await transporter.sendMail({
-//         to: user.email,
-//         subject: "Account Approved 🎉",
-//         html: `<p>Your RealtyXpo account is approved. You may now log in.</p>`
-//       });
-
-//       return res.status(200).send("✔ User Approved Successfully!");
-//     }
-
-//     return res.status(400).send("Invalid query. Use ?confirm=yes or ?confirm=no");
-
-//   } catch (err) {
-//     console.error(err);
-//     res.status(400).send("Invalid or expired approval link ❌");
-//   }
-// };
 
 
-
-// exports.approveUser = async (req, res) => {
-//   try {
-//     const { token } = req.params;
-
-//     // Decode JWT token
-//     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-//     const user = await User.findById(decoded.userId);
-
-//     // If user doesn't exist
-//     if (!user) return res.status(404).send("❌ User not found");
-
-//     // If already approved
-//     if (user.isApproved) {
-//       return res.status(200).send(`
-//         <h2>✔ Already Approved</h2>
-//         <p>${user.name} (${user.email}) already has access.</p>
-//       `);
-//     }
-
-//     // Approve the user
-//     user.isApproved = true;
-//     await user.save();
-
-//     // Send email to user
-//     await transporter.sendMail({
-//       from: `"RealtyXpo" <webnestmediacrm@gmail.com>`,
-//       to: user.email,
-//       subject: "Account Approved 🎉",
-//       html: `
-//         <h2>Welcome to RealtyXpo 🎉</h2>
-//         <p>Your account has been successfully approved.</p>
-//         <p>You can now log in and use the platform.</p>
-//       `
-//     });
-
-//     // Admin response after clicking
-//     return res.status(200).send(`
-//       <h2>✔ User Approved Successfully</h2>
-//       <p>${user.name} (${user.email}) can now login.</p>
-//     `);
-
-//   } catch (err) {
-//     console.error(err);
-//     return res.status(400).send("❌ Invalid or expired approval link");
-//   }
-// };
 
 
 exports.approveUser = async (req, res) => {
@@ -373,48 +277,86 @@ exports.approveUser = async (req, res) => {
 
 
 
-
-
-
-
-exports.approveUser = async (req, res) => {
+exports.getProfile = async (req, res) => {
   try {
-    const { token } = req.params;
+    const user = await User.findById(req.user.userId).select("-password");
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Decode token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId);
+    const userId = user._id;
 
-    // User not found
-    if (!user) {
-      return res.status(404).send("❌ User not found");
+    // -------------------- LEADS COUNT --------------------
+    const totalAssigned = await Lead.countDocuments({ assignTo: userId });
+    const totalCaptured = await Lead.countDocuments({ capturedBy: userId });
+
+    const totalBuyerLeads = await Lead.countDocuments({
+      assignTo: userId,
+      leadType: "Buyer"
+    });
+
+    const totalRentalLeads = await Lead.countDocuments({
+      assignTo: userId,
+      leadType: "Rental"
+    });
+
+    // -------------------- STATUS BASED COUNTS (Individual Fields) --------------------
+    const statuses = [
+      "Hot",
+      "Not Connected",
+      "Serious",
+      "Potential",
+      "Futuristic",
+      "Dead Lead",
+      "Completed"
+    ];
+
+    const statusCounts = {};
+
+    for (const status of statuses) {
+      const formattedKey = status.replace(/\s+/g, ""); // remove spaces
+      statusCounts[formattedKey] = await Lead.countDocuments({
+        assignTo: userId,
+        status
+      });
     }
 
-    // Already approved
-    if (user.isApproved) {
-      return res.status(200).send(`
-        <h2>✔ User Already Approved</h2>
-        <p>${user.name} (${user.email}) already has login access.</p>
-      `);
-    }
+    // -------------------- INVENTORY COUNTS --------------------
+    const totalBuyerInventory = await Inventory.countDocuments({
+      assignTo: userId,
+      inventoryType: "Sales"
+    });
 
-    // Approve user
-    user.isApproved = true;
-    await user.save();
+    const totalRentInventory = await Inventory.countDocuments({
+      assignTo: userId,
+      inventoryType: "Rent"
+    });
 
-    // Response to admin (no email sent to user)
-    return res.status(200).send(`
-      <h2>✔ User Approved Successfully</h2>
-      <p>${user.name} (${user.email}) can now log in.</p>
-    `);
+    const totalInventory = totalBuyerInventory + totalRentInventory;
+
+    // -------------------- FINAL RESPONSE --------------------
+    res.json({
+      ...user.toObject(),
+      stats: {
+        totalCaptured,
+        totalAssigned,
+        totalBuyerLeads,
+        totalRentalLeads,
+        totalLeadCount: totalBuyerLeads + totalRentalLeads,
+
+        // 🔥 Individual status fields
+        ...statusCounts,
+
+        // Inventory stats
+        totalBuyerInventory,
+        totalRentInventory,
+        totalInventory
+      },
+    });
 
   } catch (err) {
-    console.error(err);
-    return res.status(400).send("❌ Invalid or expired approval link");
+    console.error("Error fetching profile:", err);
+    res.status(500).json({ message: "Server error fetching profile" });
   }
 };
-
-
 
 
 exports.logout = async (req, res) => {
