@@ -236,55 +236,103 @@ exports.login = async (req, res) => {
 
 
 // ---------------- APPROVE USER ----------------
+// exports.approveUser = async (req, res) => {
+//   try {
+//     const { token } = req.params;
+//     const { confirm } = req.query;
+
+//     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+//     const user = await User.findById(decoded.userId);
+
+//     if (!user) return res.status(404).send("User not found ❌");
+
+//     if (!confirm) {
+//       return res.status(200).send(`
+//         <h3>Approve this user?</h3>
+//         <p><strong>Name:</strong> ${user.name}</p>
+//         <p><strong>Email:</strong> ${user.email}</p><br>
+//         <a href="?confirm=yes" style="padding:10px;background:green;color:white;border-radius:5px;">YES</a>
+//         <a href="?confirm=no" style="padding:10px;background:red;color:white;border-radius:5px;margin-left:10px;">NO</a>
+//       `);
+//     }
+
+//     if (confirm.toLowerCase() === "no") {
+//       await User.findByIdAndDelete(user._id);
+//       return res.status(200).send("❌ User rejected and deleted.");
+//     }
+
+//     if (confirm.toLowerCase() === "yes") {
+
+//       if (user.isApproved) return res.status(200).send("✔ User already approved.");
+
+//       user.isApproved = true;
+//       await user.save();
+
+//       await transporter.sendMail({
+//         to: user.email,
+//         subject: "Account Approved 🎉",
+//         html: `<p>Your RealtyXpo account is approved. You may now log in.</p>`
+//       });
+
+//       return res.status(200).send("✔ User Approved Successfully!");
+//     }
+
+//     return res.status(400).send("Invalid query. Use ?confirm=yes or ?confirm=no");
+
+//   } catch (err) {
+//     console.error(err);
+//     res.status(400).send("Invalid or expired approval link ❌");
+//   }
+// };
+
+
+
 exports.approveUser = async (req, res) => {
   try {
     const { token } = req.params;
-    const { confirm } = req.query;
 
+    // Decode JWT token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.userId);
 
-    if (!user) return res.status(404).send("User not found ❌");
+    // If user doesn't exist
+    if (!user) return res.status(404).send("❌ User not found");
 
-    if (!confirm) {
+    // If already approved
+    if (user.isApproved) {
       return res.status(200).send(`
-        <h3>Approve this user?</h3>
-        <p><strong>Name:</strong> ${user.name}</p>
-        <p><strong>Email:</strong> ${user.email}</p><br>
-        <a href="?confirm=yes" style="padding:10px;background:green;color:white;border-radius:5px;">YES</a>
-        <a href="?confirm=no" style="padding:10px;background:red;color:white;border-radius:5px;margin-left:10px;">NO</a>
+        <h2>✔ Already Approved</h2>
+        <p>${user.name} (${user.email}) already has access.</p>
       `);
     }
 
-    if (confirm.toLowerCase() === "no") {
-      await User.findByIdAndDelete(user._id);
-      return res.status(200).send("❌ User rejected and deleted.");
-    }
+    // Approve the user
+    user.isApproved = true;
+    await user.save();
 
-    if (confirm.toLowerCase() === "yes") {
+    // Send email to user
+    await transporter.sendMail({
+      from: `"RealtyXpo" <webnestmediacrm@gmail.com>`,
+      to: user.email,
+      subject: "Account Approved 🎉",
+      html: `
+        <h2>Welcome to RealtyXpo 🎉</h2>
+        <p>Your account has been successfully approved.</p>
+        <p>You can now log in and use the platform.</p>
+      `
+    });
 
-      if (user.isApproved) return res.status(200).send("✔ User already approved.");
-
-      user.isApproved = true;
-      await user.save();
-
-      await transporter.sendMail({
-        to: user.email,
-        subject: "Account Approved 🎉",
-        html: `<p>Your RealtyXpo account is approved. You may now log in.</p>`
-      });
-
-      return res.status(200).send("✔ User Approved Successfully!");
-    }
-
-    return res.status(400).send("Invalid query. Use ?confirm=yes or ?confirm=no");
+    // Admin response after clicking
+    return res.status(200).send(`
+      <h2>✔ User Approved Successfully</h2>
+      <p>${user.name} (${user.email}) can now login.</p>
+    `);
 
   } catch (err) {
     console.error(err);
-    res.status(400).send("Invalid or expired approval link ❌");
+    return res.status(400).send("❌ Invalid or expired approval link");
   }
 };
-
 
 
 
