@@ -622,9 +622,9 @@ exports.deleteUser = async (req, res) => {
 
 
 async function sendResetEmail(email, token) {
-  const resetUrl = `https://realtyxpo.in/reset-password?token=${token}`;
+  const resetUrl = `https://crm.realtyxpo.in/reset-password?token=${token}`;
   const mailOptions = {
-    from: '"Realtyxpo" <fullstackdeveloperabhi1@gmail.com>',
+    from: '"Realtyxpo" <webnestmediacrm@gmail.com>',
     to: email,
     subject: 'Password Reset Request',
     html: `<p>You requested a password reset. Click <a href="${resetUrl}">here</a> to set a new password.</p>`
@@ -652,9 +652,9 @@ exports.forgotPassword = async (req, res) => {
     await user.save();
 
     // ✅ Send raw token in email link
-    const resetUrl = `https://realtyxpo.in/reset-password?token=${resetToken}`;
+    const resetUrl = `https://crm.realtyxpo.in/reset-password?token=${resetToken}`;
     const mailOptions = {
-      from: '"Realtyxpo" <fullstackdeveloperabhi1@gmail.com>',
+      from: '"Realtyxpo" <webnestmediacrm@gmail.com>',
       to: email,
       subject: 'Password Reset Request',
       html: `
