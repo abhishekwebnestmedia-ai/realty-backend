@@ -35,7 +35,18 @@ const brokerRequirementSchema = new mongoose.Schema(
 
         ret.createdAt = formatDate(ret.createdAt);
         ret.updatedAt = formatDate(ret.updatedAt);
-        ret.followUpDate = formatDate(ret.followUpDate);
+          // Keep a raw ISO value for programmatic use (edit forms, datetime-local inputs)
+          if (ret.followUpDate) {
+            try {
+              ret.followUpDateRaw = new Date(ret.followUpDate).toISOString();
+            } catch (e) {
+              ret.followUpDateRaw = null;
+            }
+          } else {
+            ret.followUpDateRaw = null;
+          }
+
+          ret.followUpDate = formatDate(ret.followUpDate);
         return ret;
       },
     },

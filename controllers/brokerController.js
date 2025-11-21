@@ -5,6 +5,13 @@ const BrokerRequirement = require("../models/broker");
 // Create Single Requirement
 exports.createRequirement = async (req, res) => {
   try {
+    // Normalize followUpDate if provided (accepts ISO or datetime-local)
+    if (req.body.followUpDate) {
+      const d = new Date(req.body.followUpDate);
+      if (!isNaN(d.getTime())) req.body.followUpDate = d;
+      else delete req.body.followUpDate;
+    }
+
     const newRequirement = new BrokerRequirement(req.body);
     await newRequirement.save();
     res.status(201).json(newRequirement);
@@ -37,6 +44,13 @@ exports.getRequirementById = async (req, res) => {
 // Update
 exports.updateRequirement = async (req, res) => {
   try {
+    // Normalize followUpDate when updating
+    if (req.body.followUpDate) {
+      const d = new Date(req.body.followUpDate);
+      if (!isNaN(d.getTime())) req.body.followUpDate = d;
+      else delete req.body.followUpDate;
+    }
+
     const updatedRequirement = await BrokerRequirement.findByIdAndUpdate(
       req.params.id,
       req.body,
