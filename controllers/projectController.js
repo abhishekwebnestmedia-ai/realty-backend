@@ -1144,33 +1144,33 @@ exports.bulkUploadProjects = async (req, res) => {
           projectTypeDoc = new ProjectType({ category, projectcategory, cities: [] });
         }
         
-        let city = projectTypeDoc.cities.find(c => c.name === cityName);
+        let city = projectTypeDoc.cities.find(c => c.cityName === cityName);
         if (!city) {
-          city = { name: cityName, divisions: [] };
+          city = { cityName: cityName, divisions: [] };
           projectTypeDoc.cities.push(city);
         }
         
-        let division = city.divisions.find(d => d.name === divisionName);
+        let division = city.divisions.find(d => d.divisionName === divisionName);
         if (!division) {
-          division = { name: divisionName, sectors: [] };
+          division = { divisionName: divisionName, sectors: [] };
           city.divisions.push(division);
         }
         
-        let sector = division.sectors.find(s => s.name === sectorName);
+        let sector = division.sectors.find(s => s.sectorName === sectorName);
         if (!sector) {
-          sector = { name: sectorName, projects: [] };
+          sector = { sectorName: sectorName, projects: [] };
           division.sectors.push(sector);
         }
         
-        let project = sector.projects.find(p => p.name === projectName);
+        let project = sector.projects.find(p => p.projectName === projectName);
         if (!project) {
-          project = { name: projectName, projectType: projectType, towers: [] };
+          project = { projectName: projectName, projectType: projectType, towers: [] };
           sector.projects.push(project);
         }
         
-        let tower = project.towers.find(t => t.name === towerName);
+        let tower = project.towers.find(t => t.towerName === towerName);
         if (!tower) {
-          tower = { name: towerName, units: [] };
+          tower = { towerName: towerName, units: [] };
           project.towers.push(tower);
         }
         
