@@ -11,7 +11,7 @@ const unitSchema = new mongoose.Schema({
   followUpDate: Date,
   status: { 
     type: String, 
-    enum: ["Vacant", "Rental", "Self Occupied", "Interested in calling"], 
+    enum: ["Vacant", "Rental", "Self Occupied", "For Sale", "Interested in calling"], 
     default: "Vacant" 
   },
   remarks: String,

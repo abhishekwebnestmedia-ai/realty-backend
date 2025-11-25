@@ -12,6 +12,7 @@ exports.createDatabase = async (req, res) => {
       price,
       size,
       pdfLink,
+      remarks,
       type,
       constructionType,
     } = req.body;
@@ -25,6 +26,7 @@ exports.createDatabase = async (req, res) => {
       price,
       size,
       pdfLink,
+      remarks,
       type,
       constructionType,
       createdBy: req.user._id,

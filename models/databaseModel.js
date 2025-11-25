@@ -31,6 +31,11 @@ const databaseSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    
+    remarks: {
+      type: String,
+      trim: true,
+    },
 
     // 🔹 Select Type
     type: {

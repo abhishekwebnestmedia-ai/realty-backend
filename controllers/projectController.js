@@ -1125,6 +1125,7 @@ exports.bulkUploadProjects = async (req, res) => {
         // Validate category values
         const allowedCategories = ['Residential', 'Commercial'];
         const allowedProjectCategories = ['ReadyToMove', 'UnderConstruction'];
+        const allowedStatuses = ['Vacant', 'Rental', 'Self Occupied', 'For Sale', 'Interested in calling'];
         
         if (!allowedCategories.includes(category)) {
           errors.push(`Row ${i + 2}: Invalid Category '${category}'. Must be 'Residential' or 'Commercial'`);
@@ -1134,6 +1135,12 @@ exports.bulkUploadProjects = async (req, res) => {
         
         if (!allowedProjectCategories.includes(projectcategory)) {
           errors.push(`Row ${i + 2}: Invalid Construction Status '${projectcategory}'. Must be 'ReadyToMove' or 'UnderConstruction'`);
+          errorCount++;
+          continue;
+        }
+        
+        if (!allowedStatuses.includes(status)) {
+          errors.push(`Row ${i + 2}: Invalid Status '${status}'. Must be one of: ${allowedStatuses.join(', ')}`);
           errorCount++;
           continue;
         }
