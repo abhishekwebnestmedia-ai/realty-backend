@@ -35,6 +35,43 @@ exports.createInventry = async (req, res) => {
   try {
     const record = new Inventory(req.body);
     await record.save();
+
+    // 🔔 Create notification when inventory is created and assigned
+    if (record.assignTo) {
+      try {
+        let receiverId = null;
+        if (mongoose.Types.ObjectId.isValid(String(record.assignTo))) {
+          receiverId = record.assignTo;
+        } else {
+          const user = await User.findOne({ name: record.assignTo });
+          if (user) receiverId = user._id;
+        }
+
+        if (receiverId) {
+          const changedBy = req.user || {};
+          const msg = `🆕 New inventory "${record.sellerName || 'Property'}" assigned to you by ${changedBy.name || "System"}`;
+          const notif = await Notification.create({
+            type: "Inventory",
+            itemId: record._id,
+            message: msg,
+            changedBy: changedBy.name || "System",
+            receiver: receiverId,
+          });
+
+          const payload = { 
+            ...notif.toJSON(), 
+            inventoryId: record._id,
+            _id: notif._id,
+            notificationId: notif._id
+          };
+          console.log('🔔 New inventory notification created:', { receiverId, payload });
+          await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
+        }
+      } catch (notifErr) {
+        console.warn("⚠️ Notification creation failed (new inventory):", notifErr.message);
+      }
+    }
+
     res.status(201).json(record);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -169,7 +206,13 @@ exports.updateInventry = async (req, res) => {
               meta: buildInventoryMeta(updatedRecord),
             });
 
-            const payload = { ...notif.toJSON(), inventoryId: id };
+            const payload = { 
+              ...notif.toJSON(), 
+              inventoryId: id,
+              _id: notif._id,
+              notificationId: notif._id
+            };
+            console.log('🔔 Inventory assignTo notification created:', { receiverId, payload });
             receiverId ? await emitNotification(receiverId.toString(), payload, { emitToAdmin: true }) : emitToAdmins(payload);
           }
 

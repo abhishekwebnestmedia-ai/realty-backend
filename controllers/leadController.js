@@ -94,6 +94,33 @@ exports.createLead = async (req, res) => {
     });
 
     await lead.save();
+
+    // 🔔 Create notification when lead is created and assigned
+    if (user && user._id) {
+      try {
+        const changedBy = req.user || {};
+        const msg = `🆕 New lead "${lead.customerName}" assigned to you by ${changedBy.name || "System"}`;
+        const notif = await Notification.create({
+          type: "Lead",
+          itemId: lead._id,
+          message: msg,
+          changedBy: changedBy.name || "System",
+          receiver: user._id,
+        });
+
+        const payload = { 
+          ...notif.toJSON(), 
+          leadId: lead._id,
+          _id: notif._id,
+          notificationId: notif._id
+        };
+        console.log('🔔 New lead notification created:', { receiverId: user._id, payload });
+        await emitNotification(user._id.toString(), payload, { emitToAdmin: true });
+      } catch (notifErr) {
+        console.warn("⚠️ Notification creation failed (new lead):", notifErr.message);
+      }
+    }
+
     res.status(201).json({ success: true, data: lead });
   } catch (err) {
     console.error(" createLead error:", err);
@@ -352,7 +379,13 @@ exports.updateLead = async (req, res) => {
               receiver: receiverId || null,
             });
 
-            const payload = { ...notif.toJSON(), leadId: id };
+            const payload = { 
+              ...notif.toJSON(), 
+              leadId: id,
+              _id: notif._id,
+              notificationId: notif._id
+            };
+            console.log('🔔 Lead assignTo notification created:', { receiverId, payload });
             if (receiverId) {
               // send to specific user and also to admins
               await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
@@ -371,7 +404,13 @@ exports.updateLead = async (req, res) => {
               receiver: receiverId || null,
             });
 
-            const payload = { ...notif.toJSON(), leadId: id };
+            const payload = { 
+              ...notif.toJSON(), 
+              leadId: id,
+              _id: notif._id,
+              notificationId: notif._id
+            };
+            console.log('🔔 Lead status notification created:', { receiverId, payload });
             if (receiverId) {
               await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
             } else {
