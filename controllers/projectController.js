@@ -1056,7 +1056,7 @@ async function resolveAssign(assignToValue) {
   return user ? user._id : null;
 }
 
-// Bulk upload projects from Excel file
+// Bulk upload projects from Excel/CSV file
 exports.bulkUploadProjects = async (req, res) => {
   try {
     const XLSX = require('xlsx');
@@ -1067,11 +1067,30 @@ exports.bulkUploadProjects = async (req, res) => {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
     
-    // Parse uploaded file
-    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    // Get file extension
+    const fileExtension = req.file.originalname.split('.').pop().toLowerCase();
+    const allowedExtensions = ['csv', 'xlsx', 'xls', 'xlsm'];
+    
+    if (!allowedExtensions.includes(fileExtension)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid file format. Supported formats: CSV, XLSX, XLS, XLSM' 
+      });
+    }
+    
+    // Parse uploaded file (XLSX library handles both Excel and CSV)
+    const workbook = XLSX.read(req.file.buffer, { 
+      type: 'buffer',
+      // For CSV files, ensure proper parsing
+      raw: fileExtension === 'csv'
+    });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
-    const data = XLSX.utils.sheet_to_json(sheet);
+    const data = XLSX.utils.sheet_to_json(sheet, {
+      // Handle empty cells and trim whitespace
+      defval: '',
+      raw: false
+    });
     
     if (!data || data.length === 0) {
       return res.status(400).json({ success: false, message: 'No data found in file' });
@@ -1084,20 +1103,37 @@ exports.bulkUploadProjects = async (req, res) => {
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
       try {
-        // Create/find category and structure
+        // Extract and validate fields
         const category = row['Category'] || 'Residential';
         const projectcategory = row['Construction Status'] || 'ReadyToMove';
-        const cityName = row['City Name'];
-        const divisionName = row['Division Name'];
-        const sectorName = row['Sector Name'];
-        const projectName = row['Project Name'];
-        const towerName = row['Tower Name'];
-        const unitNumber = row['Unit Number'];
+        const cityName = (row['City Name'] || '').toString().trim();
+        const divisionName = (row['Division Name'] || '').toString().trim();
+        const sectorName = (row['Sector Name'] || '').toString().trim();
+        const projectName = (row['Project Name'] || '').toString().trim();
+        const towerName = (row['Tower Name'] || '').toString().trim();
+        const unitNumber = (row['Unit Number'] || '').toString().trim();
         const projectType = row['Project Type'] || 'Residential';
         const status = row['Status'] || 'Vacant';
         
-        if (!cityName || !projectName) {
-          errors.push(`Row ${i + 2}: Missing required fields (City Name or Project Name)`);
+        // Validate required fields
+        if (!cityName || !projectName || !towerName || !unitNumber) {
+          errors.push(`Row ${i + 2}: Missing required fields (City Name, Project Name, Tower Name, or Unit Number)`);
+          errorCount++;
+          continue;
+        }
+        
+        // Validate category values
+        const allowedCategories = ['Residential', 'Commercial'];
+        const allowedProjectCategories = ['ReadyToMove', 'UnderConstruction'];
+        
+        if (!allowedCategories.includes(category)) {
+          errors.push(`Row ${i + 2}: Invalid Category '${category}'. Must be 'Residential' or 'Commercial'`);
+          errorCount++;
+          continue;
+        }
+        
+        if (!allowedProjectCategories.includes(projectcategory)) {
+          errors.push(`Row ${i + 2}: Invalid Construction Status '${projectcategory}'. Must be 'ReadyToMove' or 'UnderConstruction'`);
           errorCount++;
           continue;
         }
