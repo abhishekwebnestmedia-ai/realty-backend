@@ -1146,32 +1146,36 @@ exports.bulkUploadProjects = async (req, res) => {
         
         let city = projectTypeDoc.cities.find(c => c.cityName === cityName);
         if (!city) {
-          city = { cityName: cityName, divisions: [] };
-          projectTypeDoc.cities.push(city);
+          projectTypeDoc.cities.push({ cityName: cityName, divisions: [] });
+          city = projectTypeDoc.cities[projectTypeDoc.cities.length - 1];
         }
         
-        let division = city.divisions.find(d => d.divisionName === divisionName);
+        // Use default division name if empty
+        const finalDivisionName = divisionName || 'General';
+        let division = city.divisions.find(d => d.divisionName === finalDivisionName);
         if (!division) {
-          division = { divisionName: divisionName, sectors: [] };
-          city.divisions.push(division);
+          city.divisions.push({ divisionName: finalDivisionName, sectors: [] });
+          division = city.divisions[city.divisions.length - 1];
         }
         
-        let sector = division.sectors.find(s => s.sectorName === sectorName);
+        // Use default sector name if empty
+        const finalSectorName = sectorName || 'General';
+        let sector = division.sectors.find(s => s.sectorName === finalSectorName);
         if (!sector) {
-          sector = { sectorName: sectorName, projects: [] };
-          division.sectors.push(sector);
+          division.sectors.push({ sectorName: finalSectorName, projects: [] });
+          sector = division.sectors[division.sectors.length - 1];
         }
         
         let project = sector.projects.find(p => p.projectName === projectName);
         if (!project) {
-          project = { projectName: projectName, projectType: projectType, towers: [] };
-          sector.projects.push(project);
+          sector.projects.push({ projectName: projectName, towers: [] });
+          project = sector.projects[sector.projects.length - 1];
         }
         
         let tower = project.towers.find(t => t.towerName === towerName);
         if (!tower) {
-          tower = { towerName: towerName, units: [] };
-          project.towers.push(tower);
+          project.towers.push({ towerName: towerName, units: [] });
+          tower = project.towers[project.towers.length - 1];
         }
         
         // Check if unit already exists
