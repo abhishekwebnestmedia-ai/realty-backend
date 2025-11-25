@@ -207,35 +207,66 @@ exports.deleteInventry = async (req, res) => {
 
 
 
+// exports.getAllInventry = async (req, res) => {
+//   try {
+//     // ✅ Step 1 - Ensure user is authenticated
+//     if (!req.user || !req.user.name) {
+//       return res.status(401).json({
+//         success: false,
+//         message: "Unauthorized access — user info missing",
+//       });
+//     }
+
+//     const userRole = req.user.role || "user";
+//     const userName = req.user.name; // 🟢 Match against transferTo (string)
+//     let filter = {};
+
+//     // ✅ Step 2 - Restrict access for non-admin users
+//     if (userRole !== "admin") {
+//       filter = { transferTo: userName };
+//     }
+
+//     // ✅ Step 3 - Fetch filtered inventory
+//     const records = await Inventory.find(filter).sort({ createdAt: -1 }).lean();
+
+//     // ✅ Step 4 - Respond
+//     res.status(200).json({
+//       success: true,
+//       role: userRole,
+//       count: records.length,
+//       data: records,
+//     });
+//   } catch (err) {
+//     console.error("❌ getAllInventry error:", err);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error fetching inventory",
+//     });
+//   }
+// };
+
 exports.getAllInventry = async (req, res) => {
   try {
-    // ✅ Step 1 - Ensure user is authenticated
-    if (!req.user || !req.user.name) {
+    // Ensure user is authenticated
+    if (!req.user) {
       return res.status(401).json({
         success: false,
-        message: "Unauthorized access — user info missing",
+        message: "Unauthorized access",
       });
     }
 
-    const userRole = req.user.role || "user";
-    const userName = req.user.name; // 🟢 Match against transferTo (string)
-    let filter = {};
+    // Fetch all inventory (no filters)
+    const records = await Inventory.find()
+      .populate("transferTo", "name email") // optional
+      .sort({ createdAt: -1 })
+      .lean();
 
-    // ✅ Step 2 - Restrict access for non-admin users
-    if (userRole !== "admin") {
-      filter = { transferTo: userName };
-    }
-
-    // ✅ Step 3 - Fetch filtered inventory
-    const records = await Inventory.find(filter).sort({ createdAt: -1 }).lean();
-
-    // ✅ Step 4 - Respond
     res.status(200).json({
       success: true,
-      role: userRole,
       count: records.length,
       data: records,
     });
+
   } catch (err) {
     console.error("❌ getAllInventry error:", err);
     res.status(500).json({
@@ -244,6 +275,8 @@ exports.getAllInventry = async (req, res) => {
     });
   }
 };
+
+
 
 
 exports.getInventoryByTransferTo = async (req, res) => {

@@ -65,12 +65,10 @@ const leadSchema = new mongoose.Schema(
       enum: validLeadTypes,
     },
 
-    // followUp: {
-    //   type: String,
-    //   default: getISTDateTime,
-    // },
-
-  
+    followUp: {
+      type: String,
+      default: getISTDateTime,
+    },
 
     requirement: { type: String },
     remark: { type: String },
