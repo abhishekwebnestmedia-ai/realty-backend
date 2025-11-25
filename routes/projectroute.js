@@ -2,10 +2,16 @@
 
 const express = require("express");
 const router = express.Router();
+const multer = require('multer');
 const projectController = require("../controllers/projectController");
 const authMiddleware = require("../middleware/authmiddleware");
 const { approveUnit } = require("../controllers/projectController");
 
+// Configure multer for file uploads
+const upload = multer({ storage: multer.memoryStorage() });
+
+// Bulk Upload Projects
+router.post("/bulk-upload", authMiddleware, upload.single('file'), projectController.bulkUploadProjects);
 
 // Step 1 - Create ProjectType (root)
 router.post("/project-types", authMiddleware, projectController.createProjectType);

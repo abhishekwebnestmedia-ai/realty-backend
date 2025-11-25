@@ -1056,6 +1056,122 @@ async function resolveAssign(assignToValue) {
   return user ? user._id : null;
 }
 
+// Bulk upload projects from Excel file
+exports.bulkUploadProjects = async (req, res) => {
+  try {
+    const XLSX = require('xlsx');
+    const ProjectType = require('../models/project');
+    
+    // Check if file was uploaded
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+    
+    // Parse uploaded file
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const data = XLSX.utils.sheet_to_json(sheet);
+    
+    if (!data || data.length === 0) {
+      return res.status(400).json({ success: false, message: 'No data found in file' });
+    }
+    
+    let successCount = 0;
+    let errorCount = 0;
+    const errors = [];
+    
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      try {
+        // Create/find category and structure
+        const category = row['Category'] || 'Residential';
+        const projectcategory = row['Construction Status'] || 'ReadyToMove';
+        const cityName = row['City Name'];
+        const divisionName = row['Division Name'];
+        const sectorName = row['Sector Name'];
+        const projectName = row['Project Name'];
+        const towerName = row['Tower Name'];
+        const unitNumber = row['Unit Number'];
+        const projectType = row['Project Type'] || 'Residential';
+        const status = row['Status'] || 'Vacant';
+        
+        if (!cityName || !projectName) {
+          errors.push(`Row ${i + 2}: Missing required fields (City Name or Project Name)`);
+          errorCount++;
+          continue;
+        }
+        
+        // Find or create the entire structure
+        let projectTypeDoc = await ProjectType.findOne({ category, projectcategory });
+        if (!projectTypeDoc) {
+          projectTypeDoc = new ProjectType({ category, projectcategory, cities: [] });
+        }
+        
+        let city = projectTypeDoc.cities.find(c => c.name === cityName);
+        if (!city) {
+          city = { name: cityName, divisions: [] };
+          projectTypeDoc.cities.push(city);
+        }
+        
+        let division = city.divisions.find(d => d.name === divisionName);
+        if (!division) {
+          division = { name: divisionName, sectors: [] };
+          city.divisions.push(division);
+        }
+        
+        let sector = division.sectors.find(s => s.name === sectorName);
+        if (!sector) {
+          sector = { name: sectorName, projects: [] };
+          division.sectors.push(sector);
+        }
+        
+        let project = sector.projects.find(p => p.name === projectName);
+        if (!project) {
+          project = { name: projectName, projectType: projectType, towers: [] };
+          sector.projects.push(project);
+        }
+        
+        let tower = project.towers.find(t => t.name === towerName);
+        if (!tower) {
+          tower = { name: towerName, units: [] };
+          project.towers.push(tower);
+        }
+        
+        // Check if unit already exists
+        const existingUnit = tower.units.find(u => u.unitNumber === unitNumber);
+        if (!existingUnit) {
+          // Add unit
+          const unit = {
+            unitNumber: unitNumber,
+            status: status,
+            createdAt: new Date()
+          };
+          tower.units.push(unit);
+        }
+        
+        await projectTypeDoc.save();
+        successCount++;
+      } catch (err) {
+        console.error(`Error processing row ${i + 2}:`, err);
+        errors.push(`Row ${i + 2}: ${err.message}`);
+        errorCount++;
+      }
+    }
+    
+    return res.status(200).json({
+      success: true,
+      message: `Bulk upload completed. Success: ${successCount}, Errors: ${errorCount}`,
+      successCount,
+      errorCount,
+      errors: errors.length > 0 ? errors : undefined
+    });
+  } catch (error) {
+    console.error('Bulk upload error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 exports.bulkUploadProjectTypes = async (req, res) => {
   try {
     const docs = req.body;
