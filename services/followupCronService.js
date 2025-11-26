@@ -24,10 +24,8 @@ const STRING_FORMATS = [
   "%d/%m/%Y %H:%M",
   "%d/%m/%Y, %H:%M:%S",
   "%d/%m/%Y, %H:%M",
-  "%d/%m/%Y, %I:%M:%S %p",
-  "%d/%m/%Y, %I:%M %p",
-  "%m/%d/%Y, %I:%M:%S %p",
-  "%m/%d/%Y, %I:%M %p",
+  "%m/%d/%Y %H:%M:%S",
+  "%m/%d/%Y %H:%M",
 ];
 
 const userNameCache = new Map();
