@@ -13,6 +13,7 @@ const MISSED_WINDOW_MS = 60 * 1000;
 const DUPLICATE_SUPPRESS_MS = 2 * 60 * 1000;
 
 const userNameCache = new Map();
+const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
 
 // 🧮 Build a $dateFromString pipeline that tolerates multiple formats
 const computeFollowupDateExpr = (fieldPath) => ({
@@ -77,17 +78,18 @@ const buildFollowupPipeline = ({ modelField, windowStart, windowEnd, projection 
     { $match: { [modelField]: { $exists: true, $ne: null, $ne: "" } } },
     { $addFields: { __followUpDate: computeFollowupDateExpr(fieldPath) } },
     { $match: { __followUpDate: { $ne: null, $gte: windowStart, $lte: windowEnd } } },
+    { $addFields: { followUpDate: "$__followUpDate" } },
     {
       $project: {
-        __followUpDate: 0,
         _id: 1,
         assignTo: 1,
         transferTo: 1,
         [modelField]: 1,
-        followUpDate: "$__followUpDate",
+        followUpDate: 1,
         ...projection,
       },
     },
+    { $unset: "__followUpDate" },
   ];
 };
 
@@ -96,7 +98,7 @@ const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 async function findUserIdByName(name) {
   if (!name) return null;
   const normalized = name.toString().trim().toLowerCase();
-  if (!normalized) return null;
+  if (!normalized || normalized === "unassigned" || normalized === "none") return null;
   if (userNameCache.has(normalized)) return userNameCache.get(normalized);
 
   const user = await User.findOne({
@@ -112,8 +114,10 @@ async function findUserIdByName(name) {
 
 async function resolveReceiverId(doc) {
   try {
-    if (doc.transferTo && typeof doc.transferTo === "string") {
-      const found = await findUserIdByName(doc.transferTo);
+    const transferRaw =
+      typeof doc.transferTo === "string" ? doc.transferTo.trim() : null;
+    if (transferRaw) {
+      const found = await findUserIdByName(transferRaw);
       if (found) return found;
     }
 
@@ -122,12 +126,27 @@ async function resolveReceiverId(doc) {
       const candidate = doc[key];
       if (!candidate) continue;
 
-      if (candidate instanceof mongoose.Types.ObjectId) return candidate;
-      if (candidate && typeof candidate === "object" && candidate._id) return candidate._id;
+      if (candidate && typeof candidate === "object" && candidate._id) {
+        const inner = candidate._id;
+        if (isValidObjectId(inner)) {
+          return typeof inner === "string"
+            ? new mongoose.Types.ObjectId(inner)
+            : inner;
+        }
+        const resolved = await findUserIdByName(inner);
+        if (resolved) return resolved;
+      }
+
+      if (isValidObjectId(candidate)) {
+        return typeof candidate === "string"
+          ? new mongoose.Types.ObjectId(candidate)
+          : candidate;
+      }
 
       const candidateStr = candidate.toString().trim();
       if (!candidateStr) continue;
-      if (mongoose.Types.ObjectId.isValid(candidateStr)) {
+
+      if (isValidObjectId(candidateStr)) {
         return new mongoose.Types.ObjectId(candidateStr);
       }
 
