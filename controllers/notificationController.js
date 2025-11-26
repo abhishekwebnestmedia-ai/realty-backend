@@ -9,15 +9,18 @@ const { emitNotification, emitToAdmins } = require("../utils/socketEmitter");
 
 exports.getAllNotifications = async (req, res) => {
   try {
-    // If user is admin, return all notifications. Otherwise return only notifications addressed to the user.
+    // Admins see all notifications
+    // Regular users see only their own notifications (where receiver = userId)
     const userRole = req.user?.role || 'user';
     const userId = req.user?._id;
 
     let filter = {};
     if (userRole !== 'admin') {
       if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+      // Show notifications where this user is the receiver
       filter = { receiver: userId };
     }
+    // If admin, filter is empty {} which returns all notifications
 
     const notifications = await Notification.find(filter).sort({ createdAt: -1 });
 

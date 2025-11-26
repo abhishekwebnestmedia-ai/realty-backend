@@ -248,29 +248,33 @@ exports.getLeads = async (req, res) => {
       filter = {
         status: { $ne: "Dead Lead" },  // ❌ exclude dead leads
         $or: [
-          { transferTo: userName }, // priority 1
-          { assignTo: mongoose.isValidObjectId(userId)
-            ? new mongoose.Types.ObjectId(userId)
-            : userId 
-          } // priority 2
+          // Priority 1: transferTo matches user name
+          { transferTo: userName },
+          // Priority 2: assignTo matches user ID AND transferTo is empty/null/not set
+          {
+            $and: [
+              {
+                $or: [
+                  { transferTo: { $exists: false } },
+                  { transferTo: null },
+                  { transferTo: "" }
+                ]
+              },
+              {
+                assignTo: mongoose.isValidObjectId(userId)
+                  ? new mongoose.Types.ObjectId(userId)
+                  : userId
+              }
+            ]
+          }
         ]
       };
     }
 
     // Fetch leads
-    let leads = await Lead.find(filter)
+    const leads = await Lead.find(filter)
       .populate("assignTo", "name email role")
       .sort({ createdAt: -1 });
-
-    // Reorder to prioritize transferTo first
-    if (userRole !== "admin") {
-      leads = [
-        ...leads.filter(l => l.transferTo === userName),
-        ...leads.filter(l =>
-          l.assignTo && l.assignTo._id?.toString() === userId && l.transferTo !== userName
-        )
-      ];
-    }
 
     res.status(200).json({
       success: true,
@@ -369,6 +373,7 @@ exports.updateLead = async (req, res) => {
             }
           }
 
+          // 🔔 Notification for assignTo change
           if (field === "assignTo") {
             const msg = `👤 Lead "${oldLead.customerName}" was reassigned  by ${changedBy?.name || "System"}`;
             const notif = await Notification.create({
@@ -394,8 +399,34 @@ exports.updateLead = async (req, res) => {
             }
           }
 
+          // 🔔 Notification for transferTo change
+          if (field === "transferTo") {
+            const msg = `🔄 Lead "${oldLead.customerName}" was transferred to you by ${changedBy?.name || "System"}`;
+            const notif = await Notification.create({
+              type: "Lead",
+              itemId: id,
+              message: msg,
+              changedBy: changedBy?.name || "System",
+              receiver: receiverId || null,
+            });
+
+            const payload = { 
+              ...notif.toJSON(), 
+              leadId: id,
+              _id: notif._id,
+              notificationId: notif._id
+            };
+            console.log('🔔 Lead transferTo notification created:', { receiverId, payload });
+            if (receiverId) {
+              await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
+            } else {
+              emitToAdmins(payload);
+            }
+          }
+
+          // 🔔 Notification for status change
           if (field === "status") {
-            const msg = `🔄 Lead "${oldLead.customerName}" status changed by ${changedBy?.name || "System"}`;
+            const msg = `🔄 Lead "${oldLead.customerName}" status changed to "${newValue}" by ${changedBy?.name || "System"}`;
             const notif = await Notification.create({
               type: "Lead",
               itemId: id,
@@ -411,6 +442,31 @@ exports.updateLead = async (req, res) => {
               notificationId: notif._id
             };
             console.log('🔔 Lead status notification created:', { receiverId, payload });
+            if (receiverId) {
+              await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
+            } else {
+              emitToAdmins(payload);
+            }
+          }
+
+          // 🔔 Notification for followUp change
+          if (field === "followUp") {
+            const msg = `📅 Lead "${oldLead.customerName}" follow-up date updated by ${changedBy?.name || "System"}`;
+            const notif = await Notification.create({
+              type: "Lead",
+              itemId: id,
+              message: msg,
+              changedBy: changedBy?.name || "System",
+              receiver: receiverId || null,
+            });
+
+            const payload = { 
+              ...notif.toJSON(), 
+              leadId: id,
+              _id: notif._id,
+              notificationId: notif._id
+            };
+            console.log('🔔 Lead followUp notification created:', { receiverId, payload });
             if (receiverId) {
               await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
             } else {
