@@ -334,7 +334,8 @@ exports.getLeads = async (req, res) => {
                       { transferTo: { $exists: false } },
                       { transferTo: null },
                       { transferTo: "" },
-                      { transferTo: /^\s*$/ } // Trim whitespace cases
+                      { transferTo: /^\s*$/ } ,// Trim whitespace cases
+                    { transferTo: "Unassigned" } 
                     ]
                   },
                   { assignTo: userId }
