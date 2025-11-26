@@ -228,6 +228,77 @@ exports.assignLead = async (req, res) => {
 // };
 
 
+// exports.getLeads = async (req, res) => {
+//   try {
+//     if (!req.user || !req.user._id) {
+//       return res.status(401).json({
+//         success: false,
+//         message: "Unauthorized access",
+//       });
+//     }
+
+//     const userRole = req.user.role || "user";
+//     const userId = req.user._id;
+//     const userName = req.user.name;
+
+//     let filter = {};
+
+//     // ✅ 1. Admin sees ALL leads
+//     // ✅ 2. User doesn't see Dead Leads
+//     // ✅ 3. User gets leads based on: transferTo → assignTo (priority)
+//     if (userRole !== "admin") {
+//       filter = {
+//         $and: [
+//           // ❌ Exclude Dead Leads for non-admin users
+//           { status: { $ne: "Dead Lead" } },
+//           // ✅ Show leads based on transferTo OR assignTo
+//           {
+//             $or: [
+//               // Priority 1: transferTo matches user name
+//               { transferTo: userName },
+//               // Priority 2: assignTo matches user ObjectId AND transferTo is empty
+//               {
+//                 $and: [
+//                   {
+//                     $or: [
+//                       { transferTo: { $exists: false } },
+//                       { transferTo: null },
+//                       { transferTo: "" }
+//                     ]
+//                   },
+//                   { assignTo: userId }
+//                 ]
+//               }
+//             ]
+//           }
+//         ]
+//       };
+//     }
+
+//     // Fetch leads
+//     const leads = await Lead.find(filter)
+//       .populate("assignTo", "name email role")
+//       .sort({ createdAt: -1 });
+
+//     res.status(200).json({
+//       success: true,
+//       role: userRole,
+//       count: leads.length,
+//       data: leads,
+//     });
+
+//   } catch (err) {
+//     console.error("❌ getLeads error:", err);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error fetching leads",
+//     });
+//   }
+// };
+
+
+
+
 exports.getLeads = async (req, res) => {
   try {
     if (!req.user || !req.user._id) {
@@ -239,31 +310,31 @@ exports.getLeads = async (req, res) => {
 
     const userRole = req.user.role || "user";
     const userId = req.user._id;
-    const userName = req.user.name;
+    const userName = req.user.name?.trim(); // Ensure clean user name
 
     let filter = {};
 
-    // ✅ 1. Admin sees ALL leads
-    // ✅ 2. User doesn't see Dead Leads
-    // ✅ 3. User gets leads based on: transferTo → assignTo (priority)
+    // ----------------- ACCESS LOGIC -----------------
     if (userRole !== "admin") {
       filter = {
         $and: [
-          // ❌ Exclude Dead Leads for non-admin users
+          // 🚫 Normal user should NOT see Dead Leads
           { status: { $ne: "Dead Lead" } },
-          // ✅ Show leads based on transferTo OR assignTo
+
           {
             $or: [
-              // Priority 1: transferTo matches user name
+              // Priority 1 → leads transferred to user
               { transferTo: userName },
-              // Priority 2: assignTo matches user ObjectId AND transferTo is empty
+
+              // Priority 2 → assigned leads where transferTo is empty/null/blank
               {
                 $and: [
                   {
                     $or: [
                       { transferTo: { $exists: false } },
                       { transferTo: null },
-                      { transferTo: "" }
+                      { transferTo: "" },
+                      { transferTo: /^\s*$/ } // Trim whitespace cases
                     ]
                   },
                   { assignTo: userId }
@@ -275,12 +346,12 @@ exports.getLeads = async (req, res) => {
       };
     }
 
-    // Fetch leads
+    // ----------------- QUERY -----------------
     const leads = await Lead.find(filter)
       .populate("assignTo", "name email role")
       .sort({ createdAt: -1 });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       role: userRole,
       count: leads.length,
@@ -289,14 +360,12 @@ exports.getLeads = async (req, res) => {
 
   } catch (err) {
     console.error("❌ getLeads error:", err);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Server error fetching leads",
     });
   }
 };
-
-
 
 
 
