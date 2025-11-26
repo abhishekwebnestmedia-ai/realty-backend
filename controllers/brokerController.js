@@ -77,6 +77,15 @@ async function resolveBrokerReceiver(record) {
   return tryResolve(record.capturedBy);
 }
 
+function ensureCapturedBy(target, user) {
+  if (!target) return;
+  const hasValue = typeof target.capturedBy === "string" && target.capturedBy.trim().length > 0;
+  if (hasValue) {
+    target.capturedBy = target.capturedBy.trim();
+    return;
+  }
+
+
 // Create Single Requirement
 exports.createRequirement = async (req, res) => {
   try {
@@ -86,6 +95,8 @@ exports.createRequirement = async (req, res) => {
       if (!isNaN(d.getTime())) req.body.followUpDate = d;
       else delete req.body.followUpDate;
     }
+
+    ensureCapturedBy(req.body, req.user);
 
     const newRequirement = new BrokerRequirement(req.body);
     await newRequirement.save();
@@ -131,6 +142,8 @@ exports.updateRequirement = async (req, res) => {
       updatePayload.followUpDate = null;
       updatePayload.followUpUtc = null;
     }
+
+    ensureCapturedBy(updatePayload, req.user);
 
     const oldRequirement = await BrokerRequirement.findById(id);
     if (!oldRequirement) return res.status(404).json({ error: "Requirement not found" });
