@@ -238,7 +238,7 @@ exports.getLeads = async (req, res) => {
     }
 
     const userRole = req.user.role || "user";
-    const userId = req.user._id.toString();
+    const userId = req.user._id;
     const userName = req.user.name;
 
     let filter = {};
@@ -247,18 +247,6 @@ exports.getLeads = async (req, res) => {
     // ✅ 2. User doesn't see Dead Leads
     // ✅ 3. User gets leads based on: transferTo → assignTo (priority)
     if (userRole !== "admin") {
-      // Build assignTo matching conditions
-      const assignToConditions = [];
-      
-      // Match by ObjectId
-      if (mongoose.Types.ObjectId.isValid(userId)) {
-        assignToConditions.push({ assignTo: new mongoose.Types.ObjectId(userId) });
-      }
-      
-      // Match by name or user ID string
-      assignToConditions.push({ assignTo: userName });
-      assignToConditions.push({ assignTo: userId });
-
       filter = {
         $and: [
           // ❌ Exclude Dead Leads for non-admin users
@@ -268,7 +256,7 @@ exports.getLeads = async (req, res) => {
             $or: [
               // Priority 1: transferTo matches user name
               { transferTo: userName },
-              // Priority 2: assignTo matches user (by ID or name) AND transferTo is empty
+              // Priority 2: assignTo matches user ObjectId AND transferTo is empty
               {
                 $and: [
                   {
@@ -278,7 +266,7 @@ exports.getLeads = async (req, res) => {
                       { transferTo: "" }
                     ]
                   },
-                  { $or: assignToConditions }
+                  { assignTo: userId }
                 ]
               }
             ]
@@ -307,6 +295,8 @@ exports.getLeads = async (req, res) => {
     });
   }
 };
+
+
 
 
 
