@@ -93,6 +93,13 @@ async function run() {
       console.log('     receiver:', n.receiver, '| changedBy:', n.changedBy);
     });
 
+    const followUpNotif = notifs1.find(n => /follow-up/i.test(n.message));
+    if (followUpNotif) {
+      console.log('✅ Follow-up notification detected, routed to:', followUpNotif.receiver?.toString() || 'admins');
+    } else {
+      console.log('⚠️  No follow-up notification generated after follow-up date change');
+    }
+
     // Test 2: Update with transferTo (should route to transferTo user)
     console.log('\n🧪 TEST 2: Update with transferTo field');
 

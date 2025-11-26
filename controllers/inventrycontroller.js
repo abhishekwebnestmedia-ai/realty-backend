@@ -31,6 +31,51 @@ const buildInventoryMeta = (record) => {
   };
 };
 
+const FOLLOWUP_DISPLAY_LOCALE = {
+  timeZone: "Asia/Kolkata",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: true,
+};
+
+const formatFollowupDisplay = (value) => {
+  if (!value) return "N/A";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return typeof value === "string" ? value : "N/A";
+  }
+  return date.toLocaleString("en-IN", FOLLOWUP_DISPLAY_LOCALE);
+};
+
+async function resolveInventoryReceiver(record) {
+  if (!record) return null;
+
+  const tryResolveByReference = async (ref) => {
+    if (!ref) return null;
+    if (mongoose.Types.ObjectId.isValid(String(ref))) {
+      return typeof ref === "string" ? new mongoose.Types.ObjectId(ref) : ref;
+    }
+    if (typeof ref === "object" && ref._id) {
+      return ref._id;
+    }
+
+    const refName = ref.toString().trim();
+    if (!refName) return null;
+    const user = await User.findOne({ name: refName }).select("_id").lean();
+    return user ? user._id : null;
+  };
+
+  const transferCandidate = record.transferTo;
+  const resolvedTransfer = await tryResolveByReference(transferCandidate);
+  if (resolvedTransfer) return resolvedTransfer;
+
+  const assignCandidate = record.assignTo;
+  return tryResolveByReference(assignCandidate);
+}
+
 exports.createInventry = async (req, res) => {
   try {
     const record = new Inventory(req.body);
@@ -177,31 +222,17 @@ exports.updateInventry = async (req, res) => {
 
         // 🔹 Notification Handling (same structure as Lead)
         try {
-          let receiverId = null;
-
-          // Priority: transferTo → assignTo
-          if (updatedRecord.transferTo) {
-            const r = await User.findOne({ name: updatedRecord.transferTo });
-            if (r) receiverId = r._id;
-          }
-
-          if (!receiverId && updatedRecord.assignTo) {
-            if (mongoose.Types.ObjectId.isValid(String(updatedRecord.assignTo))) {
-              receiverId = updatedRecord.assignTo;
-            } else {
-              const r2 = await User.findOne({ name: updatedRecord.assignTo });
-              if (r2) receiverId = r2._id;
-            }
-          }
+          const receiverId = await resolveInventoryReceiver(updatedRecord);
+          const actorName = changedBy?.name || "System";
 
           // AssignTo Notification
           if (field === "assignTo") {
-            const msg = `👤 Inventory "${oldRecord.sellerName}" was reassigned to ${newValue || "N/A"} by ${changedBy?.name || "System"}`;
+            const msg = `👤 Inventory "${oldRecord.sellerName}" was reassigned to ${newValue || "N/A"} by ${actorName}`;
             const notif = await Notification.create({
               type: "Inventory",
               itemId: id,
               message: msg,
-              changedBy: changedBy?.name || "System",
+              changedBy: actorName,
               receiver: receiverId || null,
               meta: buildInventoryMeta(updatedRecord),
             });
@@ -213,6 +244,32 @@ exports.updateInventry = async (req, res) => {
               notificationId: notif._id
             };
             console.log('🔔 Inventory assignTo notification created:', { receiverId, payload });
+            receiverId ? await emitNotification(receiverId.toString(), payload, { emitToAdmin: true }) : emitToAdmins(payload);
+          }
+
+          if (field === "followUpDate") {
+            const msg = `📅 Inventory "${oldRecord.sellerName}" follow-up updated to ${formatFollowupDisplay(newValue)} by ${actorName}`;
+            const notif = await Notification.create({
+              type: "Inventory",
+              itemId: id,
+              message: msg,
+              changedBy: actorName,
+              receiver: receiverId || null,
+              meta: {
+                ...buildInventoryMeta(updatedRecord),
+                event: "followup_change",
+                previousFollowUp: oldValue,
+                newFollowUp: newValue,
+              },
+            });
+
+            const payload = {
+              ...notif.toJSON(),
+              inventoryId: id,
+              _id: notif._id,
+              notificationId: notif._id,
+            };
+            console.log('🔔 Inventory followUpDate notification created:', { receiverId, payload });
             receiverId ? await emitNotification(receiverId.toString(), payload, { emitToAdmin: true }) : emitToAdmins(payload);
           }
 
