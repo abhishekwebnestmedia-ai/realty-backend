@@ -1,5 +1,5 @@
-
 const mongoose = require("mongoose");
+const { parseFollowupInput } = require("../utils/followupTime");
 
 const validStatuses = ["Ok", "Hot", "Thanda", "Visit"];
 
@@ -9,6 +9,7 @@ const brokerRequirementSchema = new mongoose.Schema(
     companyName: { type: String },   // ✅ NEW FIELD ADDED
     contactNumber: { type: String, required: true },
     followUpDate: { type: Date },
+    followUpUtc: { type: Date, default: null },
     status: { type: String, enum: validStatuses },
     source: { type: String },
     capturedBy: { type: String },
@@ -35,18 +36,27 @@ const brokerRequirementSchema = new mongoose.Schema(
 
         ret.createdAt = formatDate(ret.createdAt);
         ret.updatedAt = formatDate(ret.updatedAt);
-          // Keep a raw ISO value for programmatic use (edit forms, datetime-local inputs)
-          if (ret.followUpDate) {
-            try {
-              ret.followUpDateRaw = new Date(ret.followUpDate).toISOString();
-            } catch (e) {
-              ret.followUpDateRaw = null;
-            }
-          } else {
+
+        const rawFollow = ret.followUpUtc || ret.followUpDate;
+        if (rawFollow) {
+          try {
+            ret.followUpDateRaw = new Date(rawFollow).toISOString();
+          } catch (e) {
             ret.followUpDateRaw = null;
           }
+        } else {
+          ret.followUpDateRaw = null;
+        }
 
-          ret.followUpDate = formatDate(ret.followUpDate);
+        ret.followUpDate = formatDate(ret.followUpDate);
+        if (ret.followUpUtc) {
+          try {
+            ret.followUpUtc = new Date(ret.followUpUtc).toISOString();
+          } catch (e) {
+            ret.followUpUtc = null;
+          }
+        }
+
         return ret;
       },
     },
@@ -90,13 +100,27 @@ function formatStringFields(obj, seen = new WeakSet()) {
       continue;
     }
 
-    if (typeof value === "object") formatStringFields(value, seen);
+    if (typeof value === "object") {
+      if (value instanceof Date) continue;
+      formatStringFields(value, seen);
+    }
+  }
+}
+
+function normalizeFollowUp(target) {
+  if (!target) return;
+  if (!target.followUpDate) return;
+  const parsed = parseFollowupInput(target.followUpDate);
+  if (parsed && !Number.isNaN(parsed.getTime())) {
+    target.followUpDate = parsed;
+    target.followUpUtc = parsed;
   }
 }
 
 // Hooks
 brokerRequirementSchema.pre("save", function (next) {
   formatStringFields(this);
+  normalizeFollowUp(this);
   next();
 });
 
@@ -105,6 +129,7 @@ brokerRequirementSchema.pre("findOneAndUpdate", function (next) {
   if (update) {
     const target = update.$set ? update.$set : update;
     formatStringFields(target);
+    normalizeFollowUp(target);
   }
   next();
 });

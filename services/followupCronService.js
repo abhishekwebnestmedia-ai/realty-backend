@@ -13,104 +13,36 @@ const MISSED_ALERT_DELAY_MS = 5 * 60 * 1000; // notify 5 minutes after missed
 const MISSED_WINDOW_MS = 60 * 1000;
 const DUPLICATE_SUPPRESS_MS = 2 * 60 * 1000;
 const TIMEZONE = "Asia/Kolkata";
-const STRING_FORMATS = [
-  "%Y-%m-%d %H:%M:%S",
-  "%Y-%m-%d %H:%M",
-  "%Y/%m/%d %H:%M:%S",
-  "%Y/%m/%d %H:%M",
-  "%d-%m-%Y %H:%M:%S",
-  "%d-%m-%Y %H:%M",
-  "%d/%m/%Y %H:%M:%S",
-  "%d/%m/%Y %H:%M",
-  "%d/%m/%Y, %H:%M:%S",
-  "%d/%m/%Y, %H:%M",
-  "%m/%d/%Y %H:%M:%S",
-  "%m/%d/%Y %H:%M",
-];
+const LEGACY_FETCH_LIMIT = 500;
 
 const userNameCache = new Map();
 const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
 
-const buildStringParserExpr = () => {
-  let expr = { $toDate: "$$raw" };
-  for (const format of STRING_FORMATS) {
-    expr = {
-      $ifNull: [
-        {
-          $dateFromString: {
-            dateString: "$$raw",
-            format,
-            timezone: TIMEZONE,
-            onError: null,
-            onNull: null,
-          },
-        },
-        expr,
-      ],
-    };
-  }
+async function fetchLegacyFollowups(Model, {
+  fieldName,
+  windowStart,
+  windowEnd,
+  projection = {},
+}) {
+  const docs = await Model.find({
+    [fieldName]: { $exists: true, $ne: null, $ne: "" },
+    $or: [
+      { followUpUtc: { $exists: false } },
+      { followUpUtc: null },
+    ],
+  })
+    .select({ [fieldName]: 1, assignTo: 1, transferTo: 1, ...projection })
+    .limit(LEGACY_FETCH_LIMIT)
+    .lean();
 
-  return expr;
-};
-
-// 🧮 Build a $dateFromString pipeline that tolerates multiple formats
-const computeFollowupDateExpr = (fieldPath) => ({
-  $let: {
-    vars: { raw: fieldPath },
-    in: {
-      $switch: {
-        branches: [
-          { case: { $eq: [{ $type: "$$raw" }, "date"] }, then: "$$raw" },
-          { case: { $eq: [{ $type: "$$raw" }, "double"] }, then: { $toDate: "$$raw" } },
-          { case: { $eq: [{ $type: "$$raw" }, "decimal"] }, then: { $toDate: "$$raw" } },
-          { case: { $eq: [{ $type: "$$raw" }, "int"] }, then: { $toDate: "$$raw" } },
-          { case: { $eq: [{ $type: "$$raw" }, "long"] }, then: { $toDate: "$$raw" } },
-          {
-            case: { $eq: [{ $type: "$$raw" }, "string"] },
-            then: buildStringParserExpr(),
-          },
-        ],
-        default: null,
-      },
-    },
-  },
-});
-
-const buildFollowupPipeline = ({ modelField, windowStart, windowEnd, projection = {}, missingUtcField }) => {
-  const fieldPath = `$${modelField}`;
-  const pipeline = [];
-
-  if (missingUtcField) {
-    pipeline.push({
-      $match: {
-        $or: [
-          { [missingUtcField]: { $exists: false } },
-          { [missingUtcField]: null },
-        ],
-      },
-    });
-  }
-
-  pipeline.push(
-    { $match: { [modelField]: { $exists: true, $ne: null, $ne: "" } } },
-    { $addFields: { __followUpDate: computeFollowupDateExpr(fieldPath) } },
-    { $match: { __followUpDate: { $ne: null, $gte: windowStart, $lte: windowEnd } } },
-    { $addFields: { followUpDate: "$__followUpDate" } },
-    {
-      $project: {
-        _id: 1,
-        assignTo: 1,
-        transferTo: 1,
-        [modelField]: 1,
-        followUpDate: 1,
-        ...projection,
-      },
-    },
-    { $unset: "__followUpDate" }
-  );
-
-  return pipeline;
-};
+  return docs.reduce((acc, doc) => {
+    const parsed = ensureDateInstance(doc[fieldName]);
+    if (!parsed) return acc;
+    if (parsed < windowStart || parsed > windowEnd) return acc;
+    acc.push({ ...doc, __legacyDueAt: parsed });
+    return acc;
+  }, []);
+}
 
 async function fetchLeadDocs(windowStart, windowEnd) {
   const primary = await Lead.find({
@@ -119,20 +51,17 @@ async function fetchLeadDocs(windowStart, windowEnd) {
     .select("customerName contactNumber requirement remark followUp followUpUtc assignTo transferTo")
     .lean();
 
-  const legacy = await Lead.aggregate(
-    buildFollowupPipeline({
-      modelField: "followUp",
-      windowStart,
-      windowEnd,
-      projection: {
-        customerName: 1,
-        contactNumber: 1,
-        requirement: 1,
-        remark: 1,
-      },
-      missingUtcField: "followUpUtc",
-    })
-  );
+  const legacy = await fetchLegacyFollowups(Lead, {
+    fieldName: "followUp",
+    windowStart,
+    windowEnd,
+    projection: {
+      customerName: 1,
+      contactNumber: 1,
+      requirement: 1,
+      remark: 1,
+    },
+  });
 
   return [...primary, ...legacy];
 }
@@ -144,21 +73,18 @@ async function fetchInventoryDocs(windowStart, windowEnd) {
     .select("sellerName contactNumbers sector demand requirement followUpDate followUpUtc assignTo transferTo")
     .lean();
 
-  const legacy = await Inventory.aggregate(
-    buildFollowupPipeline({
-      modelField: "followUpDate",
-      windowStart,
-      windowEnd,
-      projection: {
-        sellerName: 1,
-        contactNumbers: 1,
-        sector: 1,
-        demand: 1,
-        requirement: 1,
-      },
-      missingUtcField: "followUpUtc",
-    })
-  );
+  const legacy = await fetchLegacyFollowups(Inventory, {
+    fieldName: "followUpDate",
+    windowStart,
+    windowEnd,
+    projection: {
+      sellerName: 1,
+      contactNumbers: 1,
+      sector: 1,
+      demand: 1,
+      requirement: 1,
+    },
+  });
 
   return [...primary, ...legacy];
 }
@@ -384,7 +310,9 @@ async function processLeadFollowups(windowStart, windowEnd, status) {
     const normalizationJobs = [];
 
     for (const lead of leads) {
-      const dueAt = ensureDateInstance(lead.followUpUtc || lead.followUpDate || lead.followUp);
+      const dueAt = ensureDateInstance(
+        lead.__legacyDueAt || lead.followUpUtc || lead.followUpDate || lead.followUp
+      );
       if (!dueAt) continue;
 
       if (!lead.followUpUtc) {
@@ -416,7 +344,7 @@ async function processInventoryFollowups(windowStart, windowEnd, status) {
 
     for (const inventory of inventories) {
       const dueAt = ensureDateInstance(
-        inventory.followUpUtc || inventory.followUpDate || inventory.followUp
+        inventory.__legacyDueAt || inventory.followUpUtc || inventory.followUpDate || inventory.followUp
       );
       if (!dueAt) continue;
 
@@ -448,19 +376,48 @@ async function processInventoryFollowups(windowStart, windowEnd, status) {
 
 async function processBrokerFollowups(windowStart, windowEnd, status) {
   try {
-    const brokers = await Broker.find({
-      followUpDate: { $gte: windowStart, $lte: windowEnd },
+    const primary = await Broker.find({
+      followUpUtc: { $gte: windowStart, $lte: windowEnd },
     })
-      .select("brokerName contactNumber requirement remark followUpDate assignTo transferTo")
+      .select("brokerName contactNumber requirement remark followUpDate followUpUtc assignTo transferTo")
       .lean();
 
+    const legacy = await fetchLegacyFollowups(Broker, {
+      fieldName: "followUpDate",
+      windowStart,
+      windowEnd,
+      projection: {
+        brokerName: 1,
+        contactNumber: 1,
+        requirement: 1,
+        remark: 1,
+      },
+    });
+
+    const brokers = [...primary, ...legacy];
     let count = 0;
+    const normalizationJobs = [];
+
     for (const broker of brokers) {
-      const dueAt = ensureDateInstance(broker.followUpDate);
+      const dueAt = ensureDateInstance(
+        broker.__legacyDueAt || broker.followUpUtc || broker.followUpDate
+      );
       if (!dueAt) continue;
+
+      if (!broker.followUpUtc) {
+        normalizationJobs.push(
+          persistFollowupUtc(Broker, broker, "followUpUtc", "followUpDate", dueAt)
+        );
+      }
+
       const sent = await emitFollowupNotification({ kind: "broker", doc: broker, dueAt, status });
       if (sent) count += 1;
     }
+
+    if (normalizationJobs.length) {
+      await Promise.allSettled(normalizationJobs);
+    }
+
     return count;
   } catch (err) {
     console.error(`❌ processBrokerFollowups (${status}) error:`, err);

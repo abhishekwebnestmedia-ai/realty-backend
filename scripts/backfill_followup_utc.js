@@ -2,6 +2,7 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const Lead = require('../models/leadModel');
 const Inventory = require('../models/inventryModel');
+const Broker = require('../models/broker');
 const { parseFollowupInput, formatIstDbString } = require('../utils/followupTime');
 
 const BATCH_SIZE = 500;
@@ -64,6 +65,9 @@ async function run() {
 
   const inventoryUpdated = await backfillModel(Inventory, { rawField: 'followUpDate', utcField: 'followUpUtc' });
   console.log(`✔️ Inventory updated: ${inventoryUpdated}`);
+
+  const brokerUpdated = await backfillModel(Broker, { rawField: 'followUpDate', utcField: 'followUpUtc' });
+  console.log(`✔️ Brokers updated: ${brokerUpdated}`);
 
   await mongoose.disconnect();
   console.log('🔌 Disconnected');
