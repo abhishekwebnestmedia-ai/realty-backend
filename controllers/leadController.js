@@ -247,10 +247,17 @@ exports.getLeads = async (req, res) => {
     // ✅ 2. User doesn't see Dead Leads
     // ✅ 3. User gets leads based on: transferTo → assignTo (priority)
     if (userRole !== "admin") {
-      // Get user's ObjectId for assignTo matching
-      const userObjectId = mongoose.Types.ObjectId.isValid(userId) 
-        ? new mongoose.Types.ObjectId(userId) 
-        : null;
+      // Build assignTo matching conditions
+      const assignToConditions = [];
+      
+      // Match by ObjectId
+      if (mongoose.Types.ObjectId.isValid(userId)) {
+        assignToConditions.push({ assignTo: new mongoose.Types.ObjectId(userId) });
+      }
+      
+      // Match by name or user ID string
+      assignToConditions.push({ assignTo: userName });
+      assignToConditions.push({ assignTo: userId });
 
       filter = {
         $and: [
@@ -271,15 +278,7 @@ exports.getLeads = async (req, res) => {
                       { transferTo: "" }
                     ]
                   },
-                  {
-                    $or: [
-                      // Match by ObjectId
-                      ...(userObjectId ? [{ assignTo: userObjectId }] : []),
-                      // Match by name (if assignTo is stored as string)
-                      { assignTo: userName },
-                      { assignTo: userId }
-                    ]
-                  }
+                  { $or: assignToConditions }
                 ]
               }
             ]
