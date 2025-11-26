@@ -7,11 +7,11 @@ const Notification = require("../models/notification");
 const User = require("../models/user");
 const { emitNotification, emitToAdmins } = require("../utils/socketEmitter");
 
-// 🔹 Convert JS Date → "YYYY-MM-DDTHH:mm:ss+05:30" (IST)
-function toISTISOString(date) {
+// 🔹 Convert JS Date → "YYYY-MM-DD HH:mm:ss" in IST (matches DB string format)
+function toISTDBString(date) {
   const istOffset = 5.5 * 60 * 60 * 1000;
   const ist = new Date(date.getTime() + istOffset);
-  return ist.toISOString().split(".")[0] + "+05:30";
+  return ist.toISOString().replace("T", " ").substring(0, 19);
 }
 
 // 🕒 Format date to readable IST format (DD/MM/YYYY, HH:mm AM/PM IST)
@@ -37,8 +37,8 @@ cron.schedule("* * * * *", async () => {
     const targetStart = new Date(now.getTime() - 30 * 1000);
     const targetEnd = new Date(now.getTime() + 30 * 1000);
 
-    const startStr = toISTISOString(targetStart);
-    const endStr = toISTISOString(targetEnd);
+    const startStr = toISTDBString(targetStart);
+    const endStr = toISTDBString(targetEnd);
 
     console.log(`🔍 Checking follow-ups between ${startStr} and ${endStr}`);
 
@@ -89,31 +89,35 @@ cron.schedule("* * * * *", async () => {
     }
 
     // ✅ Create notification WITH receiver
+    const dueAt = lead.followUp || null;
     const notif = await Notification.create({
       type: "Lead",
       itemId: lead._id,
       message: msg,
       receiver: receiverId || null,
       changedBy: "System",
+      meta: {
+        followupReminder: true,
+        entity: "lead",
+        followUpDueAt: dueAt,
+      },
     });
 
     console.log(`✅ Lead follow-up notification created for ${lead.customerName}`, { receiverId });
-
-    // 🕒 Convert timestamp to IST for payload
-    const istOffset = 5.5 * 60 * 60 * 1000;
-    const createdAtIST = new Date(notif.createdAt.getTime() + istOffset)
-      .toISOString()
-      .replace("T", " ")
-      .substring(0, 19);
 
     const payload = {
       type: "Lead",
       itemId: lead._id,
       message: msg,
-      createdAt: createdAtIST,
+      createdAt: notif.createdAt.toISOString(),
       _id: notif._id,
       notificationId: notif._id,
       receiver: receiverId,
+      meta: {
+        followupReminder: true,
+        entity: "lead",
+        followUpDueAt: dueAt,
+      },
     };
 
     // 🔔 Emit notification
@@ -173,6 +177,11 @@ cron.schedule("* * * * *", async () => {
           message: msg,
           receiver: receiverId || null,
           changedBy: "System",
+          meta: {
+            followupReminder: true,
+            entity: "inventory",
+            followUpDueAt: inv.followUpDate || null,
+          },
         });
 
         console.log(`✅ Inventory follow-up notification created for ${inv.sellerName}`, { receiverId });
@@ -181,10 +190,15 @@ cron.schedule("* * * * *", async () => {
           type: "Inventory",
           itemId: inv._id,
           message: msg,
-          createdAt: notif.createdAt,
+          createdAt: notif.createdAt.toISOString(),
           _id: notif._id,
           notificationId: notif._id,
           receiver: receiverId,
+          meta: {
+            followupReminder: true,
+            entity: "inventory",
+            followUpDueAt: inv.followUpDate || null,
+          },
         };
 
         if (receiverId) {
@@ -237,12 +251,18 @@ cron.schedule("* * * * *", async () => {
           console.error("❌ Error resolving broker recipient:", e);
         }
 
+        const dueAt = b.followUpDate ? b.followUpDate.toISOString() : null;
         const notif = await Notification.create({
           type: "Broker",
           itemId: b._id,
           message: msg,
           receiver: receiverId || null,
           changedBy: "System",
+          meta: {
+            followupReminder: true,
+            entity: "broker",
+            followUpDueAt: dueAt,
+          },
         });
 
         console.log(`✅ Broker follow-up notification created for ${b.brokerName}`, { receiverId });
@@ -251,10 +271,15 @@ cron.schedule("* * * * *", async () => {
           type: "Broker",
           itemId: b._id,
           message: msg,
-          createdAt: notif.createdAt,
+          createdAt: notif.createdAt.toISOString(),
           _id: notif._id,
           notificationId: notif._id,
           receiver: receiverId,
+          meta: {
+            followupReminder: true,
+            entity: "broker",
+            followUpDueAt: dueAt,
+          },
         };
 
         if (receiverId) {

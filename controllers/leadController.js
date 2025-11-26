@@ -99,7 +99,7 @@ exports.createLead = async (req, res) => {
     if (user && user._id) {
       try {
         const changedBy = req.user || {};
-        const msg = `🆕 New lead "${lead.customerName}" assigned to you by ${changedBy.name || "System"}`;
+        const msg = `🆕 New lead "${lead.customerName}" assigned  by ${changedBy.name || "System"}`;
         const notif = await Notification.create({
           type: "Lead",
           itemId: lead._id,
@@ -730,7 +730,7 @@ exports.bulkAssignLeads = async (req, res) => {
     if (result.modifiedCount > 0) {
       try {
         const changedBy = req.user || {};
-        const msg = `👥 ${result.modifiedCount} lead(s) assigned to you by ${changedBy.name || "Admin"}`;
+        const msg = `👥 ${result.modifiedCount} lead(s) assigned  by ${changedBy.name || "Admin"}`;
         const notif = await Notification.create({
           type: "Lead",
           itemId: leadIds[0], // Use first lead ID as reference

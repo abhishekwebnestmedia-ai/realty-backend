@@ -49,7 +49,7 @@ exports.createInventry = async (req, res) => {
 
         if (receiverId) {
           const changedBy = req.user || {};
-          const msg = `🆕 New inventory "${record.sellerName || 'Property'}" assigned to you by ${changedBy.name || "System"}`;
+          const msg = `🆕 New inventory "${record.sellerName || 'Property'}" assigned by ${changedBy.name || "System"}`;
           const notif = await Notification.create({
             type: "Inventory",
             itemId: record._id,
