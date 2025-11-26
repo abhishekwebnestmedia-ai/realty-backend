@@ -243,27 +243,44 @@ exports.getLeads = async (req, res) => {
 
     let filter = {};
 
-    // Admin sees all leads (including transferred)
+    // ✅ 1. Admin sees ALL leads
+    // ✅ 2. User doesn't see Dead Leads
+    // ✅ 3. User gets leads based on: transferTo → assignTo (priority)
     if (userRole !== "admin") {
+      // Get user's ObjectId for assignTo matching
+      const userObjectId = mongoose.Types.ObjectId.isValid(userId) 
+        ? new mongoose.Types.ObjectId(userId) 
+        : null;
+
       filter = {
-        status: { $ne: "Dead Lead" },  // ❌ exclude dead leads
-        $or: [
-          // Priority 1: transferTo matches user name
-          { transferTo: userName },
-          // Priority 2: assignTo matches user ID AND transferTo is empty/null/not set
+        $and: [
+          // ❌ Exclude Dead Leads for non-admin users
+          { status: { $ne: "Dead Lead" } },
+          // ✅ Show leads based on transferTo OR assignTo
           {
-            $and: [
+            $or: [
+              // Priority 1: transferTo matches user name
+              { transferTo: userName },
+              // Priority 2: assignTo matches user (by ID or name) AND transferTo is empty
               {
-                $or: [
-                  { transferTo: { $exists: false } },
-                  { transferTo: null },
-                  { transferTo: "" }
+                $and: [
+                  {
+                    $or: [
+                      { transferTo: { $exists: false } },
+                      { transferTo: null },
+                      { transferTo: "" }
+                    ]
+                  },
+                  {
+                    $or: [
+                      // Match by ObjectId
+                      ...(userObjectId ? [{ assignTo: userObjectId }] : []),
+                      // Match by name (if assignTo is stored as string)
+                      { assignTo: userName },
+                      { assignTo: userId }
+                    ]
+                  }
                 ]
-              },
-              {
-                assignTo: mongoose.isValidObjectId(userId)
-                  ? new mongoose.Types.ObjectId(userId)
-                  : userId
               }
             ]
           }
@@ -291,6 +308,8 @@ exports.getLeads = async (req, res) => {
     });
   }
 };
+
+
 
 
 
@@ -915,13 +934,25 @@ exports.createFrom99acres = async (req, res) => {
 
 exports.getUnassignedLeads = async (req, res) => {
   try {
-    // ✅ Handle only valid leads where assignTo is missing or null
+    // ✅ A lead is unassigned if BOTH assignTo AND transferTo are empty
     const unassignedLeads = await Lead.find({
-      $or: [
-        { assignTo: { $exists: false } },
-        { assignTo: null },
-        // don't directly check for empty string — instead check with $type
-        { assignTo: { $type: 10 } }, // BSON Null
+      $and: [
+        // assignTo is empty/null/doesn't exist
+        {
+          $or: [
+            { assignTo: { $exists: false } },
+            { assignTo: null },
+            { assignTo: { $type: 10 } }, // BSON Null
+          ],
+        },
+        // transferTo is empty/null/doesn't exist
+        {
+          $or: [
+            { transferTo: { $exists: false } },
+            { transferTo: null },
+            { transferTo: "" },
+          ],
+        },
       ],
     }).populate("assignTo", "name email");
 

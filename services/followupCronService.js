@@ -54,7 +54,7 @@ cron.schedule("* * * * *", async () => {
 
   for (const lead of leads) {
   // ✅ Use correct fields from Lead model
-  const msg = `🔔 Reminder: Follow up with ${lead.customerName} (${lead.contactNumber}). Requirement: ${lead.projects || lead.remark || "N/A"}.`;
+  const msg = `🔔 Reminder: Follow up with ${lead.customerName} (${lead.contactNumber}). Requirement: ${lead.requirement || lead.remark || "N/A"}.`;
 
   // 🧠 Prevent duplicate notifications within 2 minutes
   const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
@@ -67,7 +67,7 @@ cron.schedule("* * * * *", async () => {
   });
 
   if (exists) {
-    console.log(`⏩ Skipped duplicate lead notification for ${lead.clientName}`);
+    console.log(`⏩ Skipped duplicate lead notification for ${lead.customerName}`);
     continue;
   }
 
@@ -79,7 +79,7 @@ cron.schedule("* * * * *", async () => {
       message: msg,
     });
 
-    console.log(`✅ Lead notification created for ${lead.clientName}`);
+    console.log(`✅ Lead notification created for ${lead.customerName}`);
 
     // 🕒 Convert timestamp to IST for payload
     const istOffset = 5.5 * 60 * 60 * 1000;
@@ -103,11 +103,11 @@ cron.schedule("* * * * *", async () => {
         if (r) receiverId = r._id;
       }
 
-      if (!receiverId && lead.assignedTo) {
-        if (mongoose.Types.ObjectId.isValid(String(lead.assignedTo))) {
-          receiverId = lead.assignedTo;
+      if (!receiverId && lead.assignTo) {
+        if (mongoose.Types.ObjectId.isValid(String(lead.assignTo))) {
+          receiverId = lead.assignTo;
         } else {
-          const r2 = await User.findOne({ name: lead.assignedTo });
+          const r2 = await User.findOne({ name: lead.assignTo });
           if (r2) receiverId = r2._id;
         }
       }
@@ -124,7 +124,7 @@ cron.schedule("* * * * *", async () => {
     }
 
   } catch (err) {
-    console.error(`❌ Lead notification error for ${lead.clientName}:`, err);
+    console.error(`❌ Lead notification error for ${lead.customerName}:`, err);
   }
 }
 
@@ -174,11 +174,11 @@ cron.schedule("* * * * *", async () => {
             if (r) receiverId = r._id;
           }
 
-          if (!receiverId && inv.assignedTo) {
-            if (mongoose.Types.ObjectId.isValid(String(inv.assignedTo))) {
-              receiverId = inv.assignedTo;
+          if (!receiverId && inv.assignTo) {
+            if (mongoose.Types.ObjectId.isValid(String(inv.assignTo))) {
+              receiverId = inv.assignTo;
             } else {
-              const r2 = await User.findOne({ name: inv.assignedTo });
+              const r2 = await User.findOne({ name: inv.assignTo });
               if (r2) receiverId = r2._id;
             }
           }
@@ -245,11 +245,11 @@ cron.schedule("* * * * *", async () => {
             if (r) receiverId = r._id;
           }
 
-          if (!receiverId && b.assignedTo) {
-            if (mongoose.Types.ObjectId.isValid(String(b.assignedTo))) {
-              receiverId = b.assignedTo;
+          if (!receiverId && b.assignTo) {
+            if (mongoose.Types.ObjectId.isValid(String(b.assignTo))) {
+              receiverId = b.assignTo;
             } else {
-              const r2 = await User.findOne({ name: b.assignedTo });
+              const r2 = await User.findOne({ name: b.assignTo });
               if (r2) receiverId = r2._id;
             }
           }
