@@ -984,7 +984,7 @@ exports.createFrom99acres = async (req, res) => {
       source: "99acres",
       capturedBy: "99acres",
       Budget: safe(data.budget, "Not Provided"),
-      transferTo: safe(data.assignedAgent, "Unassigned"),
+      transferTo: safe(data.assignedAgent, ""),
 
       // ⛔ Ensure Follow-up remains blank
       followUp: null,
