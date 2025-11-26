@@ -425,52 +425,62 @@ async function processBrokerFollowups(windowStart, windowEnd, status) {
   }
 }
 
-cron.schedule("* * * * *", async () => {
-  try {
-    const now = new Date();
+if (process.env.FOLLOWUP_CRON_DISABLED === "true") {
+  console.log("⚙️ Follow-up cron disabled via FOLLOWUP_CRON_DISABLED flag.");
+} else {
+  cron.schedule("* * * * *", async () => {
+    try {
+      const now = new Date();
 
-    const dueStart = new Date(now.getTime() - FOLLOWUP_WINDOW_MS / 2);
-    const dueEnd = new Date(now.getTime() + FOLLOWUP_WINDOW_MS / 2);
+      const dueStart = new Date(now.getTime() - FOLLOWUP_WINDOW_MS / 2);
+      const dueEnd = new Date(now.getTime() + FOLLOWUP_WINDOW_MS / 2);
 
-    const [leadDue, inventoryDue, brokerDue] = await Promise.all([
-      processLeadFollowups(dueStart, dueEnd, "due"),
-      processInventoryFollowups(dueStart, dueEnd, "due"),
-      processBrokerFollowups(dueStart, dueEnd, "due"),
-    ]);
+      const [leadDue, inventoryDue, brokerDue] = await Promise.all([
+        processLeadFollowups(dueStart, dueEnd, "due"),
+        processInventoryFollowups(dueStart, dueEnd, "due"),
+        processBrokerFollowups(dueStart, dueEnd, "due"),
+      ]);
 
-    const missedStart = new Date(now.getTime() - MISSED_ALERT_DELAY_MS - MISSED_WINDOW_MS / 2);
-    const missedEnd = new Date(now.getTime() - MISSED_ALERT_DELAY_MS + MISSED_WINDOW_MS / 2);
+      const missedStart = new Date(now.getTime() - MISSED_ALERT_DELAY_MS - MISSED_WINDOW_MS / 2);
+      const missedEnd = new Date(now.getTime() - MISSED_ALERT_DELAY_MS + MISSED_WINDOW_MS / 2);
 
-    const [leadMissed, inventoryMissed, brokerMissed] = await Promise.all([
-      processLeadFollowups(missedStart, missedEnd, "missed"),
-      processInventoryFollowups(missedStart, missedEnd, "missed"),
-      processBrokerFollowups(missedStart, missedEnd, "missed"),
-    ]);
+      const [leadMissed, inventoryMissed, brokerMissed] = await Promise.all([
+        processLeadFollowups(missedStart, missedEnd, "missed"),
+        processInventoryFollowups(missedStart, missedEnd, "missed"),
+        processBrokerFollowups(missedStart, missedEnd, "missed"),
+      ]);
 
-    if (leadDue + inventoryDue + brokerDue > 0) {
-      console.log(
-        `✅ Follow-up reminders sent — leads: ${leadDue}, inventory: ${inventoryDue}, brokers: ${brokerDue}`
-      );
+      if (leadDue + inventoryDue + brokerDue > 0) {
+        console.log(
+          `✅ Follow-up reminders sent — leads: ${leadDue}, inventory: ${inventoryDue}, brokers: ${brokerDue}`
+        );
+      }
+
+      if (leadMissed + inventoryMissed + brokerMissed > 0) {
+        console.log(
+          `⚠️ Missed follow-up alerts sent — leads: ${leadMissed}, inventory: ${inventoryMissed}, brokers: ${brokerMissed}`
+        );
+      }
+
+      if (
+        leadDue + inventoryDue + brokerDue === 0 &&
+        leadMissed + inventoryMissed + brokerMissed === 0
+      ) {
+        console.log("⏸️ No follow-up notifications to dispatch this minute.");
+      }
+    } catch (err) {
+      console.error("🚨 followUpCronService error:", err);
     }
+  });
 
-    if (leadMissed + inventoryMissed + brokerMissed > 0) {
-      console.log(
-        `⚠️ Missed follow-up alerts sent — leads: ${leadMissed}, inventory: ${inventoryMissed}, brokers: ${brokerMissed}`
-      );
-    }
+  console.log("✅ Follow-up cron job initialized (runs every minute).");
+}
 
-    if (
-      leadDue + inventoryDue + brokerDue === 0 &&
-      leadMissed + inventoryMissed + brokerMissed === 0
-    ) {
-      console.log("⏸️ No follow-up notifications to dispatch this minute.");
-    }
-  } catch (err) {
-    console.error("🚨 followUpCronService error:", err);
-  }
-});
-
-console.log("✅ Follow-up cron job initialized (runs every minute).");
+module.exports = {
+  processLeadFollowups,
+  processInventoryFollowups,
+  processBrokerFollowups,
+};
 
 
 
