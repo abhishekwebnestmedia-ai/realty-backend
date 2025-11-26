@@ -1,5 +1,5 @@
 const cron = require("node-cron");
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 const Lead = require("../models/leadModel");
 const Inventory = require("../models/inventryModel");
 const Broker = require("../models/broker");
@@ -7,11 +7,146 @@ const Notification = require("../models/notification");
 const User = require("../models/user");
 const { emitNotification, emitToAdmins } = require("../utils/socketEmitter");
 
-// 🔹 Convert JS Date → "YYYY-MM-DD HH:mm:ss" in IST (matches DB string format)
-function toISTDBString(date) {
-  const istOffset = 5.5 * 60 * 60 * 1000;
-  const ist = new Date(date.getTime() + istOffset);
-  return ist.toISOString().replace("T", " ").substring(0, 19);
+const FOLLOWUP_WINDOW_MS = 60 * 1000; // ±30 seconds around the scheduled time
+const MISSED_ALERT_DELAY_MS = 5 * 60 * 1000; // notify 5 minutes after missed
+const MISSED_WINDOW_MS = 60 * 1000;
+const DUPLICATE_SUPPRESS_MS = 2 * 60 * 1000;
+
+const userNameCache = new Map();
+
+// 🧮 Build a $dateFromString pipeline that tolerates multiple formats
+const computeFollowupDateExpr = (fieldPath) => ({
+  $let: {
+    vars: { raw: fieldPath },
+    in: {
+      $switch: {
+        branches: [
+          { case: { $eq: [{ $type: "$$raw" }, "date"] }, then: "$$raw" },
+          { case: { $eq: [{ $type: "$$raw" }, "double"] }, then: { $toDate: "$$raw" } },
+          { case: { $eq: [{ $type: "$$raw" }, "decimal"] }, then: { $toDate: "$$raw" } },
+          { case: { $eq: [{ $type: "$$raw" }, "int"] }, then: { $toDate: "$$raw" } },
+          { case: { $eq: [{ $type: "$$raw" }, "long"] }, then: { $toDate: "$$raw" } },
+          {
+            case: { $eq: [{ $type: "$$raw" }, "string"] },
+            then: {
+              $let: {
+                vars: {
+                  exact: {
+                    $dateFromString: {
+                      dateString: "$$raw",
+                      format: "%Y-%m-%d %H:%M:%S",
+                      timezone: "Asia/Kolkata",
+                      onError: null,
+                      onNull: null,
+                    },
+                  },
+                  minute: {
+                    $dateFromString: {
+                      dateString: "$$raw",
+                      format: "%Y-%m-%d %H:%M",
+                      timezone: "Asia/Kolkata",
+                      onError: null,
+                      onNull: null,
+                    },
+                  },
+                  iso: {
+                    $dateFromString: {
+                      dateString: "$$raw",
+                      timezone: "Asia/Kolkata",
+                      onError: null,
+                      onNull: null,
+                    },
+                  },
+                },
+                in: {
+                  $ifNull: ["$$exact", { $ifNull: ["$$minute", "$$iso"] }],
+                },
+              },
+            },
+          },
+        ],
+        default: null,
+      },
+    },
+  },
+});
+
+const buildFollowupPipeline = ({ modelField, windowStart, windowEnd, projection = {} }) => {
+  const fieldPath = `$${modelField}`;
+  return [
+    { $match: { [modelField]: { $exists: true, $ne: null, $ne: "" } } },
+    { $addFields: { __followUpDate: computeFollowupDateExpr(fieldPath) } },
+    { $match: { __followUpDate: { $ne: null, $gte: windowStart, $lte: windowEnd } } },
+    {
+      $project: {
+        __followUpDate: 0,
+        _id: 1,
+        assignTo: 1,
+        transferTo: 1,
+        [modelField]: 1,
+        followUpDate: "$__followUpDate",
+        ...projection,
+      },
+    },
+  ];
+};
+
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+async function findUserIdByName(name) {
+  if (!name) return null;
+  const normalized = name.toString().trim().toLowerCase();
+  if (!normalized) return null;
+  if (userNameCache.has(normalized)) return userNameCache.get(normalized);
+
+  const user = await User.findOne({
+    name: { $regex: new RegExp(`^${escapeRegex(normalized)}$`, "i") },
+  })
+    .select("_id")
+    .lean();
+
+  const id = user ? user._id : null;
+  userNameCache.set(normalized, id);
+  return id;
+}
+
+async function resolveReceiverId(doc) {
+  try {
+    if (doc.transferTo && typeof doc.transferTo === "string") {
+      const found = await findUserIdByName(doc.transferTo);
+      if (found) return found;
+    }
+
+    const candidateKeys = ["assignTo", "assignedTo"];
+    for (const key of candidateKeys) {
+      const candidate = doc[key];
+      if (!candidate) continue;
+
+      if (candidate instanceof mongoose.Types.ObjectId) return candidate;
+      if (candidate && typeof candidate === "object" && candidate._id) return candidate._id;
+
+      const candidateStr = candidate.toString().trim();
+      if (!candidateStr) continue;
+      if (mongoose.Types.ObjectId.isValid(candidateStr)) {
+        return new mongoose.Types.ObjectId(candidateStr);
+      }
+
+      const resolved = await findUserIdByName(candidateStr);
+      if (resolved) return resolved;
+    }
+
+    return null;
+  } catch (err) {
+    console.error("❌ resolveReceiverId error:", err);
+    return null;
+  }
+}
+
+function ensureDateInstance(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 // 🕒 Format date to readable IST format (DD/MM/YYYY, HH:mm AM/PM IST)
@@ -24,278 +159,226 @@ function formatIST(date) {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    hour12: true
+    hour12: true,
   });
 }
 
-// 🕒 Runs every minute
-cron.schedule("* * * * *", async () => {
-  try {
-    const now = new Date();
+function buildMessage(kind, doc, dueAt, status) {
+  const whenText = formatIST(dueAt);
 
-    // --- 🔹 Trigger exactly at follow-up time (±30 seconds) ---
-    const targetStart = new Date(now.getTime() - 30 * 1000);
-    const targetEnd = new Date(now.getTime() + 30 * 1000);
-
-    const startStr = toISTDBString(targetStart);
-    const endStr = toISTDBString(targetEnd);
-
-    console.log(`🔍 Checking follow-ups between ${startStr} and ${endStr}`);
-
-    // ----------------- LEADS -----------------
-    const leads = await Lead.find({
-      followUp: { $gte: startStr, $lte: endStr },
-    });
-
-
-
-
-    // ----------------- INVENTORIES -----------------
-
-  for (const lead of leads) {
-  // ✅ Use correct fields from Lead model
-  const msg = `🔔 Reminder: Follow up with ${lead.customerName} (${lead.contactNumber}). Requirement: ${lead.requirement || lead.remark || "N/A"}.`;
-
-  // 🧠 Prevent duplicate notifications within 2 minutes
-  const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
-
-  const exists = await Notification.findOne({
-    type: "Lead",
-    itemId: lead._id,
-    message: msg,
-    createdAt: { $gte: twoMinutesAgo },
-  });
-
-  if (exists) {
-    console.log(`⏩ Skipped duplicate lead notification for ${lead.customerName}`);
-    continue;
+  if (kind === "lead") {
+    const name = doc.customerName || "the lead";
+    const phone = doc.contactNumber || "N/A";
+    const requirement = doc.requirement || doc.remark || "N/A";
+    if (status === "missed") {
+      return `⏰ Missed follow-up with ${name} (${phone}). Scheduled for ${whenText}. Requirement: ${requirement}.`;
+    }
+    return `🔔 Reminder: Follow up with ${name} (${phone}) at ${whenText}. Requirement: ${requirement}.`;
   }
 
-  try {
-    // 🔔 Determine recipient FIRST: transferTo (name) -> assignTo (id) -> admins
-    let receiverId = null;
-    try {
-      if (lead.transferTo) {
-        const r = await User.findOne({ name: lead.transferTo });
-        if (r) receiverId = r._id;
-      }
+  if (kind === "inventory") {
+    const name = doc.sellerName || "the seller";
+    const phone = Array.isArray(doc.contactNumbers) ? doc.contactNumbers.find(Boolean) : null;
+    const demand = doc.demand || doc.requirement || "N/A";
+    const sector = doc.sector ? `sector ${doc.sector}` : "the property";
+    if (status === "missed") {
+      return `⏰ Missed inventory follow-up with ${name} (${phone || "N/A"}). Scheduled for ${whenText}. Demand: ${demand}.`;
+    }
+    return `🔔 Reminder: Inventory follow-up with ${name} (${phone || "N/A"}) at ${whenText}. Location: ${sector}. Demand: ${demand}.`;
+  }
 
-      if (!receiverId && lead.assignTo) {
-        // assignTo is ObjectId, use directly
-        receiverId = lead.assignTo;
-      }
-    } catch (e) {
-      console.error("❌ Error resolving lead recipient:", e);
+  const name = doc.brokerName || "the broker";
+  const phone = doc.contactNumber || "N/A";
+  const requirement = doc.requirement || doc.remark || "N/A";
+  if (status === "missed") {
+    return `⏰ Missed broker follow-up with ${name} (${phone}). Scheduled for ${whenText}. Requirement: ${requirement}.`;
+  }
+  return `🔔 Reminder: Broker follow-up with ${name} (${phone}) at ${whenText}. Requirement: ${requirement}.`;
+}
+
+async function emitFollowupNotification({ kind, doc, dueAt, status }) {
+  try {
+    const typeMap = { lead: "Lead", inventory: "Inventory", broker: "Broker" };
+    const type = typeMap[kind] || "Lead";
+    const dueIso = dueAt ? dueAt.toISOString() : null;
+
+    const duplicate = await Notification.findOne({
+      type,
+      itemId: doc._id,
+      "meta.event": "followup",
+      "meta.status": status,
+      "meta.followUpDueAt": dueIso,
+      createdAt: { $gte: new Date(Date.now() - DUPLICATE_SUPPRESS_MS) },
+    }).lean();
+    if (duplicate) {
+      return false;
     }
 
-    // ✅ Create notification WITH receiver
-    const dueAt = lead.followUp || null;
+    const receiverId = await resolveReceiverId(doc);
+    const meta = {
+      followupReminder: true,
+      entity: kind,
+      followUpDueAt: dueIso,
+      status,
+      event: "followup",
+    };
+    const message = buildMessage(kind, doc, dueAt, status);
+
     const notif = await Notification.create({
-      type: "Lead",
-      itemId: lead._id,
-      message: msg,
+      type,
+      itemId: doc._id,
+      message,
       receiver: receiverId || null,
       changedBy: "System",
-      meta: {
-        followupReminder: true,
-        entity: "lead",
-        followUpDueAt: dueAt,
-      },
+      meta,
     });
 
-    console.log(`✅ Lead follow-up notification created for ${lead.customerName}`, { receiverId });
+    const entityId = doc._id && doc._id.toString ? doc._id.toString() : doc._id;
 
     const payload = {
-      type: "Lead",
-      itemId: lead._id,
-      message: msg,
-      createdAt: notif.createdAt.toISOString(),
-      _id: notif._id,
+      ...notif.toJSON(),
       notificationId: notif._id,
-      receiver: receiverId,
-      meta: {
-        followupReminder: true,
-        entity: "lead",
-        followUpDueAt: dueAt,
-      },
+      itemId: entityId,
+      meta,
     };
 
-    // 🔔 Emit notification
+    if (kind === "lead") payload.leadId = entityId;
+    if (kind === "inventory") payload.inventoryId = entityId;
+    if (kind === "broker") payload.brokerId = entityId;
+
     if (receiverId) {
       await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
     } else {
       emitToAdmins(payload);
-      console.log(`📩 Unassigned lead notification sent to admins`);
     }
 
+    return true;
   } catch (err) {
-    console.error(`❌ Lead notification error for ${lead.customerName}:`, err);
+    console.error(`❌ emitFollowupNotification (${kind}, ${status}) failed:`, err);
+    return false;
   }
 }
 
-    
-    
-    const inventories = await Inventory.find({
-      followUpDate: { $gte: startStr, $lte: endStr },
+async function processLeadFollowups(windowStart, windowEnd, status) {
+  try {
+    const pipeline = buildFollowupPipeline({
+      modelField: "followUp",
+      windowStart,
+      windowEnd,
+      projection: {
+        customerName: 1,
+        contactNumber: 1,
+        requirement: 1,
+        remark: 1,
+      },
     });
 
-    for (const inv of inventories) {
-      const istTime = formatIST(inv.followUpDate);
-      const msg = `🔔 Reminder: Follow up with ${inv.sellerName} (${inv.contactNumbers?.[0] || "N/A"}) at ${istTime} IST. Property in sector ${inv.sector || "N/A"} — Demand: ${inv.demand || "N/A"}.`;
-
-      const exists = await Notification.findOne({
-        type: "Inventory",
-        itemId: inv._id,
-        message: msg,
-        createdAt: { $gte: new Date(Date.now() - 2 * 60 * 1000) },
-      });
-
-      if (exists) {
-        console.log(`⏩ Skipped duplicate inventory notification for ${inv.sellerName}`);
-        continue;
-      }
-
-      try {
-        // 🔔 Determine receiver FIRST: transferTo -> assignTo -> admins
-        let receiverId = null;
-        try {
-          if (inv.transferTo) {
-            const r = await User.findOne({ name: inv.transferTo });
-            if (r) receiverId = r._id;
-          }
-
-          if (!receiverId && inv.assignTo) {
-            receiverId = inv.assignTo;
-          }
-        } catch (e) {
-          console.error("❌ Error resolving inventory recipient:", e);
-        }
-
-        const notif = await Notification.create({
-          type: "Inventory",
-          itemId: inv._id,
-          message: msg,
-          receiver: receiverId || null,
-          changedBy: "System",
-          meta: {
-            followupReminder: true,
-            entity: "inventory",
-            followUpDueAt: inv.followUpDate || null,
-          },
-        });
-
-        console.log(`✅ Inventory follow-up notification created for ${inv.sellerName}`, { receiverId });
-
-        const payload = {
-          type: "Inventory",
-          itemId: inv._id,
-          message: msg,
-          createdAt: notif.createdAt.toISOString(),
-          _id: notif._id,
-          notificationId: notif._id,
-          receiver: receiverId,
-          meta: {
-            followupReminder: true,
-            entity: "inventory",
-            followUpDueAt: inv.followUpDate || null,
-          },
-        };
-
-        if (receiverId) {
-          await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
-        } else {
-          emitToAdmins(payload);
-          console.log(`📩 Unassigned inventory notification sent to admins`);
-        }
-
-      } catch (err) {
-        console.error("❌ Inventory notification error:", err);
-      }
+    const leads = await Lead.aggregate(pipeline);
+    let count = 0;
+    for (const lead of leads) {
+      const dueAt = ensureDateInstance(lead.followUpDate);
+      if (!dueAt) continue;
+      const sent = await emitFollowupNotification({ kind: "lead", doc: lead, dueAt, status });
+      if (sent) count += 1;
     }
+    return count;
+  } catch (err) {
+    console.error(`❌ processLeadFollowups (${status}) error:`, err);
+    return 0;
+  }
+}
 
-    // ----------------- BROKERS -----------------
-    // Broker model stores followUpDate as a Date; query using Date range
+async function processInventoryFollowups(windowStart, windowEnd, status) {
+  try {
+    const pipeline = buildFollowupPipeline({
+      modelField: "followUpDate",
+      windowStart,
+      windowEnd,
+      projection: {
+        sellerName: 1,
+        contactNumbers: 1,
+        sector: 1,
+        demand: 1,
+        requirement: 1,
+      },
+    });
+
+    const inventories = await Inventory.aggregate(pipeline);
+    let count = 0;
+    for (const inventory of inventories) {
+      const dueAt = ensureDateInstance(inventory.followUpDate);
+      if (!dueAt) continue;
+      const sent = await emitFollowupNotification({ kind: "inventory", doc: inventory, dueAt, status });
+      if (sent) count += 1;
+    }
+    return count;
+  } catch (err) {
+    console.error(`❌ processInventoryFollowups (${status}) error:`, err);
+    return 0;
+  }
+}
+
+async function processBrokerFollowups(windowStart, windowEnd, status) {
+  try {
     const brokers = await Broker.find({
-      followUpDate: { $gte: targetStart, $lte: targetEnd },
-    });
+      followUpDate: { $gte: windowStart, $lte: windowEnd },
+    })
+      .select("brokerName contactNumber requirement remark followUpDate assignTo transferTo")
+      .lean();
 
-    for (const b of brokers) {
-      const istTime = formatIST(b.followUpDate);
-      const msg = `🔔 Reminder: Follow up with ${b.brokerName} (${b.contactNumber || 'N/A'}) at ${istTime} IST. Requirement: ${b.requirement || 'N/A'}.`;
+    let count = 0;
+    for (const broker of brokers) {
+      const dueAt = ensureDateInstance(broker.followUpDate);
+      if (!dueAt) continue;
+      const sent = await emitFollowupNotification({ kind: "broker", doc: broker, dueAt, status });
+      if (sent) count += 1;
+    }
+    return count;
+  } catch (err) {
+    console.error(`❌ processBrokerFollowups (${status}) error:`, err);
+    return 0;
+  }
+}
 
-      const exists = await Notification.findOne({
-        type: "Broker",
-        itemId: b._id,
-        message: msg,
-        createdAt: { $gte: new Date(Date.now() - 2 * 60 * 1000) },
-      });
+cron.schedule("* * * * *", async () => {
+  try {
+    const now = new Date();
 
-      if (exists) {
-        console.log(`⏩ Skipped duplicate broker notification for ${b.brokerName}`);
-        continue;
-      }
+    const dueStart = new Date(now.getTime() - FOLLOWUP_WINDOW_MS / 2);
+    const dueEnd = new Date(now.getTime() + FOLLOWUP_WINDOW_MS / 2);
 
-      try {
-        // 🔔 Determine receiver FIRST: transferTo -> assignTo -> admins
-        let receiverId = null;
-        try {
-          if (b.transferTo) {
-            const r = await User.findOne({ name: b.transferTo });
-            if (r) receiverId = r._id;
-          }
+    const [leadDue, inventoryDue, brokerDue] = await Promise.all([
+      processLeadFollowups(dueStart, dueEnd, "due"),
+      processInventoryFollowups(dueStart, dueEnd, "due"),
+      processBrokerFollowups(dueStart, dueEnd, "due"),
+    ]);
 
-          if (!receiverId && b.assignTo) {
-            receiverId = b.assignTo;
-          }
-        } catch (e) {
-          console.error("❌ Error resolving broker recipient:", e);
-        }
+    const missedStart = new Date(now.getTime() - MISSED_ALERT_DELAY_MS - MISSED_WINDOW_MS / 2);
+    const missedEnd = new Date(now.getTime() - MISSED_ALERT_DELAY_MS + MISSED_WINDOW_MS / 2);
 
-        const dueAt = b.followUpDate ? b.followUpDate.toISOString() : null;
-        const notif = await Notification.create({
-          type: "Broker",
-          itemId: b._id,
-          message: msg,
-          receiver: receiverId || null,
-          changedBy: "System",
-          meta: {
-            followupReminder: true,
-            entity: "broker",
-            followUpDueAt: dueAt,
-          },
-        });
+    const [leadMissed, inventoryMissed, brokerMissed] = await Promise.all([
+      processLeadFollowups(missedStart, missedEnd, "missed"),
+      processInventoryFollowups(missedStart, missedEnd, "missed"),
+      processBrokerFollowups(missedStart, missedEnd, "missed"),
+    ]);
 
-        console.log(`✅ Broker follow-up notification created for ${b.brokerName}`, { receiverId });
-
-        const payload = {
-          type: "Broker",
-          itemId: b._id,
-          message: msg,
-          createdAt: notif.createdAt.toISOString(),
-          _id: notif._id,
-          notificationId: notif._id,
-          receiver: receiverId,
-          meta: {
-            followupReminder: true,
-            entity: "broker",
-            followUpDueAt: dueAt,
-          },
-        };
-
-        if (receiverId) {
-          await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
-        } else {
-          emitToAdmins(payload);
-          console.log(`📩 Unassigned broker notification sent to admins`);
-        }
-
-      } catch (err) {
-        console.error("❌ Broker notification error:", err);
-      }
+    if (leadDue + inventoryDue + brokerDue > 0) {
+      console.log(
+        `✅ Follow-up reminders sent — leads: ${leadDue}, inventory: ${inventoryDue}, brokers: ${brokerDue}`
+      );
     }
 
-    if (!leads.length && !inventories.length) {
-      console.log("⏸️ No follow-ups this minute.");
+    if (leadMissed + inventoryMissed + brokerMissed > 0) {
+      console.log(
+        `⚠️ Missed follow-up alerts sent — leads: ${leadMissed}, inventory: ${inventoryMissed}, brokers: ${brokerMissed}`
+      );
+    }
+
+    if (
+      leadDue + inventoryDue + brokerDue === 0 &&
+      leadMissed + inventoryMissed + brokerMissed === 0
+    ) {
+      console.log("⏸️ No follow-up notifications to dispatch this minute.");
     }
   } catch (err) {
     console.error("🚨 followUpCronService error:", err);
