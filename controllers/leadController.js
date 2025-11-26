@@ -524,13 +524,20 @@ exports.updateLead = async (req, res) => {
 
           // 🔔 Notification for followUp change
           if (field === "followUp") {
-            const msg = `📅 Lead "${oldLead.customerName}" follow-up date updated by ${changedBy?.name || "System"}`;
+            const now = new Date().toISOString();
+            const msg = `📅 Lead "${oldLead.customerName}" follow-up date updated by ${changedBy?.name || "System"} at ${now}`;
             const notif = await Notification.create({
               type: "Lead",
               itemId: id,
               message: msg,
               changedBy: changedBy?.name || "System",
               receiver: receiverId || null,
+              meta: {
+                event: "followup_change",
+                entity: "lead",
+                oldValue,
+                newValue,
+              },
             });
 
             const payload = { 
