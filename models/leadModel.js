@@ -85,7 +85,7 @@ const leadSchema = new mongoose.Schema(
 
     capturedBy: { type: String },
     assignTo: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-    transferTo: { type: String },
+    transferTo: { type: String,default: null },
     source: { type: String },
     Budget: { type: String },
   },

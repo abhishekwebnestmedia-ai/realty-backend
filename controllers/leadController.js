@@ -976,7 +976,7 @@ exports.createFrom99acres = async (req, res) => {
       contactNumber: safe(data.contactNumber || data.phone, "0000000000"),
       email: safe(data.email, "unknown@example.com"),
       status: safe(data.status, "Not Connected"),
-      leadType: safe(data.leadType, "Buyer"),
+      leadType: safe(data.leadType, " "),
 
       requirement: safe(
         data.requirement || data.project || data.propertyType,

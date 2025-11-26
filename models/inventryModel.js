@@ -38,7 +38,7 @@ const inventorySchema = new mongoose.Schema(
     },
     capturedBy: { type: String },
     assignTo: { type: String },
-    transferTo: { type: String },
+    transferTo: { type: String , default: null },
     followUpDate: {
       type: String,
       default: getISTDateTime,
@@ -195,3 +195,5 @@ inventorySchema.methods.toJSON = function () {
 inventorySchema.index({ followUpUtc: 1 });
 
 module.exports = mongoose.model('Inventory', inventorySchema);
+
+
