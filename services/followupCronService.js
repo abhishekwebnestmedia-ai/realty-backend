@@ -72,14 +72,32 @@ cron.schedule("* * * * *", async () => {
   }
 
   try {
-    // ✅ Create notification
+    // 🔔 Determine recipient FIRST: transferTo (name) -> assignTo (id) -> admins
+    let receiverId = null;
+    try {
+      if (lead.transferTo) {
+        const r = await User.findOne({ name: lead.transferTo });
+        if (r) receiverId = r._id;
+      }
+
+      if (!receiverId && lead.assignTo) {
+        // assignTo is ObjectId, use directly
+        receiverId = lead.assignTo;
+      }
+    } catch (e) {
+      console.error("❌ Error resolving lead recipient:", e);
+    }
+
+    // ✅ Create notification WITH receiver
     const notif = await Notification.create({
       type: "Lead",
       itemId: lead._id,
       message: msg,
+      receiver: receiverId || null,
+      changedBy: "System",
     });
 
-    console.log(`✅ Lead notification created for ${lead.customerName}`);
+    console.log(`✅ Lead follow-up notification created for ${lead.customerName}`, { receiverId });
 
     // 🕒 Convert timestamp to IST for payload
     const istOffset = 5.5 * 60 * 60 * 1000;
@@ -93,34 +111,17 @@ cron.schedule("* * * * *", async () => {
       itemId: lead._id,
       message: msg,
       createdAt: createdAtIST,
+      _id: notif._id,
+      notificationId: notif._id,
+      receiver: receiverId,
     };
 
-    // 🔔 Determine recipient: transferTo (name) -> assignTo (id or name) -> admins
-    try {
-      let receiverId = null;
-      if (lead.transferTo) {
-        const r = await User.findOne({ name: lead.transferTo });
-        if (r) receiverId = r._id;
-      }
-
-      if (!receiverId && lead.assignTo) {
-        if (mongoose.Types.ObjectId.isValid(String(lead.assignTo))) {
-          receiverId = lead.assignTo;
-        } else {
-          const r2 = await User.findOne({ name: lead.assignTo });
-          if (r2) receiverId = r2._id;
-        }
-      }
-
-      if (receiverId) {
-        await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
-      } else {
-        emitToAdmins(payload);
-        console.log(`📩 Unassigned lead notification sent to admins`);
-      }
-    } catch (e) {
-      console.error("❌ Error resolving lead recipient:", e);
+    // 🔔 Emit notification
+    if (receiverId) {
+      await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
+    } else {
       emitToAdmins(payload);
+      console.log(`📩 Unassigned lead notification sent to admins`);
     }
 
   } catch (err) {
@@ -151,47 +152,46 @@ cron.schedule("* * * * *", async () => {
       }
 
       try {
-        const notif = await Notification.create({
-          type: "Inventory",
-          itemId: inv._id,
-          message: msg,
-        });
-
-        console.log(`✅ Inventory notification created for ${inv.sellerName}`);
-
-        const payload = {
-          type: "Inventory",
-          itemId: inv._id,
-          message: msg,
-          createdAt: notif.createdAt,
-        };
-
-        // Determine receiver for inventory: transferTo -> assignTo -> admins
+        // 🔔 Determine receiver FIRST: transferTo -> assignTo -> admins
+        let receiverId = null;
         try {
-          let receiverId = null;
           if (inv.transferTo) {
             const r = await User.findOne({ name: inv.transferTo });
             if (r) receiverId = r._id;
           }
 
           if (!receiverId && inv.assignTo) {
-            if (mongoose.Types.ObjectId.isValid(String(inv.assignTo))) {
-              receiverId = inv.assignTo;
-            } else {
-              const r2 = await User.findOne({ name: inv.assignTo });
-              if (r2) receiverId = r2._id;
-            }
-          }
-
-          if (receiverId) {
-            await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
-          } else {
-            emitToAdmins(payload);
-            console.log(`📩 Unassigned inventory notification sent to admins`);
+            receiverId = inv.assignTo;
           }
         } catch (e) {
           console.error("❌ Error resolving inventory recipient:", e);
+        }
+
+        const notif = await Notification.create({
+          type: "Inventory",
+          itemId: inv._id,
+          message: msg,
+          receiver: receiverId || null,
+          changedBy: "System",
+        });
+
+        console.log(`✅ Inventory follow-up notification created for ${inv.sellerName}`, { receiverId });
+
+        const payload = {
+          type: "Inventory",
+          itemId: inv._id,
+          message: msg,
+          createdAt: notif.createdAt,
+          _id: notif._id,
+          notificationId: notif._id,
+          receiver: receiverId,
+        };
+
+        if (receiverId) {
+          await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
+        } else {
           emitToAdmins(payload);
+          console.log(`📩 Unassigned inventory notification sent to admins`);
         }
 
       } catch (err) {
@@ -222,47 +222,46 @@ cron.schedule("* * * * *", async () => {
       }
 
       try {
-        const notif = await Notification.create({
-          type: "Broker",
-          itemId: b._id,
-          message: msg,
-        });
-
-        console.log(`✅ Broker notification created for ${b.brokerName}`);
-
-        const payload = {
-          type: "Broker",
-          itemId: b._id,
-          message: msg,
-          createdAt: notif.createdAt,
-        };
-
-        // Determine receiver for broker: transferTo -> assignTo -> admins
+        // 🔔 Determine receiver FIRST: transferTo -> assignTo -> admins
+        let receiverId = null;
         try {
-          let receiverId = null;
           if (b.transferTo) {
             const r = await User.findOne({ name: b.transferTo });
             if (r) receiverId = r._id;
           }
 
           if (!receiverId && b.assignTo) {
-            if (mongoose.Types.ObjectId.isValid(String(b.assignTo))) {
-              receiverId = b.assignTo;
-            } else {
-              const r2 = await User.findOne({ name: b.assignTo });
-              if (r2) receiverId = r2._id;
-            }
-          }
-
-          if (receiverId) {
-            await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
-          } else {
-            emitToAdmins(payload);
-            console.log(`📩 Unassigned broker notification sent to admins`);
+            receiverId = b.assignTo;
           }
         } catch (e) {
           console.error("❌ Error resolving broker recipient:", e);
+        }
+
+        const notif = await Notification.create({
+          type: "Broker",
+          itemId: b._id,
+          message: msg,
+          receiver: receiverId || null,
+          changedBy: "System",
+        });
+
+        console.log(`✅ Broker follow-up notification created for ${b.brokerName}`, { receiverId });
+
+        const payload = {
+          type: "Broker",
+          itemId: b._id,
+          message: msg,
+          createdAt: notif.createdAt,
+          _id: notif._id,
+          notificationId: notif._id,
+          receiver: receiverId,
+        };
+
+        if (receiverId) {
+          await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
+        } else {
           emitToAdmins(payload);
+          console.log(`📩 Unassigned broker notification sent to admins`);
         }
 
       } catch (err) {

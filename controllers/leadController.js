@@ -434,7 +434,7 @@ exports.updateLead = async (req, res) => {
 
         // 🔹 NEW functionality — Create notifications (safely)
         try {
-          // Resolve receiver: prefer transferTo (name) -> assignTo (id or name)
+          // Resolve receiver: prefer transferTo (name) -> assignTo (id)
           let receiverId = null;
           if (updatedLead.transferTo) {
             const r = await User.findOne({ name: updatedLead.transferTo });
@@ -442,13 +442,8 @@ exports.updateLead = async (req, res) => {
           }
 
           if (!receiverId && updatedLead.assignTo) {
-            // assignTo may be an ObjectId or a string name
-            if (mongoose.Types.ObjectId.isValid(String(updatedLead.assignTo))) {
-              receiverId = updatedLead.assignTo;
-            } else {
-              const r2 = await User.findOne({ name: updatedLead.assignTo });
-              if (r2) receiverId = r2._id;
-            }
+            // assignTo is populated, so it's an object with _id
+            receiverId = updatedLead.assignTo._id || updatedLead.assignTo;
           }
 
           // 🔔 Notification for assignTo change
@@ -730,6 +725,32 @@ exports.bulkAssignLeads = async (req, res) => {
       { _id: { $in: leadIds } },
       { $set: { assignTo: user._id } }
     );
+
+    // 🔔 Send notification for bulk assignment
+    if (result.modifiedCount > 0) {
+      try {
+        const changedBy = req.user || {};
+        const msg = `👥 ${result.modifiedCount} lead(s) assigned to you by ${changedBy.name || "Admin"}`;
+        const notif = await Notification.create({
+          type: "Lead",
+          itemId: leadIds[0], // Use first lead ID as reference
+          message: msg,
+          changedBy: changedBy.name || "Admin",
+          receiver: user._id,
+        });
+
+        const payload = {
+          ...notif.toJSON(),
+          leadId: leadIds[0],
+          _id: notif._id,
+          notificationId: notif._id,
+        };
+        console.log('🔔 Bulk assign notification created:', { receiverId: user._id, count: result.modifiedCount });
+        await emitNotification(user._id.toString(), payload, { emitToAdmin: true });
+      } catch (notifErr) {
+        console.warn("⚠️ Notification creation failed (bulk assign):", notifErr.message);
+      }
+    }
 
     res.json({
       success: true,
