@@ -12,7 +12,7 @@ const brokerRequirementSchema = new mongoose.Schema(
     followUpUtc: { type: Date, default: null },
     status: { type: String, enum: validStatuses },
     source: { type: String },
-    capturedBy: { type: String },
+  
     requirement: { type: String },
     remark: { type: String },
   },

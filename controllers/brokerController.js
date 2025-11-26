@@ -1,5 +1,3 @@
-
-
 const mongoose = require("mongoose");
 const BrokerRequirement = require("../models/broker");
 const Notification = require("../models/notification");
@@ -19,13 +17,11 @@ const FOLLOWUP_DISPLAY_LOCALE = {
 const formatFollowupDisplay = (value) => {
   if (!value) return "N/A";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return typeof value === "string" ? value : "N/A";
-  }
+  if (isNaN(date.getTime())) return typeof value === "string" ? value : "N/A";
   return date.toLocaleString("en-IN", FOLLOWUP_DISPLAY_LOCALE);
 };
 
-const escapeRegex = (value = "") => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRegex = (val = "") => val.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const buildBrokerMeta = (record) => {
   if (!record) return {};
@@ -34,7 +30,6 @@ const buildBrokerMeta = (record) => {
     brokerName: record.brokerName,
     companyName: record.companyName,
     status: record.status,
-    capturedBy: record.capturedBy,
     requirement: record.requirement,
     contactNumber: record.contactNumber,
     followUpDate: record.followUpDate,
@@ -42,25 +37,24 @@ const buildBrokerMeta = (record) => {
   };
 };
 
+// Resolve notification receiver
 async function resolveBrokerReceiver(record) {
   if (!record) return null;
 
-  const tryResolve = async (candidate) => {
-    if (!candidate) return null;
+  const tryResolve = async (value) => {
+    if (!value) return null;
 
-    if (mongoose.Types.ObjectId.isValid(String(candidate))) {
-      return typeof candidate === "string" ? new mongoose.Types.ObjectId(candidate) : candidate;
+    // if value is ObjectId or string ObjectId
+    if (mongoose.Types.ObjectId.isValid(String(value))) {
+      return typeof value === "string" ? new mongoose.Types.ObjectId(value) : value;
     }
 
-    if (typeof candidate === "object" && candidate._id) {
-      return candidate._id;
-    }
+    // if it's an object containing a user ref
+    if (typeof value === "object" && value._id) return value._id;
 
-    const name = candidate.toString().trim();
-    if (!name) return null;
-
+    // Treat as name match
     const user = await User.findOne({
-      name: { $regex: new RegExp(`^${escapeRegex(name)}$`, "i") },
+      name: { $regex: new RegExp(`^${escapeRegex(value.toString().trim())}$`, "i") },
     })
       .select("_id")
       .lean();
@@ -74,170 +68,152 @@ async function resolveBrokerReceiver(record) {
   const assignReceiver = await tryResolve(record.assignTo);
   if (assignReceiver) return assignReceiver;
 
-  return tryResolve(record.capturedBy);
+  return null; // No capturedBy fallback anymore
 }
 
-function ensureCapturedBy(target, user) {
-  if (!target) return;
-  const hasValue = typeof target.capturedBy === "string" && target.capturedBy.trim().length > 0;
-  if (hasValue) {
-    target.capturedBy = target.capturedBy.trim();
-    return;
-  }
-
-
-// Create Single Requirement
+/* ===========================
+    CREATE REQUIREMENT
+=========================== */
 exports.createRequirement = async (req, res) => {
   try {
-    // Normalize followUpDate if provided (accepts ISO or datetime-local)
     if (req.body.followUpDate) {
       const d = new Date(req.body.followUpDate);
-      if (!isNaN(d.getTime())) req.body.followUpDate = d;
-      else delete req.body.followUpDate;
+      req.body.followUpDate = isNaN(d.getTime()) ? undefined : d;
     }
 
-    ensureCapturedBy(req.body, req.user);
+    const doc = new BrokerRequirement(req.body);
+    await doc.save();
 
-    const newRequirement = new BrokerRequirement(req.body);
-    await newRequirement.save();
-    res.status(201).json(newRequirement);
+    res.status(201).json(doc);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 };
 
-// Get All
+/* ===========================
+    GET ALL REQUIREMENTS
+=========================== */
 exports.getAllRequirements = async (req, res) => {
   try {
-    const requirements = await BrokerRequirement.find().sort({ createdAt: -1 });
-    res.json(requirements);
+    const data = await BrokerRequirement.find().sort({ createdAt: -1 });
+    res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-// Get by ID
+/* ===========================
+    GET SINGLE REQUIREMENT
+=========================== */
 exports.getRequirementById = async (req, res) => {
   try {
-    const requirement = await BrokerRequirement.findById(req.params.id);
-    if (!requirement) return res.status(404).json({ error: "Requirement not found" });
-    res.json(requirement);
+    const doc = await BrokerRequirement.findById(req.params.id);
+    if (!doc) return res.status(404).json({ error: "Requirement not found" });
+    res.json(doc);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-// Update
+/* ===========================
+    UPDATE REQUIREMENT
+=========================== */
 exports.updateRequirement = async (req, res) => {
   try {
     const { id } = req.params;
-    const updatePayload = { ...req.body };
-    const followUpFieldProvided = Object.prototype.hasOwnProperty.call(req.body, "followUpDate");
+    const updateData = { ...req.body };
+    const followUpProvided = Object.prototype.hasOwnProperty.call(req.body, "followUpDate");
 
-    if (updatePayload.followUpDate) {
-      const d = new Date(updatePayload.followUpDate);
-      if (!isNaN(d.getTime())) updatePayload.followUpDate = d;
-      else delete updatePayload.followUpDate;
-    } else if (followUpFieldProvided) {
-      updatePayload.followUpDate = null;
-      updatePayload.followUpUtc = null;
+    if (followUpProvided) {
+      if (updateData.followUpDate) {
+        const d = new Date(updateData.followUpDate);
+        updateData.followUpDate = isNaN(d.getTime()) ? null : d;
+      } else {
+        updateData.followUpDate = null;
+        updateData.followUpUtc = null;
+      }
     }
 
-    ensureCapturedBy(updatePayload, req.user);
+    const oldData = await BrokerRequirement.findById(id);
+    if (!oldData) return res.status(404).json({ error: "Requirement not found" });
 
-    const oldRequirement = await BrokerRequirement.findById(id);
-    if (!oldRequirement) return res.status(404).json({ error: "Requirement not found" });
-
-    const updatedRequirement = await BrokerRequirement.findByIdAndUpdate(id, updatePayload, {
+    const updated = await BrokerRequirement.findByIdAndUpdate(id, updateData, {
       new: true,
       runValidators: true,
     });
-    if (!updatedRequirement) return res.status(404).json({ error: "Requirement not found" });
 
-    const prevTimestamp = oldRequirement.followUpDate
-      ? new Date(oldRequirement.followUpDate).getTime()
-      : null;
-    const newTimestamp = updatedRequirement.followUpDate
-      ? new Date(updatedRequirement.followUpDate).getTime()
-      : null;
-    const followUpChanged = followUpFieldProvided && prevTimestamp !== newTimestamp;
+    // Detect follow-up date change
+    const prev = oldData.followUpDate ? new Date(oldData.followUpDate).getTime() : null;
+    const now = updated.followUpDate ? new Date(updated.followUpDate).getTime() : null;
 
-    if (followUpChanged) {
+    if (followUpProvided && prev !== now) {
       try {
         const actorName = req.user?.name || "System";
-        const receiverId = await resolveBrokerReceiver(updatedRequirement);
-        const message = `📅 Broker "${oldRequirement.brokerName || "Requirement"}" follow-up updated to ${formatFollowupDisplay(updatedRequirement.followUpDate)} by ${actorName}`;
+        const receiverId = await resolveBrokerReceiver(updated);
+
         const notif = await Notification.create({
           type: "Broker",
           itemId: id,
-          message,
           changedBy: actorName,
           receiver: receiverId || null,
+          message: `📅 Broker "${oldData.brokerName}" follow-up updated to ${formatFollowupDisplay(
+            updated.followUpDate
+          )} by ${actorName}`,
           meta: {
-            ...buildBrokerMeta(updatedRequirement),
-            event: "followup_change",
-            previousFollowUp: oldRequirement.followUpDate
-              ? new Date(oldRequirement.followUpDate).toISOString()
-              : null,
-            newFollowUp: updatedRequirement.followUpDate
-              ? new Date(updatedRequirement.followUpDate).toISOString()
-              : null,
+            ...buildBrokerMeta(updated),
+            previousFollowUp: oldData.followUpDate || null,
+            newFollowUp: updated.followUpDate || null,
           },
         });
 
         const payload = {
-          ...notif.toJSON(),
+          ...notif.toObject(),
           brokerId: id,
-          _id: notif._id,
           notificationId: notif._id,
         };
-        console.log("🔔 Broker followUpDate notification created:", { receiverId, payload });
-        if (receiverId) {
-          await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
-        } else {
-          emitToAdmins(payload);
-        }
-      } catch (notifErr) {
-        console.warn("⚠️ Broker follow-up notification failed:", notifErr.message);
+
+        receiverId ? await emitNotification(receiverId.toString(), payload, { emitToAdmin: true }) : emitToAdmins(payload);
+      } catch (e) {
+        console.warn("⚠️ Notification Error:", e.message);
       }
     }
 
-    res.json(updatedRequirement);
+    res.json(updated);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 };
 
-// Delete
+/* ===========================
+    DELETE REQUIREMENT
+=========================== */
 exports.deleteRequirement = async (req, res) => {
   try {
-    const deletedRequirement = await BrokerRequirement.findByIdAndDelete(req.params.id);
-    if (!deletedRequirement) return res.status(404).json({ error: "Requirement not found" });
+    const deleted = await BrokerRequirement.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ error: "Requirement not found" });
+
     res.json({ message: "Requirement deleted successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-// Bulk Upload
+/* ===========================
+    BULK UPLOAD
+=========================== */
 exports.bulkUpload = async (req, res) => {
   try {
-    const data = req.body;
+    if (!Array.isArray(req.body) || req.body.length === 0)
+      return res.status(400).json({ error: "Send an array of broker entries" });
 
-    if (!Array.isArray(data) || data.length === 0) {
-      return res.status(400).json({ error: "Please send an array of broker requirements" });
-    }
-
-    const brokers = await BrokerRequirement.insertMany(data, { ordered: false });
+    const result = await BrokerRequirement.insertMany(req.body, { ordered: false });
 
     res.status(201).json({
       message: "Bulk upload successful",
-      count: brokers.length,
-      brokers
+      count: result.length,
+      brokers: result,
     });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 };
-
-
