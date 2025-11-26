@@ -2,6 +2,7 @@
 
 
 const mongoose = require('mongoose');
+const { parseFollowupInput, formatIstDbString } = require('../utils/followupTime');
 
 // ✅ Valid Enums
 const validInventoryTypes = ["Sales", "Rent"];
@@ -41,6 +42,10 @@ const inventorySchema = new mongoose.Schema(
     followUpDate: {
       type: String,
       default: getISTDateTime,
+    },
+    followUpUtc: {
+      type: Date,
+      default: null,
     },
     source: { type: [String] },
     loanStatus: { type: String },
@@ -128,6 +133,14 @@ function formatStringFields(obj, seen = new WeakSet()) {
 inventorySchema.pre('save', function (next) {
   if (!this.date) this.date = getISTDateTime();
   if (!this.followUpDate) this.followUpDate = getISTDateTime();
+
+  const rawFollow = this.followUpDate || this.followUpUtc || getISTDateTime();
+  const parsed = parseFollowupInput(rawFollow);
+  const normalized = formatIstDbString(parsed) || rawFollow;
+  if (normalized) this.followUpDate = normalized;
+  if (parsed && !Number.isNaN(parsed.getTime())) {
+    this.followUpUtc = parsed;
+  }
   formatStringFields(this);
   next();
 });
@@ -140,6 +153,17 @@ inventorySchema.pre('findOneAndUpdate', function (next) {
   if (update) {
     const target = update.$set ? update.$set : update;
     formatStringFields(target);
+    if (target.followUpDate) {
+      const parsed = parseFollowupInput(target.followUpDate);
+      const normalized = formatIstDbString(parsed) || target.followUpDate;
+      if (normalized) target.followUpDate = normalized;
+      if (parsed && !Number.isNaN(parsed.getTime())) {
+        target.followUpUtc = parsed;
+      }
+    } else if (target.followUpUtc && !target.followUpDate) {
+      const normalized = formatIstDbString(target.followUpUtc);
+      if (normalized) target.followUpDate = normalized;
+    }
   }
   next();
 });
@@ -161,8 +185,13 @@ inventorySchema.methods.toJSON = function () {
 
   obj.createdAt = formatIST(obj.createdAt);
   obj.updatedAt = formatIST(obj.updatedAt);
+  if (obj.followUpUtc) {
+    obj.followUpUtc = new Date(obj.followUpUtc).toISOString();
+  }
 
   return obj;
 };
+
+inventorySchema.index({ followUpUtc: 1 });
 
 module.exports = mongoose.model('Inventory', inventorySchema);

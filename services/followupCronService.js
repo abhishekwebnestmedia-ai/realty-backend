@@ -6,14 +6,54 @@ const Broker = require("../models/broker");
 const Notification = require("../models/notification");
 const User = require("../models/user");
 const { emitNotification, emitToAdmins } = require("../utils/socketEmitter");
+const { parseFollowupInput, formatIstDbString } = require("../utils/followupTime");
 
 const FOLLOWUP_WINDOW_MS = 60 * 1000; // ±30 seconds around the scheduled time
 const MISSED_ALERT_DELAY_MS = 5 * 60 * 1000; // notify 5 minutes after missed
 const MISSED_WINDOW_MS = 60 * 1000;
 const DUPLICATE_SUPPRESS_MS = 2 * 60 * 1000;
+const TIMEZONE = "Asia/Kolkata";
+const STRING_FORMATS = [
+  "%Y-%m-%d %H:%M:%S",
+  "%Y-%m-%d %H:%M",
+  "%Y/%m/%d %H:%M:%S",
+  "%Y/%m/%d %H:%M",
+  "%d-%m-%Y %H:%M:%S",
+  "%d-%m-%Y %H:%M",
+  "%d/%m/%Y %H:%M:%S",
+  "%d/%m/%Y %H:%M",
+  "%d/%m/%Y, %H:%M:%S",
+  "%d/%m/%Y, %H:%M",
+  "%d/%m/%Y, %I:%M:%S %p",
+  "%d/%m/%Y, %I:%M %p",
+  "%m/%d/%Y, %I:%M:%S %p",
+  "%m/%d/%Y, %I:%M %p",
+];
 
 const userNameCache = new Map();
 const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
+
+const buildStringParserExpr = () => {
+  let expr = { $toDate: "$$raw" };
+  for (const format of STRING_FORMATS) {
+    expr = {
+      $ifNull: [
+        {
+          $dateFromString: {
+            dateString: "$$raw",
+            format,
+            timezone: TIMEZONE,
+            onError: null,
+            onNull: null,
+          },
+        },
+        expr,
+      ],
+    };
+  }
+
+  return expr;
+};
 
 // 🧮 Build a $dateFromString pipeline that tolerates multiple formats
 const computeFollowupDateExpr = (fieldPath) => ({
@@ -29,41 +69,7 @@ const computeFollowupDateExpr = (fieldPath) => ({
           { case: { $eq: [{ $type: "$$raw" }, "long"] }, then: { $toDate: "$$raw" } },
           {
             case: { $eq: [{ $type: "$$raw" }, "string"] },
-            then: {
-              $let: {
-                vars: {
-                  exact: {
-                    $dateFromString: {
-                      dateString: "$$raw",
-                      format: "%Y-%m-%d %H:%M:%S",
-                      timezone: "Asia/Kolkata",
-                      onError: null,
-                      onNull: null,
-                    },
-                  },
-                  minute: {
-                    $dateFromString: {
-                      dateString: "$$raw",
-                      format: "%Y-%m-%d %H:%M",
-                      timezone: "Asia/Kolkata",
-                      onError: null,
-                      onNull: null,
-                    },
-                  },
-                  iso: {
-                    $dateFromString: {
-                      dateString: "$$raw",
-                      timezone: "Asia/Kolkata",
-                      onError: null,
-                      onNull: null,
-                    },
-                  },
-                },
-                in: {
-                  $ifNull: ["$$exact", { $ifNull: ["$$minute", "$$iso"] }],
-                },
-              },
-            },
+            then: buildStringParserExpr(),
           },
         ],
         default: null,
@@ -72,9 +78,22 @@ const computeFollowupDateExpr = (fieldPath) => ({
   },
 });
 
-const buildFollowupPipeline = ({ modelField, windowStart, windowEnd, projection = {} }) => {
+const buildFollowupPipeline = ({ modelField, windowStart, windowEnd, projection = {}, missingUtcField }) => {
   const fieldPath = `$${modelField}`;
-  return [
+  const pipeline = [];
+
+  if (missingUtcField) {
+    pipeline.push({
+      $match: {
+        $or: [
+          { [missingUtcField]: { $exists: false } },
+          { [missingUtcField]: null },
+        ],
+      },
+    });
+  }
+
+  pipeline.push(
     { $match: { [modelField]: { $exists: true, $ne: null, $ne: "" } } },
     { $addFields: { __followUpDate: computeFollowupDateExpr(fieldPath) } },
     { $match: { __followUpDate: { $ne: null, $gte: windowStart, $lte: windowEnd } } },
@@ -89,9 +108,62 @@ const buildFollowupPipeline = ({ modelField, windowStart, windowEnd, projection 
         ...projection,
       },
     },
-    { $unset: "__followUpDate" },
-  ];
+    { $unset: "__followUpDate" }
+  );
+
+  return pipeline;
 };
+
+async function fetchLeadDocs(windowStart, windowEnd) {
+  const primary = await Lead.find({
+    followUpUtc: { $gte: windowStart, $lte: windowEnd },
+  })
+    .select("customerName contactNumber requirement remark followUp followUpUtc assignTo transferTo")
+    .lean();
+
+  const legacy = await Lead.aggregate(
+    buildFollowupPipeline({
+      modelField: "followUp",
+      windowStart,
+      windowEnd,
+      projection: {
+        customerName: 1,
+        contactNumber: 1,
+        requirement: 1,
+        remark: 1,
+      },
+      missingUtcField: "followUpUtc",
+    })
+  );
+
+  return [...primary, ...legacy];
+}
+
+async function fetchInventoryDocs(windowStart, windowEnd) {
+  const primary = await Inventory.find({
+    followUpUtc: { $gte: windowStart, $lte: windowEnd },
+  })
+    .select("sellerName contactNumbers sector demand requirement followUpDate followUpUtc assignTo transferTo")
+    .lean();
+
+  const legacy = await Inventory.aggregate(
+    buildFollowupPipeline({
+      modelField: "followUpDate",
+      windowStart,
+      windowEnd,
+      projection: {
+        sellerName: 1,
+        contactNumbers: 1,
+        sector: 1,
+        demand: 1,
+        requirement: 1,
+      },
+      missingUtcField: "followUpUtc",
+    })
+  );
+
+  return [...primary, ...legacy];
+}
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -163,9 +235,38 @@ async function resolveReceiverId(doc) {
 
 function ensureDateInstance(value) {
   if (!value) return null;
-  if (value instanceof Date) return value;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  if (typeof value === "number") {
+    const fromNumber = new Date(value);
+    return Number.isNaN(fromNumber.getTime()) ? null : fromNumber;
+  }
+  const parsed = parseFollowupInput(value);
+  return parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+}
+
+function persistFollowupUtc(Model, doc, utcField, rawField, dueAt) {
+  if (!Model || !doc || !doc._id || !dueAt || doc[utcField]) {
+    return Promise.resolve();
+  }
+
+  const update = {
+    [utcField]: dueAt,
+  };
+
+  const istString = formatIstDbString(dueAt);
+  if (istString && rawField) {
+    update[rawField] = istString;
+  }
+
+  return Model.updateOne({ _id: doc._id }, { $set: update })
+    .catch((err) => {
+      console.error(
+        `⚠️ Failed to normalize follow-up timestamp for ${Model.modelName} ${doc._id}:`,
+        err?.message || err
+      );
+    });
 }
 
 // 🕒 Format date to readable IST format (DD/MM/YYYY, HH:mm AM/PM IST)
@@ -280,26 +381,28 @@ async function emitFollowupNotification({ kind, doc, dueAt, status }) {
 
 async function processLeadFollowups(windowStart, windowEnd, status) {
   try {
-    const pipeline = buildFollowupPipeline({
-      modelField: "followUp",
-      windowStart,
-      windowEnd,
-      projection: {
-        customerName: 1,
-        contactNumber: 1,
-        requirement: 1,
-        remark: 1,
-      },
-    });
-
-    const leads = await Lead.aggregate(pipeline);
+    const leads = await fetchLeadDocs(windowStart, windowEnd);
     let count = 0;
+    const normalizationJobs = [];
+
     for (const lead of leads) {
-      const dueAt = ensureDateInstance(lead.followUpDate);
+      const dueAt = ensureDateInstance(lead.followUpUtc || lead.followUpDate || lead.followUp);
       if (!dueAt) continue;
+
+      if (!lead.followUpUtc) {
+        normalizationJobs.push(
+          persistFollowupUtc(Lead, lead, "followUpUtc", "followUp", dueAt)
+        );
+      }
+
       const sent = await emitFollowupNotification({ kind: "lead", doc: lead, dueAt, status });
       if (sent) count += 1;
     }
+
+    if (normalizationJobs.length) {
+      await Promise.allSettled(normalizationJobs);
+    }
+
     return count;
   } catch (err) {
     console.error(`❌ processLeadFollowups (${status}) error:`, err);
@@ -309,27 +412,35 @@ async function processLeadFollowups(windowStart, windowEnd, status) {
 
 async function processInventoryFollowups(windowStart, windowEnd, status) {
   try {
-    const pipeline = buildFollowupPipeline({
-      modelField: "followUpDate",
-      windowStart,
-      windowEnd,
-      projection: {
-        sellerName: 1,
-        contactNumbers: 1,
-        sector: 1,
-        demand: 1,
-        requirement: 1,
-      },
-    });
-
-    const inventories = await Inventory.aggregate(pipeline);
+    const inventories = await fetchInventoryDocs(windowStart, windowEnd);
     let count = 0;
+    const normalizationJobs = [];
+
     for (const inventory of inventories) {
-      const dueAt = ensureDateInstance(inventory.followUpDate);
+      const dueAt = ensureDateInstance(
+        inventory.followUpUtc || inventory.followUpDate || inventory.followUp
+      );
       if (!dueAt) continue;
-      const sent = await emitFollowupNotification({ kind: "inventory", doc: inventory, dueAt, status });
+
+      if (!inventory.followUpUtc) {
+        normalizationJobs.push(
+          persistFollowupUtc(Inventory, inventory, "followUpUtc", "followUpDate", dueAt)
+        );
+      }
+
+      const sent = await emitFollowupNotification({
+        kind: "inventory",
+        doc: inventory,
+        dueAt,
+        status,
+      });
       if (sent) count += 1;
     }
+
+    if (normalizationJobs.length) {
+      await Promise.allSettled(normalizationJobs);
+    }
+
     return count;
   } catch (err) {
     console.error(`❌ processInventoryFollowups (${status}) error:`, err);

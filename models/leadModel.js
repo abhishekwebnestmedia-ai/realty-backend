@@ -1,5 +1,6 @@
 
 const mongoose = require('mongoose');
+const { parseFollowupInput, formatIstDbString } = require('../utils/followupTime');
 
 const validStatuses = [
   "Hot",
@@ -69,6 +70,10 @@ const leadSchema = new mongoose.Schema(
       type: String,
       default: getISTDateTime,
     },
+    followUpUtc: {
+      type: Date,
+      default: null,
+    },
 
     requirement: { type: String },
     remark: { type: String },
@@ -92,12 +97,13 @@ const leadSchema = new mongoose.Schema(
 //
 leadSchema.pre('save', function (next) {
   if (!this.date) this.date = getISTDateTime();
-  // Normalize followUp to IST DB string when possible
-  if (!this.followUp) {
-    this.followUp = getISTDateTime();
-  } else {
-    const normalized = formatToISTDBString(this.followUp);
-    if (normalized) this.followUp = normalized;
+
+  const rawFollow = this.followUp || this.followUpUtc || getISTDateTime();
+  const parsed = parseFollowupInput(rawFollow);
+  const istString = formatIstDbString(parsed) || formatToISTDBString(rawFollow);
+  if (istString) this.followUp = istString;
+  if (parsed && !Number.isNaN(parsed.getTime())) {
+    this.followUpUtc = parsed;
   }
   next();
 });
@@ -171,7 +177,14 @@ leadSchema.pre('findOneAndUpdate', function (next) {
     formatStringFields(target);
     // If followUp is present in update, normalize to IST DB string
     if (target.followUp) {
-      const normalized = formatToISTDBString(target.followUp);
+      const parsed = parseFollowupInput(target.followUp);
+      const normalized = formatIstDbString(parsed) || formatToISTDBString(target.followUp);
+      if (normalized) target.followUp = normalized;
+      if (parsed && !Number.isNaN(parsed.getTime())) {
+        target.followUpUtc = parsed;
+      }
+    } else if (target.followUpUtc && !target.followUp) {
+      const normalized = formatIstDbString(target.followUpUtc);
       if (normalized) target.followUp = normalized;
     }
   }
@@ -195,9 +208,14 @@ leadSchema.methods.toJSON = function () {
 
   obj.createdAt = formatIST(obj.createdAt);
   obj.updatedAt = formatIST(obj.updatedAt);
+  if (obj.followUpUtc) {
+    obj.followUpUtc = new Date(obj.followUpUtc).toISOString();
+  }
 
   return obj;
 };
+
+leadSchema.index({ followUpUtc: 1 });
 
 module.exports = mongoose.model("Lead", leadSchema);
 
