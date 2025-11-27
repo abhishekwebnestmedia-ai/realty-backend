@@ -247,31 +247,7 @@ exports.updateInventry = async (req, res) => {
             receiverId ? await emitNotification(receiverId.toString(), payload, { emitToAdmin: true }) : emitToAdmins(payload);
           }
 
-          if (field === "followUpDate") {
-            const msg = `📅 Inventory "${oldRecord.sellerName}" follow-up updated to ${formatFollowupDisplay(newValue)} by ${actorName}`;
-            const notif = await Notification.create({
-              type: "Inventory",
-              itemId: id,
-              message: msg,
-              changedBy: actorName,
-              receiver: receiverId || null,
-              meta: {
-                ...buildInventoryMeta(updatedRecord),
-                event: "followup_change",
-                previousFollowUp: oldValue,
-                newFollowUp: newValue,
-              },
-            });
-
-            const payload = {
-              ...notif.toJSON(),
-              inventoryId: id,
-              _id: notif._id,
-              notificationId: notif._id,
-            };
-            console.log('🔔 Inventory followUpDate notification created:', { receiverId, payload });
-            receiverId ? await emitNotification(receiverId.toString(), payload, { emitToAdmin: true }) : emitToAdmins(payload);
-          }
+          // Note: followUpDate changes are tracked in history only; no immediate notification.
 
         } catch (e) {
           console.warn("⚠ Notification failed:", e.message);

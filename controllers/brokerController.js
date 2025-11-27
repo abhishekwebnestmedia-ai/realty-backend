@@ -146,37 +146,7 @@ exports.updateRequirement = async (req, res) => {
     const prev = oldData.followUpDate ? new Date(oldData.followUpDate).getTime() : null;
     const now = updated.followUpDate ? new Date(updated.followUpDate).getTime() : null;
 
-    if (followUpProvided && prev !== now) {
-      try {
-        const actorName = req.user?.name || "System";
-        const receiverId = await resolveBrokerReceiver(updated);
-
-        const notif = await Notification.create({
-          type: "Broker",
-          itemId: id,
-          changedBy: actorName,
-          receiver: receiverId || null,
-          message: `📅 Broker "${oldData.brokerName}" follow-up updated to ${formatFollowupDisplay(
-            updated.followUpDate
-          )} by ${actorName}`,
-          meta: {
-            ...buildBrokerMeta(updated),
-            previousFollowUp: oldData.followUpDate || null,
-            newFollowUp: updated.followUpDate || null,
-          },
-        });
-
-        const payload = {
-          ...notif.toObject(),
-          brokerId: id,
-          notificationId: notif._id,
-        };
-
-        receiverId ? await emitNotification(receiverId.toString(), payload, { emitToAdmin: true }) : emitToAdmins(payload);
-      } catch (e) {
-        console.warn("⚠️ Notification Error:", e.message);
-      }
-    }
+    // Note: followUpDate changes for broker requirements are persisted but do not send immediate notifications.
 
     res.json(updated);
   } catch (err) {

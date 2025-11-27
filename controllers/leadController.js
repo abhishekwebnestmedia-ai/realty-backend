@@ -396,7 +396,7 @@ exports.updateLead = async (req, res) => {
     const updatedLead = await Lead.findByIdAndUpdate(id, updateData, { new: true })
       .populate("assignTo", "name email");
 
-    // ✅ Tracked fields
+    // ✅ Tracked fields (followUp changes no longer fire immediate notifications)
     const trackedFields = ["status", "assignTo", "capturedBy", "transferTo", "remark", "followUp"];
 
     // ✅ Identify who made the change
@@ -522,37 +522,7 @@ exports.updateLead = async (req, res) => {
             }
           }
 
-          // 🔔 Notification for followUp change
-          if (field === "followUp") {
-            const now = new Date().toISOString();
-            const msg = `📅 Lead "${oldLead.customerName}" follow-up date updated by ${changedBy?.name || "System"} at ${now}`;
-            const notif = await Notification.create({
-              type: "Lead",
-              itemId: id,
-              message: msg,
-              changedBy: changedBy?.name || "System",
-              receiver: receiverId || null,
-              meta: {
-                event: "followup_change",
-                entity: "lead",
-                oldValue,
-                newValue,
-              },
-            });
-
-            const payload = { 
-              ...notif.toJSON(), 
-              leadId: id,
-              _id: notif._id,
-              notificationId: notif._id
-            };
-            console.log('🔔 Lead followUp notification created:', { receiverId, payload });
-            if (receiverId) {
-              await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
-            } else {
-              emitToAdmins(payload);
-            }
-          }
+          // Note: followUp changes are tracked in history only.
         } catch (notifErr) {
           console.warn("⚠️ Notification creation failed (lead):", notifErr.message);
         }
