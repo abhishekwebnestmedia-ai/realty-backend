@@ -26,9 +26,23 @@ async function fetchLegacyFollowups(Model, {
   windowStart,
   windowEnd,
   projection = {},
+  treatAsIstString = false,
 }) {
+  const fieldCriteria = { $exists: true, $ne: null, $ne: "" };
+  if (treatAsIstString) {
+    const istStart = formatIstDbString(windowStart);
+    const istEnd = formatIstDbString(windowEnd);
+    if (istStart && istEnd) {
+      fieldCriteria.$gte = istStart;
+      fieldCriteria.$lte = istEnd;
+    }
+  } else {
+    fieldCriteria.$gte = windowStart;
+    fieldCriteria.$lte = windowEnd;
+  }
+
   const docs = await Model.find({
-    [fieldName]: { $exists: true, $ne: null, $ne: "" },
+    [fieldName]: fieldCriteria,
     $or: [
       { followUpUtc: { $exists: false } },
       { followUpUtc: null },
@@ -38,13 +52,12 @@ async function fetchLegacyFollowups(Model, {
     .limit(LEGACY_FETCH_LIMIT)
     .lean();
 
-  return docs.reduce((acc, doc) => {
-    const parsed = ensureDateInstance(doc[fieldName]);
-    if (!parsed) return acc;
-    if (parsed < windowStart || parsed > windowEnd) return acc;
-    acc.push({ ...doc, __legacyDueAt: parsed });
-    return acc;
-  }, []);
+  return docs
+    .map((doc) => {
+      const parsed = ensureDateInstance(doc[fieldName]);
+      return parsed ? { ...doc, __legacyDueAt: parsed } : null;
+    })
+    .filter(Boolean);
 }
 
 async function fetchLeadDocs(windowStart, windowEnd) {
@@ -64,6 +77,7 @@ async function fetchLeadDocs(windowStart, windowEnd) {
       requirement: 1,
       remark: 1,
     },
+    treatAsIstString: true,
   });
 
   return [...primary, ...legacy];
@@ -87,6 +101,7 @@ async function fetchInventoryDocs(windowStart, windowEnd) {
       demand: 1,
       requirement: 1,
     },
+    treatAsIstString: true,
   });
 
   return [...primary, ...legacy];
@@ -395,6 +410,7 @@ async function processBrokerFollowups(windowStart, windowEnd, status) {
         requirement: 1,
         remark: 1,
       },
+      treatAsIstString: false,
     });
 
     const brokers = [...primary, ...legacy];

@@ -12,13 +12,15 @@
 2. **High-frequency cron** (`services/followupCronService.js`):
    - Cron now runs every **10 seconds** with a ±10 s window (missed-alert window also tightened to 20 s) so reminders align with the exact scheduled moment.
    - Added idle-log throttling to avoid spamming logs while still reporting real dispatches/missed alerts.
-3. **Precision regression test** (`scripts/test_followup_precision.js`):
+3. **Legacy follow-up coverage** (`services/followupCronService.js`):
+   - Leads/inventories that still store only the IST string (`followUp`, `followUpDate`) are now filtered directly by the IST-formatted range instead of loading an arbitrary batch, so backlog records no longer block on-time lead reminders.
+4. **Precision regression test** (`scripts/test_followup_precision.js`):
    - Spins up an in-memory MongoDB, seeds lead/inventory using naive IST strings, waits for the due time, and asserts that `processLeadFollowups` / `processInventoryFollowups` each emit exactly one notification routed to `transferTo → assignTo → admins`.
 
 ## Test evidence
 | Command | Purpose | Result |
 | --- | --- | --- |
-| `node scripts/test_followup_precision.js` | Validates IST parsing, cron window, and receiver routing for both Lead & Inventory | ✅ 1 lead + 1 inventory notification emitted at the exact due times (socket warnings expected because Socket.IO isn’t bootstrapped inside the test harness) |
+| `node scripts/test_followup_precision.js` | Validates IST parsing, cron window, receiver routing, and the legacy string window for both Lead & Inventory | ✅ 1 lead + 1 inventory notification emitted at the exact due times (socket warnings expected because Socket.IO isn’t bootstrapped inside the test harness) |
 | `node scripts/test_lead_followup_cron.js` | Legacy regression on lead reminder flow | ✅ Creates reminder within the ±30 s legacy window; notification persisted once |
 | `node scripts/test_inventory_cron.js` | Legacy regression on inventory reminder flow | ✅ Inventory reminders created and routed; duplicate suppression intact |
 
