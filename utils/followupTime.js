@@ -5,6 +5,7 @@ const YEAR_FIRST_REGEX = /^(\d{4})[\/-](\d{2})[\/-](\d{2})(?:[ T](\d{2}):(\d{2})
 const DAY_FIRST_REGEX = /^(\d{2})[\/-](\d{2})[\/-](\d{4})(?:[ ,T](\d{2}):(\d{2})(?::(\d{2}))?(?:\s*([AP]M))?)?$/i;
 const US_MONTH_FIRST_REGEX = /^(\d{2})\/(\d{2})\/(\d{4})(?:[ ,T](\d{2}):(\d{2})(?::(\d{2}))?(?:\s*([AP]M))?)?$/i;
 const AMPM_WITH_COMMA_REGEX = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4}),\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AP]M)$/i;
+const EXPLICIT_TZ_REGEX = /([zZ]|[+-]\d{2}:?\d{2})$/;
 
 const pad = (value) => String(value).padStart(2, "0");
 
@@ -84,6 +85,27 @@ const tryParseAmpmWithComma = (value) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
+const tryIstPatterns = (value) => {
+  const yearFirst = tryParsePattern(value, YEAR_FIRST_REGEX, "YMD");
+  if (yearFirst) return yearFirst;
+
+  const dayFirst = tryParsePattern(value, DAY_FIRST_REGEX, "DMY");
+  if (dayFirst) return dayFirst;
+
+  const monthFirst = tryParsePattern(value, US_MONTH_FIRST_REGEX, "MDY");
+  if (monthFirst) return monthFirst;
+
+  return tryParseAmpmWithComma(value);
+};
+
+const parseNumericString = (value) => {
+  const num = Number(value);
+  if (Number.isNaN(num)) return null;
+  const ms = value.length === 10 ? num * 1000 : num;
+  const parsed = new Date(ms);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 const parseFollowupInput = (value) => {
   if (!value) return null;
 
@@ -101,24 +123,21 @@ const parseFollowupInput = (value) => {
   const trimmed = normalizeTimeString(value);
   if (!trimmed) return null;
 
-  const native = new Date(trimmed);
-  if (!Number.isNaN(native.getTime())) {
-    return native;
+  if (EXPLICIT_TZ_REGEX.test(trimmed)) {
+    const zoned = new Date(trimmed);
+    if (!Number.isNaN(zoned.getTime())) {
+      return zoned;
+    }
   }
 
-  const yearFirst = tryParsePattern(trimmed, YEAR_FIRST_REGEX, "YMD");
-  if (yearFirst) return yearFirst;
+  const istPreferred = tryIstPatterns(trimmed);
+  if (istPreferred) return istPreferred;
 
-  const dayFirst = tryParsePattern(trimmed, DAY_FIRST_REGEX, "DMY");
-  if (dayFirst) return dayFirst;
+  const numeric = parseNumericString(trimmed);
+  if (numeric) return numeric;
 
-  const monthFirst = tryParsePattern(trimmed, US_MONTH_FIRST_REGEX, "MDY");
-  if (monthFirst) return monthFirst;
-
-  const withComma = tryParseAmpmWithComma(trimmed);
-  if (withComma) return withComma;
-
-  return null;
+  const native = new Date(trimmed);
+  return Number.isNaN(native.getTime()) ? null : native;
 };
 
 const formatIstDbString = (date) => {

@@ -8,15 +8,18 @@ const User = require("../models/user");
 const { emitNotification, emitToAdmins } = require("../utils/socketEmitter");
 const { parseFollowupInput, formatIstDbString } = require("../utils/followupTime");
 
-const FOLLOWUP_WINDOW_MS = 60 * 1000; // ±30 seconds around the scheduled time
+const CRON_EXPRESSION = "*/10 * * * * *"; // run every 10 seconds for near-real-time reminders
+const FOLLOWUP_WINDOW_MS = 20 * 1000; // ±10 seconds around the scheduled time
 const MISSED_ALERT_DELAY_MS = 5 * 60 * 1000; // notify 5 minutes after missed
-const MISSED_WINDOW_MS = 60 * 1000;
+const MISSED_WINDOW_MS = 20 * 1000;
 const DUPLICATE_SUPPRESS_MS = 2 * 60 * 1000;
 const TIMEZONE = "Asia/Kolkata";
 const LEGACY_FETCH_LIMIT = 500;
+const IDLE_LOG_THROTTLE_MS = 60 * 1000;
 
 const userNameCache = new Map();
 const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
+let lastIdleLog = 0;
 
 async function fetchLegacyFollowups(Model, {
   fieldName,
@@ -428,7 +431,7 @@ async function processBrokerFollowups(windowStart, windowEnd, status) {
 if (process.env.FOLLOWUP_CRON_DISABLED === "true") {
   console.log("⚙️ Follow-up cron disabled via FOLLOWUP_CRON_DISABLED flag.");
 } else {
-  cron.schedule("* * * * *", async () => {
+  cron.schedule(CRON_EXPRESSION, async () => {
     try {
       const now = new Date();
 
@@ -466,14 +469,18 @@ if (process.env.FOLLOWUP_CRON_DISABLED === "true") {
         leadDue + inventoryDue + brokerDue === 0 &&
         leadMissed + inventoryMissed + brokerMissed === 0
       ) {
-        console.log("⏸️ No follow-up notifications to dispatch this minute.");
+        const nowTs = Date.now();
+        if (nowTs - lastIdleLog >= IDLE_LOG_THROTTLE_MS) {
+          console.log("⏸️ No follow-up notifications to dispatch right now.");
+          lastIdleLog = nowTs;
+        }
       }
     } catch (err) {
       console.error("🚨 followUpCronService error:", err);
     }
   });
 
-  console.log("✅ Follow-up cron job initialized (runs every minute).");
+  console.log("✅ Follow-up cron job initialized (runs every 10 seconds).");
 }
 
 module.exports = {
