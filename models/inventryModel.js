@@ -204,6 +204,15 @@ inventorySchema.methods.toJSON = function () {
 
   obj.createdAt = formatIST(obj.createdAt);
   obj.updatedAt = formatIST(obj.updatedAt);
+  
+  // Provide raw ISO format for frontend parsing (like broker model)
+  const rawFollow = obj.followUpUtc || obj.followUpDate;
+  if (rawFollow) {
+    obj.followUpDateRaw = new Date(rawFollow).toISOString();
+  } else {
+    obj.followUpDateRaw = null;
+  }
+  
   if (obj.followUpUtc) {
     obj.followUpUtc = new Date(obj.followUpUtc).toISOString();
   }

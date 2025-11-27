@@ -345,16 +345,18 @@ exports.getAllInventry = async (req, res) => {
       });
     }
 
-    // Fetch all inventory (no filters)
+    // Fetch all inventory - do NOT use .lean() so toJSON formatting is applied
     const records = await Inventory.find()
-      .populate("transferTo", "name email") // optional
-      .sort({ createdAt: -1 })
-      .lean();
+      .populate("transferTo", "name email")
+      .sort({ createdAt: -1 });
+
+    // Convert to JSON to apply toJSON formatting (IST dates)
+    const formattedRecords = records.map(r => r.toJSON());
 
     res.status(200).json({
       success: true,
-      count: records.length,
-      data: records,
+      count: formattedRecords.length,
+      data: formattedRecords,
     });
 
   } catch (err) {

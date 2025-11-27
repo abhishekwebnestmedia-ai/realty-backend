@@ -205,6 +205,15 @@ leadSchema.methods.toJSON = function () {
 
   obj.createdAt = formatIST(obj.createdAt);
   obj.updatedAt = formatIST(obj.updatedAt);
+  
+  // Provide raw ISO format for frontend parsing
+  const rawFollow = obj.followUpUtc || obj.followUp;
+  if (rawFollow) {
+    obj.followUpRaw = new Date(rawFollow).toISOString();
+  } else {
+    obj.followUpRaw = null;
+  }
+  
   if (obj.followUpUtc) {
     obj.followUpUtc = new Date(obj.followUpUtc).toISOString();
   }
