@@ -16,6 +16,13 @@ const DUPLICATE_SUPPRESS_MS = 2 * 60 * 1000;
 const TIMEZONE = "Asia/Kolkata";
 const LEGACY_FETCH_LIMIT = 500;
 const IDLE_LOG_THROTTLE_MS = 60 * 1000;
+const DEBUG_FOLLOWUPS = String(process.env.FOLLOWUP_DEBUG).toLowerCase() === "true";
+
+const debugLog = (...args) => {
+  if (DEBUG_FOLLOWUPS) {
+    console.log("[followup-debug]", ...args);
+  }
+};
 
 const userNameCache = new Map();
 const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
@@ -80,7 +87,11 @@ async function fetchLeadDocs(windowStart, windowEnd) {
     treatAsIstString: true,
   });
 
-  return [...primary, ...legacy];
+  const combined = [...primary, ...legacy];
+  debugLog(
+    `lead window ${windowStart.toISOString()} - ${windowEnd.toISOString()} => normalized ${primary.length}, legacy ${legacy.length}`
+  );
+  return combined;
 }
 
 async function fetchInventoryDocs(windowStart, windowEnd) {
@@ -104,7 +115,11 @@ async function fetchInventoryDocs(windowStart, windowEnd) {
     treatAsIstString: true,
   });
 
-  return [...primary, ...legacy];
+  const combined = [...primary, ...legacy];
+  debugLog(
+    `inventory window ${windowStart.toISOString()} - ${windowEnd.toISOString()} => normalized ${primary.length}, legacy ${legacy.length}`
+  );
+  return combined;
 }
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -273,6 +288,7 @@ async function emitFollowupNotification({ kind, doc, dueAt, status }) {
       createdAt: { $gte: new Date(Date.now() - DUPLICATE_SUPPRESS_MS) },
     }).lean();
     if (duplicate) {
+      debugLog(`${type} ${doc._id} skipped (duplicate within ${DUPLICATE_SUPPRESS_MS / 1000}s window)`);
       return false;
     }
 
@@ -331,7 +347,14 @@ async function processLeadFollowups(windowStart, windowEnd, status) {
       const dueAt = ensureDateInstance(
         lead.__legacyDueAt || lead.followUpUtc || lead.followUpDate || lead.followUp
       );
-      if (!dueAt) continue;
+      if (!dueAt) {
+        debugLog(`lead ${lead._id} skipped - could not parse follow-up fields`, {
+          followUpUtc: lead.followUpUtc,
+          followUp: lead.followUp,
+          legacy: lead.__legacyDueAt,
+        });
+        continue;
+      }
 
       if (!lead.followUpUtc) {
         normalizationJobs.push(
@@ -347,6 +370,7 @@ async function processLeadFollowups(windowStart, windowEnd, status) {
       await Promise.allSettled(normalizationJobs);
     }
 
+    debugLog(`lead processed=${leads.length} emitted=${count} status=${status}`);
     return count;
   } catch (err) {
     console.error(`❌ processLeadFollowups (${status}) error:`, err);
@@ -364,7 +388,14 @@ async function processInventoryFollowups(windowStart, windowEnd, status) {
       const dueAt = ensureDateInstance(
         inventory.__legacyDueAt || inventory.followUpUtc || inventory.followUpDate || inventory.followUp
       );
-      if (!dueAt) continue;
+      if (!dueAt) {
+        debugLog(`inventory ${inventory._id} skipped - could not parse follow-up fields`, {
+          followUpUtc: inventory.followUpUtc,
+          followUpDate: inventory.followUpDate,
+          legacy: inventory.__legacyDueAt,
+        });
+        continue;
+      }
 
       if (!inventory.followUpUtc) {
         normalizationJobs.push(
@@ -385,6 +416,7 @@ async function processInventoryFollowups(windowStart, windowEnd, status) {
       await Promise.allSettled(normalizationJobs);
     }
 
+    debugLog(`inventory processed=${inventories.length} emitted=${count} status=${status}`);
     return count;
   } catch (err) {
     console.error(`❌ processInventoryFollowups (${status}) error:`, err);
@@ -421,7 +453,14 @@ async function processBrokerFollowups(windowStart, windowEnd, status) {
       const dueAt = ensureDateInstance(
         broker.__legacyDueAt || broker.followUpUtc || broker.followUpDate
       );
-      if (!dueAt) continue;
+      if (!dueAt) {
+        debugLog(`broker ${broker._id} skipped - could not parse follow-up fields`, {
+          followUpUtc: broker.followUpUtc,
+          followUpDate: broker.followUpDate,
+          legacy: broker.__legacyDueAt,
+        });
+        continue;
+      }
 
       if (!broker.followUpUtc) {
         normalizationJobs.push(
@@ -437,6 +476,7 @@ async function processBrokerFollowups(windowStart, windowEnd, status) {
       await Promise.allSettled(normalizationJobs);
     }
 
+    debugLog(`broker processed=${brokers.length} emitted=${count} status=${status}`);
     return count;
   } catch (err) {
     console.error(`❌ processBrokerFollowups (${status}) error:`, err);
