@@ -29,27 +29,81 @@ const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
 const hasStoredDate = (value) => value instanceof Date && !Number.isNaN(value.getTime());
 let lastIdleLog = 0;
 
+const ENTITY_CONFIG = {
+  lead: {
+    kind: "lead",
+    Model: Lead,
+    select: "customerName contactNumber requirement remark followUp followUpUtc assignTo transferTo",
+    rawField: "followUp",
+    fallbackFields: ["__legacyDueAt", "followUpUtc", "followUpDate", "followUp"],
+    legacy: {
+      fieldName: "followUp",
+      rangeType: "istString",
+      projection: {
+        customerName: 1,
+        contactNumber: 1,
+        requirement: 1,
+        remark: 1,
+      },
+    },
+  },
+  inventory: {
+    kind: "inventory",
+    Model: Inventory,
+    select: "sellerName contactNumbers sector demand requirement followUpDate followUpUtc assignTo transferTo",
+    rawField: "followUpDate",
+    fallbackFields: ["__legacyDueAt", "followUpUtc", "followUpDate", "followUp"],
+    legacy: {
+      fieldName: "followUpDate",
+      rangeType: "istString",
+      projection: {
+        sellerName: 1,
+        contactNumbers: 1,
+        sector: 1,
+        demand: 1,
+        requirement: 1,
+      },
+    },
+  },
+  broker: {
+    kind: "broker",
+    Model: Broker,
+    select: "brokerName contactNumber requirement remark followUpDate followUpUtc assignTo transferTo",
+    rawField: "followUpDate",
+    fallbackFields: ["__legacyDueAt", "followUpUtc", "followUpDate"],
+    legacy: {
+      fieldName: "followUpDate",
+      rangeType: "date",
+      projection: {
+        brokerName: 1,
+        contactNumber: 1,
+        requirement: 1,
+        remark: 1,
+      },
+    },
+  },
+};
+
 async function fetchLegacyFollowups(Model, {
   fieldName,
   utcField = "followUpUtc",
   windowStart,
   windowEnd,
   projection = {},
-  treatAsIstString = false,
+  rangeType = "date",
 }) {
   const fieldCriteria = { $exists: true, $ne: null, $ne: "" };
-  if (treatAsIstString) {
+  if (rangeType === "istString") {
     const istStart = formatIstDbString(windowStart);
     const istEnd = formatIstDbString(windowEnd);
     if (istStart && istEnd) {
       fieldCriteria.$gte = istStart;
       fieldCriteria.$lte = istEnd;
     }
-  } else {
+  } else if (rangeType === "date") {
     fieldCriteria.$gte = windowStart;
     fieldCriteria.$lte = windowEnd;
   }
-
   const utcFieldPath = `$${utcField}`;
   const docs = await Model.find({
     [fieldName]: fieldCriteria,
@@ -69,65 +123,54 @@ async function fetchLegacyFollowups(Model, {
       const parsed = ensureDateInstance(doc[fieldName] ?? doc[utcField]);
       return parsed ? { ...doc, __legacyDueAt: parsed } : null;
     })
-    .filter(Boolean);
+    .filter((doc) => doc && doc.__legacyDueAt >= windowStart && doc.__legacyDueAt <= windowEnd);
 }
 
-async function fetchLeadDocs(windowStart, windowEnd) {
-  const primary = await Lead.find({
+const pickFields = (doc, fields = []) =>
+  fields.reduce((acc, field) => {
+    acc[field] = doc ? doc[field] : undefined;
+    return acc;
+  }, {});
+
+async function fetchEntityDocs(config, windowStart, windowEnd) {
+  const { Model, select, legacy, kind } = config;
+  const primaryQuery = Model.find({
     followUpUtc: { $gte: windowStart, $lte: windowEnd },
   })
-    .select("customerName contactNumber requirement remark followUp followUpUtc assignTo transferTo")
+    .select(select)
     .lean();
 
-  const legacy = await fetchLegacyFollowups(Lead, {
-    fieldName: "followUp",
-    utcField: "followUpUtc",
-    windowStart,
-    windowEnd,
-    projection: {
-      customerName: 1,
-      contactNumber: 1,
-      requirement: 1,
-      remark: 1,
-    },
-    treatAsIstString: true,
-  });
+  const [primary, legacyDocs] = await Promise.all([
+    primaryQuery,
+    fetchLegacyFollowups(Model, {
+      fieldName: legacy.fieldName,
+      utcField: legacy.utcField || "followUpUtc",
+      windowStart,
+      windowEnd,
+      projection: legacy.projection,
+      rangeType: legacy.rangeType,
+    }),
+  ]);
 
-  const combined = [...primary, ...legacy];
   debugLog(
-    `lead window ${windowStart.toISOString()} - ${windowEnd.toISOString()} => normalized ${primary.length}, legacy ${legacy.length}`
+    `${kind} window ${windowStart.toISOString()} - ${windowEnd.toISOString()} => normalized ${primary.length}, legacy ${legacyDocs.length}`
   );
-  return combined;
+
+  return [...primary, ...legacyDocs];
 }
 
-async function fetchInventoryDocs(windowStart, windowEnd) {
-  const primary = await Inventory.find({
-    followUpUtc: { $gte: windowStart, $lte: windowEnd },
-  })
-    .select("sellerName contactNumbers sector demand requirement followUpDate followUpUtc assignTo transferTo")
-    .lean();
-
-  const legacy = await fetchLegacyFollowups(Inventory, {
-    fieldName: "followUpDate",
-    utcField: "followUpUtc",
-    windowStart,
-    windowEnd,
-    projection: {
-      sellerName: 1,
-      contactNumbers: 1,
-      sector: 1,
-      demand: 1,
-      requirement: 1,
-    },
-    treatAsIstString: true,
-  });
-
-  const combined = [...primary, ...legacy];
-  debugLog(
-    `inventory window ${windowStart.toISOString()} - ${windowEnd.toISOString()} => normalized ${primary.length}, legacy ${legacy.length}`
-  );
-  return combined;
-}
+const resolveDueDate = (doc, fallbackFields = []) => {
+  if (!doc) return null;
+  for (const field of fallbackFields) {
+    if (field === "__legacyDueAt" && doc.__legacyDueAt) {
+      return ensureDateInstance(doc.__legacyDueAt);
+    }
+    const candidate = doc[field];
+    const parsed = ensureDateInstance(candidate);
+    if (parsed) return parsed;
+  }
+  return null;
+};
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -344,32 +387,32 @@ async function emitFollowupNotification({ kind, doc, dueAt, status }) {
   }
 }
 
-async function processLeadFollowups(windowStart, windowEnd, status) {
+async function processEntityFollowups(kind, windowStart, windowEnd, status) {
+  const config = ENTITY_CONFIG[kind];
+  if (!config) {
+    console.error(`❌ Unknown follow-up entity: ${kind}`);
+    return 0;
+  }
+
   try {
-    const leads = await fetchLeadDocs(windowStart, windowEnd);
+    const docs = await fetchEntityDocs(config, windowStart, windowEnd);
     let count = 0;
     const normalizationJobs = [];
 
-    for (const lead of leads) {
-      const dueAt = ensureDateInstance(
-        lead.__legacyDueAt || lead.followUpUtc || lead.followUpDate || lead.followUp
-      );
+    for (const doc of docs) {
+      const dueAt = resolveDueDate(doc, config.fallbackFields);
       if (!dueAt) {
-        debugLog(`lead ${lead._id} skipped - could not parse follow-up fields`, {
-          followUpUtc: lead.followUpUtc,
-          followUp: lead.followUp,
-          legacy: lead.__legacyDueAt,
-        });
+        debugLog(`${kind} ${doc._id} skipped - could not parse follow-up fields`, pickFields(doc, config.fallbackFields));
         continue;
       }
 
-      if (!hasStoredDate(lead.followUpUtc)) {
+      if (!hasStoredDate(doc.followUpUtc)) {
         normalizationJobs.push(
-          persistFollowupUtc(Lead, lead, "followUpUtc", "followUp", dueAt)
+          persistFollowupUtc(config.Model, doc, "followUpUtc", config.rawField, dueAt)
         );
       }
 
-      const sent = await emitFollowupNotification({ kind: "lead", doc: lead, dueAt, status });
+      const sent = await emitFollowupNotification({ kind, doc, dueAt, status });
       if (sent) count += 1;
     }
 
@@ -377,120 +420,22 @@ async function processLeadFollowups(windowStart, windowEnd, status) {
       await Promise.allSettled(normalizationJobs);
     }
 
-    debugLog(`lead processed=${leads.length} emitted=${count} status=${status}`);
+    debugLog(`${kind} processed=${docs.length} emitted=${count} status=${status}`);
     return count;
   } catch (err) {
-    console.error(`❌ processLeadFollowups (${status}) error:`, err);
+    console.error(`❌ process${kind}Followups (${status}) error:`, err);
     return 0;
   }
 }
 
-async function processInventoryFollowups(windowStart, windowEnd, status) {
-  try {
-    const inventories = await fetchInventoryDocs(windowStart, windowEnd);
-    let count = 0;
-    const normalizationJobs = [];
+const processLeadFollowups = (windowStart, windowEnd, status) =>
+  processEntityFollowups("lead", windowStart, windowEnd, status);
 
-    for (const inventory of inventories) {
-      const dueAt = ensureDateInstance(
-        inventory.__legacyDueAt || inventory.followUpUtc || inventory.followUpDate || inventory.followUp
-      );
-      if (!dueAt) {
-        debugLog(`inventory ${inventory._id} skipped - could not parse follow-up fields`, {
-          followUpUtc: inventory.followUpUtc,
-          followUpDate: inventory.followUpDate,
-          legacy: inventory.__legacyDueAt,
-        });
-        continue;
-      }
+const processInventoryFollowups = (windowStart, windowEnd, status) =>
+  processEntityFollowups("inventory", windowStart, windowEnd, status);
 
-      if (!hasStoredDate(inventory.followUpUtc)) {
-        normalizationJobs.push(
-          persistFollowupUtc(Inventory, inventory, "followUpUtc", "followUpDate", dueAt)
-        );
-      }
-
-      const sent = await emitFollowupNotification({
-        kind: "inventory",
-        doc: inventory,
-        dueAt,
-        status,
-      });
-      if (sent) count += 1;
-    }
-
-    if (normalizationJobs.length) {
-      await Promise.allSettled(normalizationJobs);
-    }
-
-    debugLog(`inventory processed=${inventories.length} emitted=${count} status=${status}`);
-    return count;
-  } catch (err) {
-    console.error(`❌ processInventoryFollowups (${status}) error:`, err);
-    return 0;
-  }
-}
-
-async function processBrokerFollowups(windowStart, windowEnd, status) {
-  try {
-    const primary = await Broker.find({
-      followUpUtc: { $gte: windowStart, $lte: windowEnd },
-    })
-      .select("brokerName contactNumber requirement remark followUpDate followUpUtc assignTo transferTo")
-      .lean();
-
-    const legacy = await fetchLegacyFollowups(Broker, {
-      fieldName: "followUpDate",
-      utcField: "followUpUtc",
-      windowStart,
-      windowEnd,
-      projection: {
-        brokerName: 1,
-        contactNumber: 1,
-        requirement: 1,
-        remark: 1,
-      },
-      treatAsIstString: false,
-    });
-
-    const brokers = [...primary, ...legacy];
-    let count = 0;
-    const normalizationJobs = [];
-
-    for (const broker of brokers) {
-      const dueAt = ensureDateInstance(
-        broker.__legacyDueAt || broker.followUpUtc || broker.followUpDate
-      );
-      if (!dueAt) {
-        debugLog(`broker ${broker._id} skipped - could not parse follow-up fields`, {
-          followUpUtc: broker.followUpUtc,
-          followUpDate: broker.followUpDate,
-          legacy: broker.__legacyDueAt,
-        });
-        continue;
-      }
-
-      if (!hasStoredDate(broker.followUpUtc)) {
-        normalizationJobs.push(
-          persistFollowupUtc(Broker, broker, "followUpUtc", "followUpDate", dueAt)
-        );
-      }
-
-      const sent = await emitFollowupNotification({ kind: "broker", doc: broker, dueAt, status });
-      if (sent) count += 1;
-    }
-
-    if (normalizationJobs.length) {
-      await Promise.allSettled(normalizationJobs);
-    }
-
-    debugLog(`broker processed=${brokers.length} emitted=${count} status=${status}`);
-    return count;
-  } catch (err) {
-    console.error(`❌ processBrokerFollowups (${status}) error:`, err);
-    return 0;
-  }
-}
+const processBrokerFollowups = (windowStart, windowEnd, status) =>
+  processEntityFollowups("broker", windowStart, windowEnd, status);
 
 if (process.env.FOLLOWUP_CRON_DISABLED === "true") {
   console.log("⚙️ Follow-up cron disabled via FOLLOWUP_CRON_DISABLED flag.");
