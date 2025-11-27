@@ -190,6 +190,20 @@ exports.updateInventry = async (req, res) => {
       return res.status(404).json({ success: false, message: "Inventory record not found" });
     }
 
+    // Ensure followUpUtc is also updated when followUpDate changes
+    if (updateData.followUpDate !== undefined) {
+      if (updateData.followUpDate) {
+        const d = new Date(updateData.followUpDate);
+        if (!isNaN(d.getTime())) {
+          updateData.followUpDate = d;
+          updateData.followUpUtc = d; // Sync followUpUtc for cron!
+        }
+      } else {
+        updateData.followUpDate = null;
+        updateData.followUpUtc = null;
+      }
+    }
+
     // Update record
     const updatedRecord = await Inventory.findByIdAndUpdate(id, updateData, { new: true })
       .populate("assignTo", "name email");

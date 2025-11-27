@@ -345,6 +345,7 @@ async function emitFollowupNotification({ kind, doc, dueAt, status }) {
     const type = typeMap[kind] || "Lead";
     const dueIso = dueAt ? dueAt.toISOString() : null;
 
+    // Check for duplicate notification (same item, same followup time, same status, within suppression window)
     const duplicate = await Notification.findOne({
       type,
       itemId: doc._id,
@@ -368,14 +369,38 @@ async function emitFollowupNotification({ kind, doc, dueAt, status }) {
     };
     const message = buildMessage(kind, doc, dueAt, status);
 
-    const notif = await Notification.create({
-      type,
-      itemId: doc._id,
-      message,
-      receiver: receiverId || null,
-      changedBy: "System",
-      meta,
-    });
+    let notif;
+    try {
+      notif = await Notification.create({
+        type,
+        itemId: doc._id,
+        message,
+        receiver: receiverId || null,
+        changedBy: "System",
+        meta,
+      });
+    } catch (createErr) {
+      // Handle duplicate key error gracefully - notification already exists
+      if (createErr.code === 11000) {
+        debugLog(`${type} ${doc._id} skipped (MongoDB duplicate key - notification already exists)`);
+        // Try to find and emit the existing notification instead
+        const existing = await Notification.findOne({
+          type,
+          itemId: doc._id,
+          "meta.event": "followup",
+        }).sort({ createdAt: -1 }).lean();
+        if (existing && receiverId) {
+          const payload = { ...existing, notificationId: existing._id, itemId: doc._id.toString() };
+          if (kind === "lead") payload.leadId = doc._id.toString();
+          if (kind === "inventory") payload.inventoryId = doc._id.toString();
+          if (kind === "broker") payload.brokerId = doc._id.toString();
+          await emitNotification(receiverId.toString(), payload, { emitToAdmin: true });
+          return true; // Still emit the existing notification
+        }
+        return false;
+      }
+      throw createErr; // Re-throw other errors
+    }
 
     const entityId = doc._id && doc._id.toString ? doc._id.toString() : doc._id;
 

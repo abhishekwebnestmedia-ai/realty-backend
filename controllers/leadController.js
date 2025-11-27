@@ -392,6 +392,20 @@ exports.updateLead = async (req, res) => {
       updateData.assignTo = user._id;
     }
 
+    // ✅ Ensure followUpUtc is also updated when followUp changes
+    if (updateData.followUp !== undefined) {
+      if (updateData.followUp) {
+        const d = new Date(updateData.followUp);
+        if (!isNaN(d.getTime())) {
+          updateData.followUp = d;
+          updateData.followUpUtc = d; // Sync followUpUtc for cron!
+        }
+      } else {
+        updateData.followUp = null;
+        updateData.followUpUtc = null;
+      }
+    }
+
     // ✅ Update the lead
     const updatedLead = await Lead.findByIdAndUpdate(id, updateData, { new: true })
       .populate("assignTo", "name email");

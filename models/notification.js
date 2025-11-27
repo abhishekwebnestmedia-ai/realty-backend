@@ -55,8 +55,10 @@ const notificationSchema = new mongoose.Schema(
   { versionKey: false }
 );
 
-// Prevent duplicate
-notificationSchema.index({ type: 1, itemId: 1, message: 1 });
+// Index for efficient queries - note: we use soft duplicate check in code, not unique index
+// The old unique index on (type, itemId, message) caused issues with followup notifications
+notificationSchema.index({ type: 1, itemId: 1 });
+notificationSchema.index({ type: 1, itemId: 1, 'meta.event': 1, 'meta.followUpDueAt': 1 });
 
 // Return createdAt as ISO UTC string for frontend to parse and format correctly
 notificationSchema.methods.toJSON = function () {

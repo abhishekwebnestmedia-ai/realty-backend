@@ -127,7 +127,13 @@ exports.updateRequirement = async (req, res) => {
     if (followUpProvided) {
       if (updateData.followUpDate) {
         const d = new Date(updateData.followUpDate);
-        updateData.followUpDate = isNaN(d.getTime()) ? null : d;
+        if (!isNaN(d.getTime())) {
+          updateData.followUpDate = d;
+          updateData.followUpUtc = d; // Also update followUpUtc for cron to work!
+        } else {
+          updateData.followUpDate = null;
+          updateData.followUpUtc = null;
+        }
       } else {
         updateData.followUpDate = null;
         updateData.followUpUtc = null;
