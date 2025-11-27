@@ -1,5 +1,5 @@
 
-//its leadd and inventry notification 
+// Its lead, inventory and broker notifications
 
 const Notification = require("../models/notification");
 const mongoose = require("mongoose");
