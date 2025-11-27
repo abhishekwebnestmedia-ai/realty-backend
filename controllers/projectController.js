@@ -1114,6 +1114,11 @@ exports.bulkUploadProjects = async (req, res) => {
         const unitNumber = (row['Unit Number'] || '').toString().trim();
         const projectType = row['Project Type'] || 'Residential';
         const status = row['Status'] || 'Vacant';
+        const ownerName = (row['Owner Name'] || '').toString().trim();
+        const email = (row['Email'] || '').toString().trim();
+        const mobileNumbersRaw = (row['Mobile Numbers'] || '').toString().trim();
+        const remarks = (row['Remarks'] || '').toString().trim();
+        const assignToRaw = (row['Assign To'] || '').toString().trim();
         
         // Validate required fields
         if (!cityName || !projectName || !towerName || !unitNumber) {
@@ -1188,10 +1193,30 @@ exports.bulkUploadProjects = async (req, res) => {
         // Check if unit already exists
         const existingUnit = tower.units.find(u => u.unitNumber === unitNumber);
         if (!existingUnit) {
-          // Add unit
+          // Parse mobile numbers (comma or semicolon separated)
+          const mobileNumbers = mobileNumbersRaw 
+            ? mobileNumbersRaw.split(/[,;]/).map(m => m.trim()).filter(m => m)
+            : [];
+          
+          // Resolve assignTo user if provided
+          let assignToUserId = null;
+          if (assignToRaw) {
+            assignToUserId = await resolveAssign(assignToRaw);
+            if (!assignToUserId) {
+              errors.push(`Row ${i + 2}: Assign To user not found: '${assignToRaw}'`);
+              // Continue without assigning instead of failing the entire row
+            }
+          }
+          
+          // Add unit with all fields
           const unit = {
             unitNumber: unitNumber,
             status: status,
+            ownerName: ownerName || undefined,
+            email: email || undefined,
+            mobileNumbers: mobileNumbers.length > 0 ? mobileNumbers : undefined,
+            remarks: remarks || undefined,
+            assignTo: assignToUserId || undefined,
             createdAt: new Date()
           };
           tower.units.push(unit);
