@@ -26,10 +26,12 @@ const debugLog = (...args) => {
 
 const userNameCache = new Map();
 const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
+const hasStoredDate = (value) => value instanceof Date && !Number.isNaN(value.getTime());
 let lastIdleLog = 0;
 
 async function fetchLegacyFollowups(Model, {
   fieldName,
+  utcField = "followUpUtc",
   windowStart,
   windowEnd,
   projection = {},
@@ -48,20 +50,23 @@ async function fetchLegacyFollowups(Model, {
     fieldCriteria.$lte = windowEnd;
   }
 
+  const utcFieldPath = `$${utcField}`;
   const docs = await Model.find({
     [fieldName]: fieldCriteria,
     $or: [
-      { followUpUtc: { $exists: false } },
-      { followUpUtc: null },
+      { [utcField]: { $exists: false } },
+      { [utcField]: null },
+      { $expr: { $ne: [{ $type: utcFieldPath }, "date"] } },
     ],
   })
-    .select({ [fieldName]: 1, assignTo: 1, transferTo: 1, ...projection })
+    .select({ [fieldName]: 1, [utcField]: 1, assignTo: 1, transferTo: 1, ...projection })
     .limit(LEGACY_FETCH_LIMIT)
     .lean();
 
   return docs
+    .filter((doc) => !hasStoredDate(doc[utcField]))
     .map((doc) => {
-      const parsed = ensureDateInstance(doc[fieldName]);
+      const parsed = ensureDateInstance(doc[fieldName] ?? doc[utcField]);
       return parsed ? { ...doc, __legacyDueAt: parsed } : null;
     })
     .filter(Boolean);
@@ -76,6 +81,7 @@ async function fetchLeadDocs(windowStart, windowEnd) {
 
   const legacy = await fetchLegacyFollowups(Lead, {
     fieldName: "followUp",
+    utcField: "followUpUtc",
     windowStart,
     windowEnd,
     projection: {
@@ -103,6 +109,7 @@ async function fetchInventoryDocs(windowStart, windowEnd) {
 
   const legacy = await fetchLegacyFollowups(Inventory, {
     fieldName: "followUpDate",
+    utcField: "followUpUtc",
     windowStart,
     windowEnd,
     projection: {
@@ -204,7 +211,7 @@ function ensureDateInstance(value) {
 }
 
 function persistFollowupUtc(Model, doc, utcField, rawField, dueAt) {
-  if (!Model || !doc || !doc._id || !dueAt || doc[utcField]) {
+  if (!Model || !doc || !doc._id || !dueAt || hasStoredDate(doc[utcField])) {
     return Promise.resolve();
   }
 
@@ -356,7 +363,7 @@ async function processLeadFollowups(windowStart, windowEnd, status) {
         continue;
       }
 
-      if (!lead.followUpUtc) {
+      if (!hasStoredDate(lead.followUpUtc)) {
         normalizationJobs.push(
           persistFollowupUtc(Lead, lead, "followUpUtc", "followUp", dueAt)
         );
@@ -397,7 +404,7 @@ async function processInventoryFollowups(windowStart, windowEnd, status) {
         continue;
       }
 
-      if (!inventory.followUpUtc) {
+      if (!hasStoredDate(inventory.followUpUtc)) {
         normalizationJobs.push(
           persistFollowupUtc(Inventory, inventory, "followUpUtc", "followUpDate", dueAt)
         );
@@ -434,6 +441,7 @@ async function processBrokerFollowups(windowStart, windowEnd, status) {
 
     const legacy = await fetchLegacyFollowups(Broker, {
       fieldName: "followUpDate",
+      utcField: "followUpUtc",
       windowStart,
       windowEnd,
       projection: {
@@ -462,7 +470,7 @@ async function processBrokerFollowups(windowStart, windowEnd, status) {
         continue;
       }
 
-      if (!broker.followUpUtc) {
+      if (!hasStoredDate(broker.followUpUtc)) {
         normalizationJobs.push(
           persistFollowupUtc(Broker, broker, "followUpUtc", "followUpDate", dueAt)
         );
@@ -544,6 +552,9 @@ module.exports = {
   processInventoryFollowups,
   processBrokerFollowups,
 };
+
+
+
 
 
 
