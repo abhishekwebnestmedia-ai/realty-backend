@@ -262,9 +262,8 @@ function persistFollowupUtc(Model, doc, utcField, rawField, dueAt) {
     [utcField]: dueAt,
   };
 
-  const istString = formatIstDbString(dueAt);
-  if (istString && rawField) {
-    update[rawField] = istString;
+  if (rawField) {
+    update[rawField] = dueAt;
   }
 
   return Model.updateOne({ _id: doc._id }, { $set: update })

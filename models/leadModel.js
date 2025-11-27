@@ -1,6 +1,6 @@
 
 const mongoose = require('mongoose');
-const { parseFollowupInput, formatIstDbString } = require('../utils/followupTime');
+const { parseFollowupInput } = require('../utils/followupTime');
 
 const validStatuses = [
   "Hot",
@@ -25,29 +25,6 @@ function getISTDateTime() {
 }
 
 // ✅ Helper: Convert a Date (or parseable input) to IST DB string (YYYY-MM-DD HH:mm:ss)
-function formatToISTDBString(input) {
-  if (!input) return null;
-  let d = null;
-  if (input instanceof Date) d = input;
-  else {
-    // Replace space-with-T for common 'YYYY-MM-DD HH:mm:ss' -> ISO
-    try {
-      const maybe = String(input).trim();
-      const tryVals = [maybe.replace(' ', 'T'), maybe, new Date(maybe)];
-      for (const t of tryVals) {
-        const dt = new Date(t);
-        if (!isNaN(dt.getTime())) { d = dt; break; }
-      }
-    } catch {
-      d = null;
-    }
-  }
-  if (!d) return null;
-  const istOffset = 5.5 * 60 * 60 * 1000;
-  const ist = new Date(d.getTime() + istOffset);
-  return ist.toISOString().replace('T', ' ').substring(0, 19);
-}
-
 const leadSchema = new mongoose.Schema(
   {
     customerName: { type: String, required: true },
@@ -67,8 +44,8 @@ const leadSchema = new mongoose.Schema(
     },
 
     followUp: {
-      type: String,
-      default: getISTDateTime,
+      type: Date,
+      default: Date.now,
     },
     followUpUtc: {
       type: Date,
@@ -95,16 +72,46 @@ const leadSchema = new mongoose.Schema(
 //
 // ✅ Ensure both dates are set before saving
 //
+function normalizeFollowupFields(target) {
+  if (!target) return;
+  const candidates = [target.followUp, target.followUpUtc];
+  for (const value of candidates) {
+    const parsed = parseFollowupInput(value);
+    if (parsed && !Number.isNaN(parsed.getTime())) {
+      target.followUp = parsed;
+      target.followUpUtc = parsed;
+      return;
+    }
+  }
+  if (!target.followUp) target.followUp = new Date();
+  if (!target.followUpUtc) target.followUpUtc = target.followUp;
+}
+
+const IST_FORMATTER = new Intl.DateTimeFormat('en-IN', {
+  timeZone: 'Asia/Kolkata',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+});
+
+const formatIstString = (value) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = IST_FORMATTER.formatToParts(date).reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {});
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+};
+
 leadSchema.pre('save', function (next) {
   if (!this.date) this.date = getISTDateTime();
-
-  const rawFollow = this.followUp || this.followUpUtc || getISTDateTime();
-  const parsed = parseFollowupInput(rawFollow);
-  const istString = formatIstDbString(parsed) || formatToISTDBString(rawFollow);
-  if (istString) this.followUp = istString;
-  if (parsed && !Number.isNaN(parsed.getTime())) {
-    this.followUpUtc = parsed;
-  }
+  normalizeFollowupFields(this);
   next();
 });
 
@@ -176,17 +183,7 @@ leadSchema.pre('findOneAndUpdate', function (next) {
     // Normalize string fields
     formatStringFields(target);
     // If followUp is present in update, normalize to IST DB string
-    if (target.followUp) {
-      const parsed = parseFollowupInput(target.followUp);
-      const normalized = formatIstDbString(parsed) || formatToISTDBString(target.followUp);
-      if (normalized) target.followUp = normalized;
-      if (parsed && !Number.isNaN(parsed.getTime())) {
-        target.followUpUtc = parsed;
-      }
-    } else if (target.followUpUtc && !target.followUp) {
-      const normalized = formatIstDbString(target.followUpUtc);
-      if (normalized) target.followUp = normalized;
-    }
+    normalizeFollowupFields(target);
   }
   next();
 });
@@ -211,6 +208,7 @@ leadSchema.methods.toJSON = function () {
   if (obj.followUpUtc) {
     obj.followUpUtc = new Date(obj.followUpUtc).toISOString();
   }
+  obj.followUp = formatIstString(obj.followUp);
 
   return obj;
 };

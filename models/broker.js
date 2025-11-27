@@ -3,6 +3,28 @@ const { parseFollowupInput } = require("../utils/followupTime");
 
 const validStatuses = ["Ok", "Hot", "Thanda", "Visit"];
 
+const IST_FORMATTER = new Intl.DateTimeFormat("en-IN", {
+  timeZone: "Asia/Kolkata",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+
+const formatIstString = (value) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = IST_FORMATTER.formatToParts(date).reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {});
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+};
+
 const brokerRequirementSchema = new mongoose.Schema(
   {
     brokerName: { type: String, required: true },
@@ -39,23 +61,13 @@ const brokerRequirementSchema = new mongoose.Schema(
 
         const rawFollow = ret.followUpUtc || ret.followUpDate;
         if (rawFollow) {
-          try {
-            ret.followUpDateRaw = new Date(rawFollow).toISOString();
-          } catch (e) {
-            ret.followUpDateRaw = null;
-          }
+          ret.followUpDateRaw = new Date(rawFollow).toISOString();
         } else {
           ret.followUpDateRaw = null;
         }
 
-        ret.followUpDate = formatDate(ret.followUpDate);
-        if (ret.followUpUtc) {
-          try {
-            ret.followUpUtc = new Date(ret.followUpUtc).toISOString();
-          } catch (e) {
-            ret.followUpUtc = null;
-          }
-        }
+        ret.followUpDate = formatIstString(ret.followUpDate);
+        ret.followUpUtc = ret.followUpUtc ? new Date(ret.followUpUtc).toISOString() : null;
 
         return ret;
       },

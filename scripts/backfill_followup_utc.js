@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const Lead = require('../models/leadModel');
 const Inventory = require('../models/inventryModel');
 const Broker = require('../models/broker');
-const { parseFollowupInput, formatIstDbString } = require('../utils/followupTime');
+const { parseFollowupInput } = require('../utils/followupTime');
 
 const BATCH_SIZE = 500;
 const SLEEP_MS = 50;
@@ -36,10 +36,9 @@ async function backfillModel(Model, { rawField, utcField }) {
       .map((doc) => {
         const dueAt = parseFollowupInput(doc[rawField]);
         if (!dueAt) return null;
-        const istString = formatIstDbString(dueAt) || doc[rawField];
         return Model.updateOne(
           { _id: doc._id },
-          { $set: { [utcField]: dueAt, [rawField]: istString } }
+          { $set: { [utcField]: dueAt, [rawField]: dueAt } }
         );
       })
       .filter(Boolean);

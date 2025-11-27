@@ -2,7 +2,7 @@
 
 
 const mongoose = require('mongoose');
-const { parseFollowupInput, formatIstDbString } = require('../utils/followupTime');
+const { parseFollowupInput } = require('../utils/followupTime');
 
 // ✅ Valid Enums
 const validInventoryTypes = ["Sales", "Rent"];
@@ -40,8 +40,8 @@ const inventorySchema = new mongoose.Schema(
     assignTo: { type: String },
     transferTo: { type: String , default: null },
     followUpDate: {
-      type: String,
-      default: getISTDateTime,
+      type: Date,
+      default: Date.now,
     },
     followUpUtc: {
       type: Date,
@@ -130,17 +130,46 @@ function formatStringFields(obj, seen = new WeakSet()) {
 //
 // 🟢 Before saving
 //
+const IST_FORMATTER = new Intl.DateTimeFormat('en-IN', {
+  timeZone: 'Asia/Kolkata',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+});
+
+const formatIstString = (value) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = IST_FORMATTER.formatToParts(date).reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {});
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+};
+
+function normalizeFollowupDate(target) {
+  if (!target) return;
+  const candidates = [target.followUpDate, target.followUpUtc];
+  for (const value of candidates) {
+    const parsed = parseFollowupInput(value);
+    if (parsed && !Number.isNaN(parsed.getTime())) {
+      target.followUpDate = parsed;
+      target.followUpUtc = parsed;
+      return;
+    }
+  }
+  if (!target.followUpDate) target.followUpDate = new Date();
+  if (!target.followUpUtc) target.followUpUtc = target.followUpDate;
+}
+
 inventorySchema.pre('save', function (next) {
   if (!this.date) this.date = getISTDateTime();
-  if (!this.followUpDate) this.followUpDate = getISTDateTime();
-
-  const rawFollow = this.followUpDate || this.followUpUtc || getISTDateTime();
-  const parsed = parseFollowupInput(rawFollow);
-  const normalized = formatIstDbString(parsed) || rawFollow;
-  if (normalized) this.followUpDate = normalized;
-  if (parsed && !Number.isNaN(parsed.getTime())) {
-    this.followUpUtc = parsed;
-  }
+  normalizeFollowupDate(this);
   formatStringFields(this);
   next();
 });
@@ -153,17 +182,7 @@ inventorySchema.pre('findOneAndUpdate', function (next) {
   if (update) {
     const target = update.$set ? update.$set : update;
     formatStringFields(target);
-    if (target.followUpDate) {
-      const parsed = parseFollowupInput(target.followUpDate);
-      const normalized = formatIstDbString(parsed) || target.followUpDate;
-      if (normalized) target.followUpDate = normalized;
-      if (parsed && !Number.isNaN(parsed.getTime())) {
-        target.followUpUtc = parsed;
-      }
-    } else if (target.followUpUtc && !target.followUpDate) {
-      const normalized = formatIstDbString(target.followUpUtc);
-      if (normalized) target.followUpDate = normalized;
-    }
+    normalizeFollowupDate(target);
   }
   next();
 });
@@ -188,6 +207,7 @@ inventorySchema.methods.toJSON = function () {
   if (obj.followUpUtc) {
     obj.followUpUtc = new Date(obj.followUpUtc).toISOString();
   }
+  obj.followUpDate = formatIstString(obj.followUpDate);
 
   return obj;
 };
