@@ -9,14 +9,14 @@ const { emitNotification, emitToAdmins } = require("../utils/socketEmitter");
 const { parseFollowupInput, formatIstDbString } = require("../utils/followupTime");
 
 const CRON_EXPRESSION = "*/10 * * * * *"; // run every 10 seconds for near-real-time reminders
-const FOLLOWUP_WINDOW_MS = 20 * 1000; // ±10 seconds around the scheduled time
+const FOLLOWUP_WINDOW_MS = 60 * 1000; // ±30 seconds around the scheduled time (widened for reliability)
 const MISSED_ALERT_DELAY_MS = 5 * 60 * 1000; // notify 5 minutes after missed
-const MISSED_WINDOW_MS = 20 * 1000;
-const DUPLICATE_SUPPRESS_MS = 2 * 60 * 1000;
+const MISSED_WINDOW_MS = 60 * 1000; // ±30 seconds for missed window
+const DUPLICATE_SUPPRESS_MS = 3 * 60 * 1000; // suppress duplicates for 3 minutes
 const TIMEZONE = "Asia/Kolkata";
 const LEGACY_FETCH_LIMIT = 500;
 const IDLE_LOG_THROTTLE_MS = 60 * 1000;
-const DEBUG_FOLLOWUPS = String(process.env.FOLLOWUP_DEBUG).toLowerCase() === "true";
+const DEBUG_FOLLOWUPS = String(process.env.FOLLOWUP_DEBUG).toLowerCase() === "true" || true; // Enable debug logging temporarily
 
 const debugLog = (...args) => {
   if (DEBUG_FOLLOWUPS) {
@@ -134,8 +134,16 @@ const pickFields = (doc, fields = []) =>
 
 async function fetchEntityDocs(config, windowStart, windowEnd) {
   const { Model, select, legacy, kind } = config;
+  
+  // Also query by the raw field (followUp for leads, followUpDate for inventory/broker)
+  // in case followUpUtc wasn't normalized yet
+  const rawFieldName = config.rawField;
   const primaryQuery = Model.find({
-    followUpUtc: { $gte: windowStart, $lte: windowEnd },
+    $or: [
+      { followUpUtc: { $gte: windowStart, $lte: windowEnd } },
+      // Also check the raw field directly if it's a Date
+      { [rawFieldName]: { $gte: windowStart, $lte: windowEnd, $type: "date" } },
+    ]
   })
     .select(select)
     .lean();
@@ -152,11 +160,20 @@ async function fetchEntityDocs(config, windowStart, windowEnd) {
     }),
   ]);
 
+  // Deduplicate by _id in case both queries return same doc
+  const seen = new Set();
+  const combined = [...primary, ...legacyDocs].filter(doc => {
+    const id = doc._id.toString();
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+
   debugLog(
-    `${kind} window ${windowStart.toISOString()} - ${windowEnd.toISOString()} => normalized ${primary.length}, legacy ${legacyDocs.length}`
+    `${kind} window ${windowStart.toISOString()} - ${windowEnd.toISOString()} => primary ${primary.length}, legacy ${legacyDocs.length}, combined ${combined.length}`
   );
 
-  return [...primary, ...legacyDocs];
+  return combined;
 }
 
 const resolveDueDate = (doc, fallbackFields = []) => {
@@ -442,9 +459,13 @@ if (process.env.FOLLOWUP_CRON_DISABLED === "true") {
   cron.schedule(CRON_EXPRESSION, async () => {
     try {
       const now = new Date();
+      const nowIST = now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
       const dueStart = new Date(now.getTime() - FOLLOWUP_WINDOW_MS / 2);
       const dueEnd = new Date(now.getTime() + FOLLOWUP_WINDOW_MS / 2);
+      
+      debugLog(`Cron tick at IST: ${nowIST} | UTC: ${now.toISOString()}`);
+      debugLog(`Due window: ${dueStart.toISOString()} to ${dueEnd.toISOString()}`);
 
       const [leadDue, inventoryDue, brokerDue] = await Promise.all([
         processLeadFollowups(dueStart, dueEnd, "due"),
@@ -479,7 +500,8 @@ if (process.env.FOLLOWUP_CRON_DISABLED === "true") {
       ) {
         const nowTs = Date.now();
         if (nowTs - lastIdleLog >= IDLE_LOG_THROTTLE_MS) {
-          console.log("⏸️ No follow-up notifications to dispatch right now.");
+          const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+          console.log(`⏸️ No follow-up notifications to dispatch right now. (IST: ${nowIST})`);
           lastIdleLog = nowTs;
         }
       }
