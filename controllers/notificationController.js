@@ -6,12 +6,19 @@ const mongoose = require("mongoose");
 const User = require("../models/user");
 const { emitNotification, emitToAdmins } = require("../utils/socketEmitter");
 
+const toObjectId = (value) => {
+  if (!value) return null;
+  if (value instanceof mongoose.Types.ObjectId) return value;
+  if (!mongoose.Types.ObjectId.isValid(String(value))) return null;
+  return new mongoose.Types.ObjectId(String(value));
+};
+
 
 exports.getAllNotifications = async (req, res) => {
   try {
     // If user is admin, return all notifications. Otherwise return only notifications addressed to the user.
     const userRole = req.user?.role || 'user';
-    const userId = req.user?._id;
+    const userId = toObjectId(req.user?._id);
 
     let filter = {};
     if (userRole !== 'admin') {
@@ -69,9 +76,12 @@ exports.markAsRead = async (req, res) => {
 exports.markAllAsRead = async (req, res) => {
   try {
     const userRole = req.user?.role || 'user';
-    const userId = req.user?._id;
+    const userId = toObjectId(req.user?._id);
 
     const filter = userRole === 'admin' ? {} : { receiver: userId };
+    if (userRole !== 'admin' && !userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
     await Notification.updateMany(filter, { read: true });
 
     res.json({
@@ -106,7 +116,7 @@ exports.createTestNotification = async (req, res) => {
 
     if (!receiverId && assignTo) {
       if (mongoose.Types.ObjectId.isValid(String(assignTo))) {
-        receiverId = assignTo;
+        receiverId = new mongoose.Types.ObjectId(String(assignTo));
       } else {
         const r2 = await User.findOne({ name: assignTo });
         if (r2) receiverId = r2._id;
