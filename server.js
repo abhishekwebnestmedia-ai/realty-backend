@@ -18,7 +18,7 @@ const app = express();
 // ----------------------------------------
 const allowedOrigins = [
   
-  "nesthubr.webnestmedia.online",
+  "https://nesthubr.webnestmedia.online",
   "http://localhost:3000",
 ];
 
@@ -282,3 +282,6 @@ server
 
   
 
+
+
+  
