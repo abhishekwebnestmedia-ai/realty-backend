@@ -17,8 +17,8 @@ const app = express();
 // ✅ CORS Configuration
 // ----------------------------------------
 const allowedOrigins = [
-  "https://realtyxpo.in",
-  "https://crm.realtyxpo.in",
+  
+  "nesthubr.webnestmedia.online",
   "http://localhost:3000",
 ];
 
