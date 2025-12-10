@@ -1,6 +1,4 @@
 
-
-
 const Lead = require('../models/leadModel');
 const User = require('../models/user');
 const mongoose = require("mongoose");
@@ -25,6 +23,32 @@ const validLeadTypes = ["Buyer", "Rental"];
 // 🔹 Helpers
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const isValidPhone = (phone) => /^\d{7,15}$/.test(phone);
+
+// 🔹 Parse date helper - tolerant to a few common malformed ISO strings
+function parseDateInput(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return isNaN(value.getTime()) ? null : value;
+  }
+  if (typeof value !== 'string') return null;
+
+  // First try native parsing
+  let d = new Date(value);
+  if (!isNaN(d.getTime())) return d;
+
+  // Fix single-digit hour like 'T0:00:00' -> 'T00:00:00'
+  const fixed = value.replace(/T(\d):/, 'T0$1:');
+  d = new Date(fixed);
+  if (!isNaN(d.getTime())) return d;
+
+  // Try stripping timezone offset if present
+  const noTz = fixed.replace(/[+-]\d{2}:?\d{2}$/, '');
+  d = new Date(noTz);
+  if (!isNaN(d.getTime())) return d;
+
+  // Couldn't parse
+  return null;
+}
 
 // 🔹 Resolve assignTo: accepts ObjectId, name, or email
 async function resolveAssignTo(assignTo) {
@@ -79,6 +103,15 @@ exports.createLead = async (req, res) => {
     }
 
     const { assignTo, ...leadData } = req.body;
+
+    // Normalize followUp field if provided
+    if (leadData.followUp) {
+      const parsed = parseDateInput(leadData.followUp);
+      if (!parsed) {
+        return res.status(400).json({ success: false, message: 'Invalid followUp date format' });
+      }
+      leadData.followUp = parsed;
+    }
 
     let user = null;
     if (assignTo) {
@@ -1041,5 +1074,7 @@ exports.getUnassignedLeads = async (req, res) => {
     });
   }
 };
+
+
 
 
