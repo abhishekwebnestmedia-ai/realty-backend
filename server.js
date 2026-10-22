@@ -17,7 +17,7 @@ const app = express();
 // ✅ CORS Configuration
 // ----------------------------------------
 const allowedOrigins = [
-  
+  "https://realtyxpo.vercel.app",
   "https://nesthubr.webnestmedia.online",
   "http://localhost:3000",
 ];
